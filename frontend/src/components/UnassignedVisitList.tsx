@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { createAssignment } from "../api";
 import type { Assignment, Employee, ServiceVisit } from "../types";
+import { InfoBox } from "./InfoBox";
 
 interface ListProps {
   visits: ServiceVisit[];
@@ -37,7 +38,7 @@ interface RowProps {
 }
 
 function VisitRow({ visit, employees, onAssigned }: RowProps) {
-  const [open, setOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [plannedStart, setPlannedStart] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -56,7 +57,7 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
         planned_start: new Date(plannedStart).toISOString(),
       });
       onAssigned(assignment);
-      setOpen(false);
+      setAssignOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign visit");
     } finally {
@@ -66,24 +67,36 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
 
   return (
     <li className="border border-slate-100 rounded-md p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="font-medium text-slate-800 text-sm">{visit.customer_name}</div>
-          <div className="text-xs text-slate-500">{visit.address}</div>
-          <div className="text-xs text-slate-500">
-            {visit.duration_minutes} min · requested {visit.requested_date}
+      <div className="flex items-start justify-between gap-3">
+        <InfoBox
+          summary={
+            <div>
+              <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                {visit.customer_location.region.name}
+              </span>
+              <div className="text-xs text-slate-500 mt-1">
+                {visit.duration_minutes} min · requested {visit.requested_date}
+              </div>
+            </div>
+          }
+        >
+          <div>{visit.customer_location.customer.name}</div>
+          <div>{visit.customer_location.address}</div>
+          <div>
+            {visit.customer_location.latitude.toFixed(4)},{" "}
+            {visit.customer_location.longitude.toFixed(4)}
           </div>
-        </div>
+        </InfoBox>
         <button
           type="button"
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={() => setAssignOpen((prev) => !prev)}
           className="shrink-0 text-sm px-3 py-1 rounded-md bg-slate-900 text-white hover:bg-slate-700"
         >
           Assign
         </button>
       </div>
 
-      {open && (
+      {assignOpen && (
         <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-2">
           <select
             value={employeeId}
@@ -118,7 +131,7 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
             </button>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => setAssignOpen(false)}
               className="text-sm px-3 py-1 rounded-md border border-slate-300"
             >
               Cancel

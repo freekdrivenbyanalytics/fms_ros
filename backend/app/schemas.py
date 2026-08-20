@@ -5,6 +5,31 @@ from pydantic import BaseModel, ConfigDict
 from app.models import VisitStatus
 
 
+class RegionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class CustomerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class CustomerLocationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    address: str
+    latitude: float
+    longitude: float
+    customer: CustomerOut
+    region: RegionOut
+
+
 class EmployeeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -14,19 +39,17 @@ class EmployeeOut(BaseModel):
     work_end: time
     latitude: float
     longitude: float
+    regions: list[RegionOut]
 
 
 class ServiceVisitOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    customer_name: str
-    address: str
-    latitude: float
-    longitude: float
     duration_minutes: int
     requested_date: date
     status: VisitStatus
+    customer_location: CustomerLocationOut
 
 
 class AssignmentCreate(BaseModel):

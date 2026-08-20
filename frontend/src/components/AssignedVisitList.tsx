@@ -1,4 +1,5 @@
 import type { Assignment, ServiceVisit } from "../types";
+import { InfoBox } from "./InfoBox";
 
 interface Props {
   visits: ServiceVisit[];
@@ -19,14 +20,24 @@ export function AssignedVisitList({ visits, assignments }: Props) {
             const assignment = assignmentByVisit.get(visit.id);
             return (
               <li key={visit.id} className="border border-slate-100 rounded-md p-3 text-sm">
-                <div className="font-medium text-slate-800">{visit.customer_name}</div>
-                <div className="text-xs text-slate-500">{visit.address}</div>
-                {assignment && (
-                  <div className="text-xs text-slate-600 mt-1">
-                    {assignment.employee.name} ·{" "}
-                    {formatRange(assignment.planned_start, assignment.planned_end)}
-                  </div>
-                )}
+                <InfoBox
+                  summary={
+                    <div>
+                      <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        {visit.customer_location.region.name}
+                      </span>
+                      {assignment && (
+                        <div className="text-xs text-slate-600 mt-1">
+                          {assignment.employee.name} ·{" "}
+                          {formatRange(assignment.planned_start, assignment.planned_end)}
+                        </div>
+                      )}
+                    </div>
+                  }
+                >
+                  <div>{visit.customer_location.customer.name}</div>
+                  <div>{visit.customer_location.address}</div>
+                </InfoBox>
               </li>
             );
           })}

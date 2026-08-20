@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Assignment, Employee, ServiceVisit, VisitStatus
+from app.models import Assignment, CustomerLocation, Employee, ServiceVisit, VisitStatus
 from app.schemas import AssignmentCreate, AssignmentOut, EmployeeOut, ServiceVisitOut
 
 app = FastAPI(title="fms_ros")
@@ -20,19 +20,44 @@ app.add_middleware(
 
 @app.get("/employees", response_model=list[EmployeeOut])
 def list_employees(db: Session = Depends(get_db)) -> list[Employee]:
-    return db.query(Employee).order_by(Employee.id).all()
+    return (
+        db.query(Employee)
+        .options(joinedload(Employee.regions))
+        .order_by(Employee.id)
+        .all()
+    )
 
 
 @app.get("/service-visits", response_model=list[ServiceVisitOut])
 def list_service_visits(db: Session = Depends(get_db)) -> list[ServiceVisit]:
-    return db.query(ServiceVisit).order_by(ServiceVisit.id).all()
+    return (
+        db.query(ServiceVisit)
+        .options(
+            joinedload(ServiceVisit.customer_location).joinedload(
+                CustomerLocation.customer
+            ),
+            joinedload(ServiceVisit.customer_location).joinedload(
+                CustomerLocation.region
+            ),
+        )
+        .order_by(ServiceVisit.id)
+        .all()
+    )
 
 
 @app.get("/assignments", response_model=list[AssignmentOut])
 def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
     return (
         db.query(Assignment)
-        .options(joinedload(Assignment.employee), joinedload(Assignment.service_visit))
+        .options(
+            joinedload(Assignment.employee).joinedload(Employee.regions),
+            joinedload(Assignment.service_visit)
+            .joinedload(ServiceVisit.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(Assignment.service_visit)
+            .joinedload(ServiceVisit.customer_location)
+            .joinedload(CustomerLocation.region),
+        )
         .order_by(Assignment.service_visit_id)
         .all()
     )
