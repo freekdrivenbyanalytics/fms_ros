@@ -1,7 +1,15 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from app.database import SessionLocal
-from app.models import Customer, CustomerLocation, Employee, Region, ServiceVisit
+from app.models import (
+    Contract,
+    Customer,
+    CustomerLocation,
+    Employee,
+    Region,
+    ServiceVisit,
+    Skill,
+)
 
 
 def seed() -> None:
@@ -17,6 +25,13 @@ def seed() -> None:
         groningen = Region(name="Groningen")
         regions = [north_holland, utrecht, south_holland, groningen]
         db.add_all(regions)
+
+        plumbing = Skill(name="Plumbing")
+        electrical = Skill(name="Electrical")
+        hvac = Skill(name="HVAC")
+        general_maintenance = Skill(name="General Maintenance")
+        skills = [plumbing, electrical, hvac, general_maintenance]
+        db.add_all(skills)
         db.flush()
 
         employees = [
@@ -27,6 +42,7 @@ def seed() -> None:
                 latitude=52.3676,
                 longitude=4.9041,
                 regions=[north_holland, utrecht],
+                skills=[electrical, general_maintenance],
             ),
             Employee(
                 name="Bram de Vries",
@@ -35,6 +51,7 @@ def seed() -> None:
                 latitude=52.0907,
                 longitude=5.1214,
                 regions=[utrecht],
+                skills=[plumbing],
             ),
             Employee(
                 name="Chen Wei",
@@ -43,6 +60,7 @@ def seed() -> None:
                 latitude=51.9244,
                 longitude=4.4777,
                 regions=[south_holland, groningen],
+                skills=[hvac, general_maintenance],
             ),
         ]
         db.add_all(employees)
@@ -100,39 +118,63 @@ def seed() -> None:
         db.add_all(locations)
         db.flush()
 
-        visits = [
-            ServiceVisit(
+        contracts = [
+            Contract(
                 customer_location=van_der_berg_location,
+                start_date=date(2026, 8, 20),
+                interval_days=30,
                 duration_minutes=60,
-                requested_date=date(2026, 8, 20),
+                required_skills=[general_maintenance],
             ),
-            ServiceVisit(
+            Contract(
                 customer_location=bakker_location,
+                start_date=date(2026, 8, 20),
+                interval_days=14,
                 duration_minutes=90,
-                requested_date=date(2026, 8, 20),
+                required_skills=[plumbing],
             ),
-            ServiceVisit(
+            Contract(
                 customer_location=de_jong_hq,
+                start_date=date(2026, 8, 21),
+                interval_days=7,
                 duration_minutes=45,
-                requested_date=date(2026, 8, 21),
+                required_skills=[electrical],
             ),
-            ServiceVisit(
+            Contract(
                 customer_location=de_jong_branch,
+                start_date=date(2026, 8, 22),
+                interval_days=21,
                 duration_minutes=30,
-                requested_date=date(2026, 8, 22),
+                required_skills=[hvac, general_maintenance],
             ),
-            ServiceVisit(
+            Contract(
                 customer_location=visser_location,
+                start_date=date(2026, 8, 21),
+                interval_days=60,
                 duration_minutes=120,
-                requested_date=date(2026, 8, 21),
+                required_skills=[hvac],
             ),
         ]
+        db.add_all(contracts)
+        db.flush()
+
+        visits = []
+        for contract in contracts:
+            for occurrence in range(2):
+                visits.append(
+                    ServiceVisit(
+                        contract=contract,
+                        requested_date=contract.start_date
+                        + timedelta(days=occurrence * contract.interval_days),
+                    )
+                )
         db.add_all(visits)
 
         db.commit()
         print(
-            f"Seeded {len(regions)} regions, {len(customers)} customers, "
-            f"{len(locations)} customer locations, {len(employees)} employees, "
+            f"Seeded {len(regions)} regions, {len(skills)} skills, "
+            f"{len(customers)} customers, {len(locations)} customer locations, "
+            f"{len(contracts)} contracts, {len(employees)} employees, "
             f"and {len(visits)} service visits."
         )
     finally:

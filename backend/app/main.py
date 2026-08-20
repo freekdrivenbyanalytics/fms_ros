@@ -5,7 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Assignment, CustomerLocation, Employee, ServiceVisit, VisitStatus
+from app.models import (
+    Assignment,
+    Contract,
+    CustomerLocation,
+    Employee,
+    ServiceVisit,
+    VisitStatus,
+)
 from app.schemas import AssignmentCreate, AssignmentOut, EmployeeOut, ServiceVisitOut
 
 app = FastAPI(title="fms_ros")
@@ -22,7 +29,7 @@ app.add_middleware(
 def list_employees(db: Session = Depends(get_db)) -> list[Employee]:
     return (
         db.query(Employee)
-        .options(joinedload(Employee.regions))
+        .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .order_by(Employee.id)
         .all()
     )
@@ -33,12 +40,13 @@ def list_service_visits(db: Session = Depends(get_db)) -> list[ServiceVisit]:
     return (
         db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.customer_location).joinedload(
-                CustomerLocation.customer
-            ),
-            joinedload(ServiceVisit.customer_location).joinedload(
-                CustomerLocation.region
-            ),
+            joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
+            joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
+            .joinedload(CustomerLocation.region),
         )
         .order_by(ServiceVisit.id)
         .all()
@@ -51,11 +59,17 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
         db.query(Assignment)
         .options(
             joinedload(Assignment.employee).joinedload(Employee.regions),
+            joinedload(Assignment.employee).joinedload(Employee.skills),
             joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.customer_location)
+            .joinedload(ServiceVisit.contract)
+            .joinedload(Contract.required_skills),
+            joinedload(Assignment.service_visit)
+            .joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
             .joinedload(CustomerLocation.customer),
             joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.customer_location)
+            .joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
             .joinedload(CustomerLocation.region),
         )
         .order_by(Assignment.service_visit_id)
@@ -80,7 +94,9 @@ def create_assignment(
             status_code=409, detail="Service visit is already assigned"
         )
 
-    planned_end = payload.planned_start + timedelta(minutes=visit.duration_minutes)
+    planned_end = payload.planned_start + timedelta(
+        minutes=visit.contract.duration_minutes
+    )
     assignment = Assignment(
         service_visit_id=visit.id,
         employee_id=employee.id,

@@ -12,6 +12,13 @@ class RegionOut(BaseModel):
     name: str
 
 
+class SkillOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
 class CustomerOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,6 +37,17 @@ class CustomerLocationOut(BaseModel):
     region: RegionOut
 
 
+class ContractOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    start_date: date
+    interval_days: int
+    duration_minutes: int
+    customer_location: CustomerLocationOut
+    required_skills: list[SkillOut]
+
+
 class EmployeeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,16 +58,16 @@ class EmployeeOut(BaseModel):
     latitude: float
     longitude: float
     regions: list[RegionOut]
+    skills: list[SkillOut]
 
 
 class ServiceVisitOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    duration_minutes: int
     requested_date: date
     status: VisitStatus
-    customer_location: CustomerLocationOut
+    contract: ContractOut
 
 
 class AssignmentCreate(BaseModel):

@@ -5,6 +5,11 @@ export interface Region {
   name: string;
 }
 
+export interface Skill {
+  id: number;
+  name: string;
+}
+
 export interface Customer {
   id: number;
   name: string;
@@ -19,6 +24,15 @@ export interface CustomerLocation {
   region: Region;
 }
 
+export interface Contract {
+  id: number;
+  start_date: string;
+  interval_days: number;
+  duration_minutes: number;
+  customer_location: CustomerLocation;
+  required_skills: Skill[];
+}
+
 export interface Employee {
   id: number;
   name: string;
@@ -27,14 +41,14 @@ export interface Employee {
   latitude: number;
   longitude: number;
   regions: Region[];
+  skills: Skill[];
 }
 
 export interface ServiceVisit {
   id: number;
-  duration_minutes: number;
   requested_date: string;
   status: VisitStatus;
-  customer_location: CustomerLocation;
+  contract: Contract;
 }
 
 export interface Assignment {

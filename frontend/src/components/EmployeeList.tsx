@@ -30,6 +30,14 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
                           {region.name}
                         </span>
                       ))}
+                      {employee.skills.map((skill) => (
+                        <span
+                          key={skill.id}
+                          className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+                        >
+                          {skill.name}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 }

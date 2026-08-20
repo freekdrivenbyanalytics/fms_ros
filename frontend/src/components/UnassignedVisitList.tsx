@@ -71,20 +71,33 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
         <InfoBox
           summary={
             <div>
-              <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                {visit.customer_location.region.name}
-              </span>
+              <div className="font-medium text-slate-800">
+                {visit.contract.customer_location.customer.name}
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                  {visit.contract.customer_location.region.name}
+                </span>
+                {visit.contract.required_skills.map((skill) => (
+                  <span
+                    key={skill.id}
+                    className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+                  >
+                    {skill.name}
+                  </span>
+                ))}
+              </div>
               <div className="text-xs text-slate-500 mt-1">
-                {visit.duration_minutes} min · requested {visit.requested_date}
+                {visit.contract.duration_minutes} min · requested {visit.requested_date}
               </div>
             </div>
           }
         >
-          <div>{visit.customer_location.customer.name}</div>
-          <div>{visit.customer_location.address}</div>
+          <div>{visit.contract.customer_location.customer.name}</div>
+          <div>{visit.contract.customer_location.address}</div>
           <div>
-            {visit.customer_location.latitude.toFixed(4)},{" "}
-            {visit.customer_location.longitude.toFixed(4)}
+            {visit.contract.customer_location.latitude.toFixed(4)},{" "}
+            {visit.contract.customer_location.longitude.toFixed(4)}
           </div>
         </InfoBox>
         <button

@@ -1,10 +1,4 @@
-# employees Specification
-
-## Purpose
-
-Represents the field service employees who can be manually assigned to service visits, including the working hours and home location used to judge assignment feasibility.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Employee data model
 The system SHALL persist each employee with a unique identifier, name, work start time, work end time, geographic location (latitude, longitude), one or more regions they belong to, and zero or more skills they hold.
@@ -20,12 +14,7 @@ The system SHALL provide an API to retrieve the list of all employees, including
 - **WHEN** a client requests the list of employees
 - **THEN** the system returns all persisted employees including their working hours, location, regions, and skills
 
-### Requirement: An employee can belong to multiple regions
-The system SHALL allow an employee to be associated with more than one region.
-
-#### Scenario: Employee with multiple regions
-- **WHEN** an employee is associated with two or more regions
-- **THEN** each association is retrievable and the employee's regions include all of them
+## ADDED Requirements
 
 ### Requirement: An employee can have multiple skills
 The system SHALL allow an employee to be associated with more than one skill.
