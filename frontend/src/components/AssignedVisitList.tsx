@@ -1,22 +1,61 @@
+import { useMemo, useState } from "react";
+import { collectFilterOptions, filterItems } from "../lib/listFilter";
 import type { Assignment, ServiceVisit } from "../types";
 import { InfoBox } from "./InfoBox";
+import { ListFilterBar } from "./ListFilterBar";
 
 interface Props {
   visits: ServiceVisit[];
   assignments: Assignment[];
 }
 
+function extract(visit: ServiceVisit) {
+  return {
+    name: visit.contract.customer_location.customer.name,
+    address: visit.contract.customer_location.address,
+    regions: [visit.contract.customer_location.region],
+    skills: visit.contract.required_skills,
+  };
+}
+
 export function AssignedVisitList({ visits, assignments }: Props) {
+  const [search, setSearch] = useState("");
+  const [regionIds, setRegionIds] = useState<number[]>([]);
+  const [skillIds, setSkillIds] = useState<number[]>([]);
+
   const assignmentByVisit = new Map(assignments.map((a) => [a.service_visit_id, a]));
+
+  const { regions: regionOptions, skills: skillOptions } = useMemo(
+    () => collectFilterOptions(visits, extract),
+    [visits]
+  );
+
+  const filteredVisits = useMemo(
+    () => filterItems(visits, extract, search, regionIds, skillIds),
+    [visits, search, regionIds, skillIds]
+  );
 
   return (
     <section className="bg-white rounded-lg border border-slate-200 p-4">
       <h2 className="text-lg font-medium text-slate-900 mb-3">Assigned Visits</h2>
+      <ListFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by customer or address…"
+        regionOptions={regionOptions}
+        selectedRegionIds={regionIds}
+        onRegionIdsChange={setRegionIds}
+        skillOptions={skillOptions}
+        selectedSkillIds={skillIds}
+        onSkillIdsChange={setSkillIds}
+      />
       {visits.length === 0 ? (
         <p className="text-sm text-slate-500">No assigned visits.</p>
+      ) : filteredVisits.length === 0 ? (
+        <p className="text-sm text-slate-500">No matches for the current search/filters.</p>
       ) : (
         <ul className="space-y-3">
-          {visits.map((visit) => {
+          {filteredVisits.map((visit) => {
             const assignment = assignmentByVisit.get(visit.id);
             return (
               <li key={visit.id} className="border border-slate-100 rounded-md p-3 text-sm">

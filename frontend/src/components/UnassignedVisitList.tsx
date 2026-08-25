@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { createAssignment } from "../api";
+import { collectFilterOptions, filterItems } from "../lib/listFilter";
 import type { Assignment, Employee, ServiceVisit } from "../types";
 import { InfoBox } from "./InfoBox";
+import { ListFilterBar } from "./ListFilterBar";
 
 interface ListProps {
   visits: ServiceVisit[];
@@ -9,15 +11,51 @@ interface ListProps {
   onAssigned: (assignment: Assignment) => void;
 }
 
+function extract(visit: ServiceVisit) {
+  return {
+    name: visit.contract.customer_location.customer.name,
+    address: visit.contract.customer_location.address,
+    regions: [visit.contract.customer_location.region],
+    skills: visit.contract.required_skills,
+  };
+}
+
 export function UnassignedVisitList({ visits, employees, onAssigned }: ListProps) {
+  const [search, setSearch] = useState("");
+  const [regionIds, setRegionIds] = useState<number[]>([]);
+  const [skillIds, setSkillIds] = useState<number[]>([]);
+
+  const { regions: regionOptions, skills: skillOptions } = useMemo(
+    () => collectFilterOptions(visits, extract),
+    [visits]
+  );
+
+  const filteredVisits = useMemo(
+    () => filterItems(visits, extract, search, regionIds, skillIds),
+    [visits, search, regionIds, skillIds]
+  );
+
   return (
     <section className="bg-white rounded-lg border border-slate-200 p-4">
       <h2 className="text-lg font-medium text-slate-900 mb-3">Unassigned Visits</h2>
+      <ListFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by customer or address…"
+        regionOptions={regionOptions}
+        selectedRegionIds={regionIds}
+        onRegionIdsChange={setRegionIds}
+        skillOptions={skillOptions}
+        selectedSkillIds={skillIds}
+        onSkillIdsChange={setSkillIds}
+      />
       {visits.length === 0 ? (
         <p className="text-sm text-slate-500">No unassigned visits.</p>
+      ) : filteredVisits.length === 0 ? (
+        <p className="text-sm text-slate-500">No matches for the current search/filters.</p>
       ) : (
         <ul className="space-y-3">
-          {visits.map((visit) => (
+          {filteredVisits.map((visit) => (
             <VisitRow
               key={visit.id}
               visit={visit}

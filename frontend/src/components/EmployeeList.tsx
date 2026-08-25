@@ -1,15 +1,51 @@
+import { useMemo, useState } from "react";
 import type { Employee } from "../types";
+import { collectFilterOptions, filterItems } from "../lib/listFilter";
 import { InfoBox } from "./InfoBox";
+import { ListFilterBar } from "./ListFilterBar";
 
 export function EmployeeList({ employees }: { employees: Employee[] }) {
+  const [search, setSearch] = useState("");
+  const [regionIds, setRegionIds] = useState<number[]>([]);
+  const [skillIds, setSkillIds] = useState<number[]>([]);
+
+  const extract = (employee: Employee) => ({
+    name: employee.name,
+    regions: employee.regions,
+    skills: employee.skills,
+  });
+
+  const { regions: regionOptions, skills: skillOptions } = useMemo(
+    () => collectFilterOptions(employees, extract),
+    [employees]
+  );
+
+  const filteredEmployees = useMemo(
+    () => filterItems(employees, extract, search, regionIds, skillIds),
+    [employees, search, regionIds, skillIds]
+  );
+
   return (
     <section className="bg-white rounded-lg border border-slate-200 p-4">
       <h2 className="text-lg font-medium text-slate-900 mb-3">Employees</h2>
+      <ListFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name…"
+        regionOptions={regionOptions}
+        selectedRegionIds={regionIds}
+        onRegionIdsChange={setRegionIds}
+        skillOptions={skillOptions}
+        selectedSkillIds={skillIds}
+        onSkillIdsChange={setSkillIds}
+      />
       {employees.length === 0 ? (
         <p className="text-sm text-slate-500">No employees.</p>
+      ) : filteredEmployees.length === 0 ? (
+        <p className="text-sm text-slate-500">No matches for the current search/filters.</p>
       ) : (
         <ul className="space-y-2">
-          {employees.map((employee) => (
+          {filteredEmployees.map((employee) => (
             <li
               key={employee.id}
               className="text-sm border border-slate-100 rounded-md p-2"
