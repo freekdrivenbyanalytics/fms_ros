@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { listAssignments, listEmployees, listServiceVisits } from "./api";
 import { AssignedVisitList } from "./components/AssignedVisitList";
+import { DayPlanningView } from "./components/DayPlanningView";
 import { EmployeeList } from "./components/EmployeeList";
 import { UnassignedVisitList } from "./components/UnassignedVisitList";
 import type { Assignment, Employee, ServiceVisit } from "./types";
 
+type View = "assign" | "planning";
+
 function App() {
+  const [view, setView] = useState<View>("assign");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [visits, setVisits] = useState<ServiceVisit[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -49,16 +53,49 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-8">
-      <h1 className="text-2xl font-semibold text-slate-900 mb-6">Manual Assignment</h1>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <EmployeeList employees={employees} />
-        <UnassignedVisitList
-          visits={unassignedVisits}
-          employees={employees}
-          onAssigned={handleAssigned}
-        />
-        <AssignedVisitList visits={assignedVisits} assignments={assignments} />
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-2xl font-semibold text-slate-900">
+          {view === "assign" ? "Manual Assignment" : "Day Planning"}
+        </h1>
+        <nav className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setView("assign")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              view === "assign"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Manual Assignment
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("planning")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              view === "planning"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Day Planning
+          </button>
+        </nav>
       </div>
+
+      {view === "assign" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <EmployeeList employees={employees} />
+          <UnassignedVisitList
+            visits={unassignedVisits}
+            employees={employees}
+            onAssigned={handleAssigned}
+          />
+          <AssignedVisitList visits={assignedVisits} assignments={assignments} />
+        </div>
+      ) : (
+        <DayPlanningView employees={employees} assignments={assignments} />
+      )}
     </div>
   );
 }
