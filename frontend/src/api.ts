@@ -1,4 +1,14 @@
-import type { Assignment, CreateAssignmentInput, Employee, ServiceVisit } from "./types";
+import type {
+  Assignment,
+  Contract,
+  CreateAssignmentInput,
+  Customer,
+  CustomerLocation,
+  Employee,
+  Region,
+  ServiceVisit,
+  Skill,
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -25,6 +35,28 @@ export function listAssignments(): Promise<Assignment[]> {
   return fetch(`${API_URL}/assignments`).then((res) =>
     handleResponse<Assignment[]>(res)
   );
+}
+
+export function listRegions(): Promise<Region[]> {
+  return fetch(`${API_URL}/regions`).then((res) => handleResponse<Region[]>(res));
+}
+
+export function listSkills(): Promise<Skill[]> {
+  return fetch(`${API_URL}/skills`).then((res) => handleResponse<Skill[]>(res));
+}
+
+export function listCustomers(): Promise<Customer[]> {
+  return fetch(`${API_URL}/customers`).then((res) => handleResponse<Customer[]>(res));
+}
+
+export function listCustomerLocations(): Promise<CustomerLocation[]> {
+  return fetch(`${API_URL}/customer-locations`).then((res) =>
+    handleResponse<CustomerLocation[]>(res)
+  );
+}
+
+export function listContracts(): Promise<Contract[]> {
+  return fetch(`${API_URL}/contracts`).then((res) => handleResponse<Contract[]>(res));
 }
 
 export function createAssignment(input: CreateAssignmentInput): Promise<Assignment> {

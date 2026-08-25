@@ -8,12 +8,25 @@ from app.database import get_db
 from app.models import (
     Assignment,
     Contract,
+    Customer,
     CustomerLocation,
     Employee,
+    Region,
     ServiceVisit,
+    Skill,
     VisitStatus,
 )
-from app.schemas import AssignmentCreate, AssignmentOut, EmployeeOut, ServiceVisitOut
+from app.schemas import (
+    AssignmentCreate,
+    AssignmentOut,
+    ContractOut,
+    CustomerLocationOut,
+    CustomerOut,
+    EmployeeOut,
+    RegionOut,
+    ServiceVisitOut,
+    SkillOut,
+)
 
 app = FastAPI(title="fms_ros")
 
@@ -31,6 +44,48 @@ def list_employees(db: Session = Depends(get_db)) -> list[Employee]:
         db.query(Employee)
         .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .order_by(Employee.id)
+        .all()
+    )
+
+
+@app.get("/regions", response_model=list[RegionOut])
+def list_regions(db: Session = Depends(get_db)) -> list[Region]:
+    return db.query(Region).order_by(Region.id).all()
+
+
+@app.get("/skills", response_model=list[SkillOut])
+def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
+    return db.query(Skill).order_by(Skill.id).all()
+
+
+@app.get("/customers", response_model=list[CustomerOut])
+def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
+    return db.query(Customer).order_by(Customer.id).all()
+
+
+@app.get("/customer-locations", response_model=list[CustomerLocationOut])
+def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocation]:
+    return (
+        db.query(CustomerLocation)
+        .options(
+            joinedload(CustomerLocation.customer),
+            joinedload(CustomerLocation.region),
+        )
+        .order_by(CustomerLocation.id)
+        .all()
+    )
+
+
+@app.get("/contracts", response_model=list[ContractOut])
+def list_contracts(db: Session = Depends(get_db)) -> list[Contract]:
+    return (
+        db.query(Contract)
+        .options(
+            joinedload(Contract.customer_location).joinedload(CustomerLocation.customer),
+            joinedload(Contract.customer_location).joinedload(CustomerLocation.region),
+            joinedload(Contract.required_skills),
+        )
+        .order_by(Contract.id)
         .all()
     )
 
