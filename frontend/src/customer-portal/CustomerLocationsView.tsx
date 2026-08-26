@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Contract, CustomerLocation } from "../types";
 import { BackButton, DetailField } from "./DetailField";
 import { ListTable } from "./ListTable";
@@ -6,10 +6,27 @@ import { ListTable } from "./ListTable";
 interface Props {
   customerLocations: CustomerLocation[];
   contracts: Contract[];
+  initialSelectedId?: number;
+  onInitialSelectionConsumed?: () => void;
 }
 
-export function CustomerLocationsView({ customerLocations, contracts }: Props) {
-  const [selected, setSelected] = useState<CustomerLocation | null>(null);
+export function CustomerLocationsView({
+  customerLocations,
+  contracts,
+  initialSelectedId,
+  onInitialSelectionConsumed,
+}: Props) {
+  const [selected, setSelected] = useState<CustomerLocation | null>(() =>
+    initialSelectedId !== undefined
+      ? customerLocations.find((location) => location.id === initialSelectedId) ?? null
+      : null
+  );
+
+  useEffect(() => {
+    if (initialSelectedId !== undefined) {
+      onInitialSelectionConsumed?.();
+    }
+  }, []);
 
   if (selected) {
     const locationContracts = contracts.filter(

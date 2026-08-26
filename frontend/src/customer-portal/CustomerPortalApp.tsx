@@ -51,6 +51,8 @@ export function CustomerPortalApp() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [viewingAsCustomerId, setViewingAsCustomerId] = useState<number | null>(null);
+  const [pendingLocationId, setPendingLocationId] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -92,10 +94,38 @@ export function CustomerPortalApp() {
     return <div className="p-8 text-red-600">Failed to load data: {loadError}</div>;
   }
 
+  const scopedCustomer = customers.find((customer) => customer.id === viewingAsCustomerId);
+
+  function handleSelectLocation(locationId: number) {
+    setEntity("customer-locations");
+    setPendingLocationId(locationId);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-56 shrink-0 bg-white border-r border-slate-200 p-4">
         <h1 className="text-lg font-semibold text-slate-900 mb-4">Customer Portal</h1>
+
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+          Viewing as
+        </label>
+        <select
+          value={viewingAsCustomerId ?? ""}
+          onChange={(event) =>
+            setViewingAsCustomerId(
+              event.target.value === "" ? null : Number(event.target.value)
+            )
+          }
+          className="w-full text-sm border border-slate-300 rounded-md px-2 py-1 mb-4"
+        >
+          <option value="">All customers</option>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+            </option>
+          ))}
+        </select>
+
         <nav className="flex flex-col gap-1">
           {ENTITY_ORDER.map((key) => (
             <button
@@ -116,10 +146,20 @@ export function CustomerPortalApp() {
       <main className="flex-1 p-8">
         {entity === "employees" && <EmployeesView employees={employees} />}
         {entity === "customers" && (
-          <CustomersView customers={customers} customerLocations={customerLocations} />
+          <CustomersView
+            customers={customers}
+            customerLocations={customerLocations}
+            scopedCustomer={scopedCustomer}
+            onSelectLocation={handleSelectLocation}
+          />
         )}
         {entity === "customer-locations" && (
-          <CustomerLocationsView customerLocations={customerLocations} contracts={contracts} />
+          <CustomerLocationsView
+            customerLocations={customerLocations}
+            contracts={contracts}
+            initialSelectedId={pendingLocationId ?? undefined}
+            onInitialSelectionConsumed={() => setPendingLocationId(null)}
+          />
         )}
         {entity === "contracts" && <ContractsView contracts={contracts} />}
         {entity === "skills" && (
