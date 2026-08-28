@@ -1,10 +1,4 @@
-# customers Specification
-
-## Purpose
-
-Represents customers and the physical locations where they receive service; each location sits in a region and is what service visits are generated from.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Customer data model
 The system SHALL persist each customer using Tripletex as the source of truth: each customer's unique identifier SHALL be the id Tripletex assigns to it, and the customer's fields SHALL be set from the corresponding Tripletex customer record.
@@ -13,19 +7,7 @@ The system SHALL persist each customer using Tripletex as the source of truth: e
 - **WHEN** a customer record is created from a Tripletex customer
 - **THEN** the system persists the customer using that Tripletex customer's id as its unique identifier, with its fields set from the corresponding Tripletex customer's fields, and both the identifier and fields are retrievable unchanged
 
-### Requirement: Customer location data model
-The system SHALL persist each customer location with a unique identifier, the customer it belongs to, the region it is in, an address, and a geographic location (latitude, longitude).
-
-#### Scenario: Customer location is persisted with required fields
-- **WHEN** a customer location is created with id, customer_id, region_id, address, latitude, and longitude
-- **THEN** the system persists the customer location and all fields are retrievable unchanged
-
-### Requirement: A customer can have multiple locations
-The system SHALL allow a customer to have one or more customer locations.
-
-#### Scenario: Customer with multiple locations
-- **WHEN** a customer has two or more customer locations persisted with its customer_id
-- **THEN** each location is retrievable and associated with that customer
+## ADDED Requirements
 
 ### Requirement: Customers are synced from Tripletex
 The system SHALL fetch the full list of customers from Tripletex and reconcile them into the locally persisted customers: a Tripletex customer not yet persisted locally SHALL be added, a Tripletex customer already persisted locally SHALL have its fields updated to match Tripletex, and a locally persisted customer no longer present in Tripletex SHALL be marked deleted (via a delete flag) rather than removed, leaving any customer locations, contracts, service visits, and assignments that depend on it unaffected. A locally persisted customer previously marked deleted that reappears in Tripletex SHALL have its deleted mark cleared and its fields overwritten to match Tripletex.

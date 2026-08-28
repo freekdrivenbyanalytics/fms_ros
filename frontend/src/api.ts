@@ -59,6 +59,12 @@ export function listContracts(): Promise<Contract[]> {
   return fetch(`${API_URL}/contracts`).then((res) => handleResponse<Contract[]>(res));
 }
 
+export function syncCustomers(): Promise<Customer[]> {
+  return fetch(`${API_URL}/customers/sync`, { method: "POST" }).then((res) =>
+    handleResponse<Customer[]>(res)
+  );
+}
+
 export function createAssignment(input: CreateAssignmentInput): Promise<Assignment> {
   return fetch(`${API_URL}/assignments`, {
     method: "POST",

@@ -89,6 +89,13 @@ The system SHALL let a user open an item from any of the six list views to see a
 - **WHEN** a user opens a Region's detail view
 - **THEN** the system shows that region's own fields, the Employees scoped to it, and the Customer Locations located in it
 
+### Requirement: Refresh customers from Tripletex
+The system SHALL provide a control on the Customer Portal's Customers view that triggers an on-demand Tripletex customer sync, and SHALL refresh the Customers, Customer Locations, and Contracts views' data after the sync completes.
+
+#### Scenario: Planner refreshes customers
+- **WHEN** a user activates the Refresh control on the Customers view
+- **THEN** the system triggers a Tripletex customer sync, and once it completes, the Customers, Customer Locations, and Contracts views reflect the resulting data
+
 ### Requirement: Customer Portal is read-only
 The system SHALL NOT provide any create, edit, or delete action for master data anywhere in the Customer Portal.
 

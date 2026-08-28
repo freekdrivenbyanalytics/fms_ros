@@ -2,6 +2,7 @@ import enum
 from datetime import date, datetime, time
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -12,7 +13,9 @@ from sqlalchemy import (
     String,
     Table,
     Time,
+    func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -73,14 +76,91 @@ class Skill(Base):
     )
 
 
+class CustomerChangeType(str, enum.Enum):
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+    RESTORED = "restored"
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Tripletex-sourced fields. id is Tripletex's own customer id, not app-generated.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    version: Mapped[int | None] = mapped_column(Integer)
+    url: Mapped[str | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    organization_number: Mapped[str | None] = mapped_column(String)
+    global_location_number: Mapped[int | None] = mapped_column(Integer)
+    supplier_number: Mapped[int | None] = mapped_column(Integer)
+    customer_number: Mapped[int | None] = mapped_column(Integer)
+    is_supplier: Mapped[bool | None] = mapped_column(Boolean)
+    is_customer: Mapped[bool | None] = mapped_column(Boolean)
+    is_inactive: Mapped[bool | None] = mapped_column(Boolean)
+    email: Mapped[str | None] = mapped_column(String)
+    invoice_email: Mapped[str | None] = mapped_column(String)
+    overdue_notice_email: Mapped[str | None] = mapped_column(String)
+    phone_number: Mapped[str | None] = mapped_column(String)
+    phone_number_mobile: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String)
+    language: Mapped[str | None] = mapped_column(String)
+    display_name: Mapped[str | None] = mapped_column(String)
+    is_private_individual: Mapped[bool | None] = mapped_column(Boolean)
+    single_customer_invoice: Mapped[bool | None] = mapped_column(Boolean)
+    invoice_send_method: Mapped[str | None] = mapped_column(String)
+    email_attachment_type: Mapped[str | None] = mapped_column(String)
+    invoices_due_in: Mapped[int | None] = mapped_column(Integer)
+    invoices_due_in_type: Mapped[str | None] = mapped_column(String)
+    is_factoring: Mapped[bool | None] = mapped_column(Boolean)
+    invoice_send_sms_notification: Mapped[bool | None] = mapped_column(Boolean)
+    invoice_sms_notification_number: Mapped[str | None] = mapped_column(String)
+    is_automatic_soft_reminder_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    is_automatic_reminder_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    is_automatic_notice_of_debt_collection_enabled: Mapped[bool | None] = mapped_column(
+        Boolean
+    )
+    discount_percentage: Mapped[float | None] = mapped_column(Float)
+    website: Mapped[str | None] = mapped_column(String)
+
+    # Nested/list-valued Tripletex fields, stored as-is.
+    account_manager: Mapped[dict | None] = mapped_column(JSONB)
+    department: Mapped[dict | None] = mapped_column(JSONB)
+    postal_address: Mapped[dict | None] = mapped_column(JSONB)
+    physical_address: Mapped[dict | None] = mapped_column(JSONB)
+    delivery_address: Mapped[dict | None] = mapped_column(JSONB)
+    category1: Mapped[dict | None] = mapped_column(JSONB)
+    category2: Mapped[dict | None] = mapped_column(JSONB)
+    category3: Mapped[dict | None] = mapped_column(JSONB)
+    currency: Mapped[dict | None] = mapped_column(JSONB)
+    ledger_account: Mapped[dict | None] = mapped_column(JSONB)
+    bank_account_presentation: Mapped[list | None] = mapped_column(JSONB)
+
+    # Local sync bookkeeping, not sourced from Tripletex.
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     locations: Mapped[list["CustomerLocation"]] = relationship(
         back_populates="customer"
+    )
+
+
+class CustomerSyncLog(Base):
+    __tablename__ = "customer_sync_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
+    change_type: Mapped[CustomerChangeType] = mapped_column(
+        Enum(
+            CustomerChangeType,
+            name="customer_change_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
     )
 
 

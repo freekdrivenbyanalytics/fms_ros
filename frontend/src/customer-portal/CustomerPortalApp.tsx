@@ -6,6 +6,7 @@ import {
   listEmployees,
   listRegions,
   listSkills,
+  syncCustomers,
 } from "../api";
 import type { Contract, Customer, CustomerLocation, Employee, Region, Skill } from "../types";
 import { ContractsView } from "./ContractsView";
@@ -53,6 +54,8 @@ export function CustomerPortalApp() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewingAsCustomerId, setViewingAsCustomerId] = useState<number | null>(null);
   const [pendingLocationId, setPendingLocationId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -101,6 +104,26 @@ export function CustomerPortalApp() {
     setPendingLocationId(locationId);
   }
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      await syncCustomers();
+      const [customersData, customerLocationsData, contractsData] = await Promise.all([
+        listCustomers(),
+        listCustomerLocations(),
+        listContracts(),
+      ]);
+      setCustomers(customersData);
+      setCustomerLocations(customerLocationsData);
+      setContracts(contractsData);
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : "Failed to refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-56 shrink-0 bg-white border-r border-slate-200 p-4">
@@ -146,12 +169,21 @@ export function CustomerPortalApp() {
       <main className="flex-1 p-8">
         {entity === "employees" && <EmployeesView employees={employees} />}
         {entity === "customers" && (
-          <CustomersView
-            customers={customers}
-            customerLocations={customerLocations}
-            scopedCustomer={scopedCustomer}
-            onSelectLocation={handleSelectLocation}
-          />
+          <div>
+            {refreshError && (
+              <p className="text-sm text-red-600 mb-3">
+                Failed to refresh: {refreshError}
+              </p>
+            )}
+            <CustomersView
+              customers={customers}
+              customerLocations={customerLocations}
+              scopedCustomer={scopedCustomer}
+              onSelectLocation={handleSelectLocation}
+              onRefresh={handleRefresh}
+              refreshing={refreshing}
+            />
+          </div>
         )}
         {entity === "customer-locations" && (
           <CustomerLocationsView

@@ -1,10 +1,12 @@
+import logging
+from contextlib import asynccontextmanager
 from datetime import timedelta
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import (
     Assignment,
     Contract,
@@ -27,8 +29,26 @@ from app.schemas import (
     ServiceVisitOut,
     SkillOut,
 )
+from app.tripletex import sync_customers
 
-app = FastAPI(title="fms_ros")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = SessionLocal()
+    try:
+        sync_customers(db)
+        logger.info("Tripletex customer sync succeeded at startup")
+    except Exception:
+        logger.warning("Tripletex customer sync failed at startup", exc_info=True)
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title="fms_ros", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +80,28 @@ def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
 
 @app.get("/customers", response_model=list[CustomerOut])
 def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
-    return db.query(Customer).order_by(Customer.id).all()
+    return (
+        db.query(Customer)
+        .filter(Customer.delete_flag.is_(False))
+        .order_by(Customer.id)
+        .all()
+    )
+
+
+@app.post("/customers/sync", response_model=list[CustomerOut])
+def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
+    try:
+        sync_customers(db)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Tripletex sync failed: {exc}"
+        ) from exc
+    return (
+        db.query(Customer)
+        .filter(Customer.delete_flag.is_(False))
+        .order_by(Customer.id)
+        .all()
+    )
 
 
 @app.get("/customer-locations", response_model=list[CustomerLocationOut])

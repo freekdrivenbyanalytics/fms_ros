@@ -12,7 +12,49 @@ export interface Skill {
 
 export interface Customer {
   id: number;
+  version: number | null;
+  url: string | null;
   name: string;
+  organization_number: string | null;
+  global_location_number: number | null;
+  supplier_number: number | null;
+  customer_number: number | null;
+  is_supplier: boolean | null;
+  is_customer: boolean | null;
+  is_inactive: boolean | null;
+  email: string | null;
+  invoice_email: string | null;
+  overdue_notice_email: string | null;
+  phone_number: string | null;
+  phone_number_mobile: string | null;
+  description: string | null;
+  language: string | null;
+  display_name: string | null;
+  is_private_individual: boolean | null;
+  single_customer_invoice: boolean | null;
+  invoice_send_method: string | null;
+  email_attachment_type: string | null;
+  invoices_due_in: number | null;
+  invoices_due_in_type: string | null;
+  is_factoring: boolean | null;
+  invoice_send_sms_notification: boolean | null;
+  invoice_sms_notification_number: string | null;
+  is_automatic_soft_reminder_enabled: boolean | null;
+  is_automatic_reminder_enabled: boolean | null;
+  is_automatic_notice_of_debt_collection_enabled: boolean | null;
+  discount_percentage: number | null;
+  website: string | null;
+  account_manager: Record<string, unknown> | null;
+  department: Record<string, unknown> | null;
+  postal_address: Record<string, unknown> | null;
+  physical_address: Record<string, unknown> | null;
+  delivery_address: Record<string, unknown> | null;
+  category1: Record<string, unknown> | null;
+  category2: Record<string, unknown> | null;
+  category3: Record<string, unknown> | null;
+  currency: Record<string, unknown> | null;
+  ledger_account: Record<string, unknown> | null;
+  bank_account_presentation: unknown[] | null;
 }
 
 export interface CustomerLocation {
