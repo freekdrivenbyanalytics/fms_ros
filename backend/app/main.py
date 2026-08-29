@@ -22,6 +22,7 @@ from app.models import (
 from app.schemas import (
     AssignmentCreate,
     AssignmentOut,
+    AssignmentPinUpdate,
     ContractOut,
     CustomerLocationOut,
     CustomerOut,
@@ -213,6 +214,32 @@ def create_assignment(
     return assignment
 
 
+@app.delete("/assignments/{service_visit_id}", status_code=204)
+def unassign_visit(service_visit_id: int, db: Session = Depends(get_db)) -> None:
+    assignment = db.get(Assignment, service_visit_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    visit = assignment.service_visit
+    db.delete(assignment)
+    visit.status = VisitStatus.UNASSIGNED
+    db.commit()
+
+
+@app.patch("/assignments/{service_visit_id}", response_model=AssignmentOut)
+def update_assignment_pin(
+    service_visit_id: int, payload: AssignmentPinUpdate, db: Session = Depends(get_db)
+) -> Assignment:
+    assignment = db.get(Assignment, service_visit_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    assignment.pinned = payload.pinned
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
 @app.post("/optimize/propose", response_model=OptimizationProposal)
 def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
     payload = build_optimize_payload(db)
@@ -269,7 +296,7 @@ def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
 def apply_optimization(
     payload: OptimizationApplyRequest, db: Session = Depends(get_db)
 ) -> OptimizationApplyResult:
-    created: list[Assignment] = []
+    results: list[Assignment] = []
     skipped: list[int] = []
     for item in payload.scheduled:
         visit = db.get(ServiceVisit, item.service_visit_id)
@@ -278,9 +305,27 @@ def apply_optimization(
                 status_code=404,
                 detail=f"Service visit {item.service_visit_id} not found",
             )
-        if visit.status == VisitStatus.ASSIGNED:
+
+        assignment = db.get(Assignment, item.service_visit_id)
+        if assignment is None:
+            results.append(create_assignment(item, db))
+            continue
+
+        if assignment.pinned:
             skipped.append(item.service_visit_id)
             continue
-        created.append(create_assignment(item, db))
 
-    return OptimizationApplyResult(created=created, skipped_visit_ids=skipped)
+        employee = db.get(Employee, item.employee_id)
+        if employee is None:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        assignment.employee_id = employee.id
+        assignment.planned_start = item.planned_start
+        assignment.planned_end = item.planned_start + timedelta(
+            minutes=visit.contract.duration_minutes
+        )
+        db.commit()
+        db.refresh(assignment)
+        results.append(assignment)
+
+    return OptimizationApplyResult(created=results, skipped_visit_ids=skipped)

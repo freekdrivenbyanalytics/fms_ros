@@ -4,7 +4,7 @@ import httpx
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
-from app.models import Assignment, Contract, CustomerLocation, Employee, ServiceVisit, VisitStatus
+from app.models import Assignment, Contract, CustomerLocation, Employee, ServiceVisit
 
 
 def _minutes_since_midnight(t: time) -> int:
@@ -58,33 +58,29 @@ def build_optimize_payload(db: Session) -> dict:
         .order_by(Employee.id)
         .all()
     )
-    unassigned_visits = (
+    all_visits = (
         db.query(ServiceVisit)
-        .filter(ServiceVisit.status == VisitStatus.UNASSIGNED)
         .options(
             joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
             joinedload(ServiceVisit.contract)
             .joinedload(Contract.customer_location)
             .joinedload(CustomerLocation.region),
+            joinedload(ServiceVisit.assignment),
         )
         .order_by(ServiceVisit.id)
         .all()
     )
-    existing_assignments = (
-        db.query(Assignment)
-        .options(
-            joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
-        )
-        .order_by(Assignment.service_visit_id)
-        .all()
-    )
+
+    # A visit is schedulable unless it has a pinned assignment; an unpinned
+    # assignment moves it from "existing fact" to "candidate" rather than
+    # appearing in both.
+    schedulable_visits = [v for v in all_visits if v.assignment is None or not v.assignment.pinned]
+    pinned_assignments = [v.assignment for v in all_visits if v.assignment is not None and v.assignment.pinned]
 
     return {
         "employees": [_employee_payload(e) for e in employees],
-        "visits": [_visit_payload(v) for v in unassigned_visits],
-        "existing_assignments": [_existing_assignment_payload(a) for a in existing_assignments],
+        "visits": [_visit_payload(v) for v in schedulable_visits],
+        "existing_assignments": [_existing_assignment_payload(a) for a in pinned_assignments],
         "time_limit_seconds": settings.solver_time_limit_seconds,
     }
 

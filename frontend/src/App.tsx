@@ -48,12 +48,31 @@ function App() {
   }
 
   function handleOptimizationApplied(created: Assignment[]) {
-    setAssignments((prev) => [...prev, ...created]);
+    setAssignments((prev) => {
+      const byVisit = new Map(prev.map((a) => [a.service_visit_id, a]));
+      for (const assignment of created) byVisit.set(assignment.service_visit_id, assignment);
+      return Array.from(byVisit.values());
+    });
     setVisits((prev) =>
       prev.map((visit) => {
         const match = created.find((a) => a.service_visit_id === visit.id);
         return match ? { ...visit, status: "assigned" } : visit;
       })
+    );
+  }
+
+  function handleUnassigned(serviceVisitId: number) {
+    setAssignments((prev) => prev.filter((a) => a.service_visit_id !== serviceVisitId));
+    setVisits((prev) =>
+      prev.map((visit) =>
+        visit.id === serviceVisitId ? { ...visit, status: "unassigned" } : visit
+      )
+    );
+  }
+
+  function handlePinChanged(assignment: Assignment) {
+    setAssignments((prev) =>
+      prev.map((a) => (a.service_visit_id === assignment.service_visit_id ? assignment : a))
     );
   }
 
@@ -123,7 +142,12 @@ function App() {
             employees={employees}
             onAssigned={handleAssigned}
           />
-          <AssignedVisitList visits={assignedVisits} assignments={assignments} />
+          <AssignedVisitList
+            visits={assignedVisits}
+            assignments={assignments}
+            onUnassigned={handleUnassigned}
+            onPinChanged={handlePinChanged}
+          />
         </div>
       )}
       {view === "planning" && (

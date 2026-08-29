@@ -75,6 +75,28 @@ export function createAssignment(input: CreateAssignmentInput): Promise<Assignme
   }).then((res) => handleResponse<Assignment>(res));
 }
 
+export async function unassignVisit(serviceVisitId: number): Promise<void> {
+  const res = await fetch(`${API_URL}/assignments/${serviceVisitId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export function setAssignmentPinned(
+  serviceVisitId: number,
+  pinned: boolean
+): Promise<Assignment> {
+  return fetch(`${API_URL}/assignments/${serviceVisitId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pinned }),
+  }).then((res) => handleResponse<Assignment>(res));
+}
+
 export function proposeOptimization(): Promise<OptimizationProposal> {
   return fetch(`${API_URL}/optimize/propose`, { method: "POST" }).then((res) =>
     handleResponse<OptimizationProposal>(res)

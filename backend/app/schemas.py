@@ -125,8 +125,13 @@ class AssignmentOut(BaseModel):
     employee_id: int
     planned_start: datetime
     planned_end: datetime
+    pinned: bool
     employee: EmployeeOut
     service_visit: ServiceVisitOut
+
+
+class AssignmentPinUpdate(BaseModel):
+    pinned: bool
 
 
 class ProposedAssignmentOut(BaseModel):

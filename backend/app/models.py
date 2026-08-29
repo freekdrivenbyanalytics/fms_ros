@@ -254,6 +254,9 @@ class Assignment(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
     planned_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     planned_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    pinned: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     service_visit: Mapped["ServiceVisit"] = relationship(back_populates="assignment")
     employee: Mapped["Employee"] = relationship(back_populates="assignments")

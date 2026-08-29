@@ -98,6 +98,7 @@ export interface Assignment {
   employee_id: number;
   planned_start: string;
   planned_end: string;
+  pinned: boolean;
   employee: Employee;
   service_visit: ServiceVisit;
 }
