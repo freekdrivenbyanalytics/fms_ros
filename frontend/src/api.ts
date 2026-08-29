@@ -5,6 +5,8 @@ import type {
   Customer,
   CustomerLocation,
   Employee,
+  OptimizationApplyResult,
+  OptimizationProposal,
   Region,
   ServiceVisit,
   Skill,
@@ -71,4 +73,20 @@ export function createAssignment(input: CreateAssignmentInput): Promise<Assignme
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   }).then((res) => handleResponse<Assignment>(res));
+}
+
+export function proposeOptimization(): Promise<OptimizationProposal> {
+  return fetch(`${API_URL}/optimize/propose`, { method: "POST" }).then((res) =>
+    handleResponse<OptimizationProposal>(res)
+  );
+}
+
+export function applyOptimization(
+  scheduled: CreateAssignmentInput[]
+): Promise<OptimizationApplyResult> {
+  return fetch(`${API_URL}/optimize/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scheduled }),
+  }).then((res) => handleResponse<OptimizationApplyResult>(res));
 }

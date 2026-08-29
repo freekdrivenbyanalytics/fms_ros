@@ -107,3 +107,22 @@ export interface CreateAssignmentInput {
   employee_id: number;
   planned_start: string;
 }
+
+export interface ProposedAssignment {
+  service_visit_id: number;
+  employee_id: number;
+  planned_start: string;
+  planned_end: string;
+  employee: Employee;
+  service_visit: ServiceVisit;
+}
+
+export interface OptimizationProposal {
+  scheduled: ProposedAssignment[];
+  unscheduled_visit_ids: number[];
+}
+
+export interface OptimizationApplyResult {
+  created: Assignment[];
+  skipped_visit_ids: number[];
+}

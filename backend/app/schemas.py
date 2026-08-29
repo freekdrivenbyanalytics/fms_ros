@@ -127,3 +127,26 @@ class AssignmentOut(BaseModel):
     planned_end: datetime
     employee: EmployeeOut
     service_visit: ServiceVisitOut
+
+
+class ProposedAssignmentOut(BaseModel):
+    service_visit_id: int
+    employee_id: int
+    planned_start: datetime
+    planned_end: datetime
+    employee: EmployeeOut
+    service_visit: ServiceVisitOut
+
+
+class OptimizationProposal(BaseModel):
+    scheduled: list[ProposedAssignmentOut]
+    unscheduled_visit_ids: list[int]
+
+
+class OptimizationApplyRequest(BaseModel):
+    scheduled: list[AssignmentCreate]
+
+
+class OptimizationApplyResult(BaseModel):
+    created: list[AssignmentOut]
+    skipped_visit_ids: list[int]

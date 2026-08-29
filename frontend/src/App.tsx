@@ -3,10 +3,17 @@ import { listAssignments, listEmployees, listServiceVisits } from "./api";
 import { AssignedVisitList } from "./components/AssignedVisitList";
 import { DayPlanningView } from "./components/DayPlanningView";
 import { EmployeeList } from "./components/EmployeeList";
+import { OptimizeView } from "./components/OptimizeView";
 import { UnassignedVisitList } from "./components/UnassignedVisitList";
 import type { Assignment, Employee, ServiceVisit } from "./types";
 
-type View = "assign" | "planning";
+type View = "assign" | "planning" | "optimize";
+
+const VIEW_TITLES: Record<View, string> = {
+  assign: "Manual Assignment",
+  planning: "Day Planning",
+  optimize: "Optimize",
+};
 
 function App() {
   const [view, setView] = useState<View>("assign");
@@ -40,6 +47,16 @@ function App() {
     );
   }
 
+  function handleOptimizationApplied(created: Assignment[]) {
+    setAssignments((prev) => [...prev, ...created]);
+    setVisits((prev) =>
+      prev.map((visit) => {
+        const match = created.find((a) => a.service_visit_id === visit.id);
+        return match ? { ...visit, status: "assigned" } : visit;
+      })
+    );
+  }
+
   const unassignedVisits = visits.filter((visit) => visit.status === "unassigned");
   const assignedVisits = visits.filter((visit) => visit.status === "assigned");
 
@@ -54,9 +71,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          {view === "assign" ? "Manual Assignment" : "Day Planning"}
-        </h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{VIEW_TITLES[view]}</h1>
         <nav className="flex gap-2">
           <button
             type="button"
@@ -80,6 +95,17 @@ function App() {
           >
             Day Planning
           </button>
+          <button
+            type="button"
+            onClick={() => setView("optimize")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              view === "optimize"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Optimize
+          </button>
           <a
             href="/customer-portal.html"
             className="rounded-md px-3 py-1.5 text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
@@ -89,7 +115,7 @@ function App() {
         </nav>
       </div>
 
-      {view === "assign" ? (
+      {view === "assign" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <EmployeeList employees={employees} />
           <UnassignedVisitList
@@ -99,9 +125,11 @@ function App() {
           />
           <AssignedVisitList visits={assignedVisits} assignments={assignments} />
         </div>
-      ) : (
+      )}
+      {view === "planning" && (
         <DayPlanningView employees={employees} assignments={assignments} />
       )}
+      {view === "optimize" && <OptimizeView onApplied={handleOptimizationApplied} />}
     </div>
   );
 }

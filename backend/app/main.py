@@ -1,7 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
@@ -25,10 +26,15 @@ from app.schemas import (
     CustomerLocationOut,
     CustomerOut,
     EmployeeOut,
+    OptimizationApplyRequest,
+    OptimizationApplyResult,
+    OptimizationProposal,
+    ProposedAssignmentOut,
     RegionOut,
     ServiceVisitOut,
     SkillOut,
 )
+from app.solver_client import build_optimize_payload, request_proposal
 from app.tripletex import sync_customers
 
 logging.basicConfig(level=logging.INFO)
@@ -205,3 +211,76 @@ def create_assignment(
     db.commit()
     db.refresh(assignment)
     return assignment
+
+
+@app.post("/optimize/propose", response_model=OptimizationProposal)
+def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
+    payload = build_optimize_payload(db)
+    try:
+        result = request_proposal(payload)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Solver request failed: {exc}"
+        ) from exc
+
+    visits_by_id = {
+        v.id: v
+        for v in db.query(ServiceVisit)
+        .options(
+            joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
+            joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(ServiceVisit.contract)
+            .joinedload(Contract.customer_location)
+            .joinedload(CustomerLocation.region),
+        )
+        .all()
+    }
+    employees_by_id = {
+        e.id: e
+        for e in db.query(Employee)
+        .options(joinedload(Employee.regions), joinedload(Employee.skills))
+        .all()
+    }
+
+    scheduled = []
+    for item in result["scheduled"]:
+        visit = visits_by_id[item["visit_id"]]
+        employee = employees_by_id[item["employee_id"]]
+        day_start = datetime.combine(visit.requested_date, time())
+        scheduled.append(
+            ProposedAssignmentOut(
+                service_visit_id=visit.id,
+                employee_id=employee.id,
+                planned_start=day_start + timedelta(minutes=item["start_minutes"]),
+                planned_end=day_start + timedelta(minutes=item["end_minutes"]),
+                employee=employee,
+                service_visit=visit,
+            )
+        )
+
+    return OptimizationProposal(
+        scheduled=scheduled, unscheduled_visit_ids=result["unscheduled_visit_ids"]
+    )
+
+
+@app.post("/optimize/apply", response_model=OptimizationApplyResult)
+def apply_optimization(
+    payload: OptimizationApplyRequest, db: Session = Depends(get_db)
+) -> OptimizationApplyResult:
+    created: list[Assignment] = []
+    skipped: list[int] = []
+    for item in payload.scheduled:
+        visit = db.get(ServiceVisit, item.service_visit_id)
+        if visit is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Service visit {item.service_visit_id} not found",
+            )
+        if visit.status == VisitStatus.ASSIGNED:
+            skipped.append(item.service_visit_id)
+            continue
+        created.append(create_assignment(item, db))
+
+    return OptimizationApplyResult(created=created, skipped_visit_ids=skipped)

@@ -44,8 +44,41 @@ npm run dev
 
 The app is now available at `http://localhost:5173`.
 
+## 4. Run the solver service
+
+The "Optimize" view calls a separate solver microservice that runs [Timefold Solver](https://timefold.ai)
+to match employees to unassigned visits. It's a standalone FastAPI service with its own virtualenv.
+
+```sh
+cd solver
+python -m venv .venv
+./.venv/Scripts/activate   # on Windows; use `source .venv/bin/activate` on macOS/Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8100
+```
+
+The solver API is now available at `http://localhost:8100`.
+
+**Note:** Timefold's Python package wraps the real Java Timefold Solver via JPype and requires a
+JVM at runtime. No system-wide Java install is needed — `jdk4py` (pinned in `requirements.txt`)
+bundles a JDK as a regular pip package, and `solver/app/jvm.py` points `JAVA_HOME`/`PATH` at it
+automatically before Timefold is imported.
+
+The backend calls this service at `solver_base_url` (`http://localhost:8100` by default, see
+`backend/app/config.py`), so it must be running for `POST /optimize/propose` to succeed.
+
+## Convenience: start everything at once
+
+```powershell
+.\start-dev.ps1
+```
+
+Starts PostgreSQL (Docker), the backend, the solver service, and the frontend, each in their own
+window (Windows/PowerShell only; assumes each `.venv`/`node_modules` is already set up as above).
+
 ## Project layout
 
 - `backend/` — FastAPI app, SQLAlchemy models, Alembic migrations
+- `solver/` — standalone FastAPI + Timefold Solver microservice for route optimization
 - `frontend/` — Vite + React + TypeScript app
 - `docker-compose.yml` — local PostgreSQL service
