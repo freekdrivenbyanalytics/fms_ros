@@ -32,12 +32,16 @@ The system SHALL only propose scheduling a service visit to an employee when the
 - **WHEN** a proposed schedule assigns a service visit to an employee
 - **THEN** the proposed time window does not overlap the time window of any other visit already assigned to that employee, or any other visit proposed to that employee in the same schedule
 
-### Requirement: Proposed schedule keeps each visit's requested date
-The system SHALL propose a planned start time for a service visit only on that visit's own requested date; the system SHALL NOT propose moving a visit to a different date.
+### Requirement: Proposed schedule keeps each visit's effective schedule date
+The system SHALL propose a planned start time for a service visit only on that visit's effective schedule date — its own requested date if that date has not yet passed, or today if it has — and SHALL NOT propose any other date.
 
-#### Scenario: Proposed time stays on the visit's requested date
-- **WHEN** a proposed schedule assigns a service visit to an employee
+#### Scenario: Proposed time stays on the visit's requested date when not yet passed
+- **WHEN** a proposed schedule assigns a service visit whose requested date has not passed
 - **THEN** the proposed planned start time falls on that visit's requested date
+
+#### Scenario: A visit whose requested date has passed is rescheduled to today
+- **WHEN** a proposed schedule assigns a service visit whose requested date has already passed
+- **THEN** the proposed planned start time falls on today's date rather than the original requested date
 
 ### Requirement: Proposed schedule minimizes travel distance
 Among schedules that satisfy the hard constraints, the system SHALL prefer a schedule that reduces the total geographic travel distance between the visits proposed to the same employee on the same day.
@@ -56,6 +60,10 @@ The system SHALL treat only pinned assignments as fixed when generating a propos
 #### Scenario: Unpinned assigned visit becomes a candidate for the schedule run
 - **WHEN** a proposed schedule is generated while a service visit has an assignment that is not pinned
 - **THEN** the proposal may assign that visit to the same or a different employee and/or time than its current assignment, subject to the hard constraints
+
+#### Scenario: An already-started assignment is fixed even without manual pinning
+- **WHEN** a proposed schedule is generated while a service visit has an assignment whose planned start time has already passed
+- **THEN** that assignment is treated as fixed exactly like a manually pinned one, and the proposal does not reassign that visit
 
 ### Requirement: Applying a proposed schedule creates or updates assignments
 The system SHALL let a user apply a previously generated proposed schedule: for each visit the proposal scheduled, the system creates a new assignment if the visit is currently unassigned, or updates its existing assignment's employee and planned start/end time in place if the visit is currently assigned and unpinned, using the same rules as manually assigning a visit. The system SHALL reject applying a visit that has become pinned since the proposal was generated, reporting it as skipped rather than overwriting its now-protected assignment.

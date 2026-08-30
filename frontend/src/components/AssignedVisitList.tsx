@@ -87,6 +87,8 @@ interface CardProps {
 function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: CardProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const plannedDate = assignment.planned_start.slice(0, 10);
+  const rescheduled = plannedDate !== visit.requested_date;
 
   async function handleUnassign() {
     setBusy(true);
@@ -143,6 +145,14 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
               <div className="text-xs text-slate-600 mt-1">
                 {assignment.employee.name} ·{" "}
                 {formatRange(assignment.planned_start, assignment.planned_end)}
+              </div>
+              <div
+                className={`text-xs mt-0.5 ${
+                  rescheduled ? "text-amber-700 font-medium" : "text-slate-400"
+                }`}
+              >
+                Requested {visit.requested_date}
+                {rescheduled ? " (rescheduled)" : ""}
               </div>
             </div>
           }

@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models import VisitStatus
 
@@ -128,6 +128,12 @@ class AssignmentOut(BaseModel):
     pinned: bool
     employee: EmployeeOut
     service_visit: ServiceVisitOut
+
+    @model_validator(mode="after")
+    def _lock_if_started(self) -> "AssignmentOut":
+        if self.planned_start <= datetime.now():
+            self.pinned = True
+        return self
 
 
 class AssignmentPinUpdate(BaseModel):

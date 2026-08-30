@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, datetime, time
 
 import httpx
 from sqlalchemy.orm import Session, joinedload
@@ -9,6 +9,21 @@ from app.models import Assignment, Contract, CustomerLocation, Employee, Service
 
 def _minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
+
+
+def effective_schedule_date(visit: ServiceVisit) -> date:
+    """The date a schedule run may propose this visit on.
+
+    A visit's own requested date, unless that date has already passed, in
+    which case it's rescheduled to today rather than being stuck on a date
+    that's already gone.
+    """
+    return max(visit.requested_date, date.today())
+
+
+def _is_locked(assignment: Assignment) -> bool:
+    """An assignment a schedule run must never touch: pinned, or already started."""
+    return assignment.pinned or assignment.planned_start <= datetime.now()
 
 
 def _employee_payload(employee: Employee) -> dict:
@@ -27,7 +42,7 @@ def _visit_payload(visit: ServiceVisit) -> dict:
     location = visit.contract.customer_location
     return {
         "id": visit.id,
-        "requested_date": visit.requested_date.isoformat(),
+        "requested_date": effective_schedule_date(visit).isoformat(),
         "duration_minutes": visit.contract.duration_minutes,
         "required_skill_ids": [s.id for s in visit.contract.required_skills],
         "region_id": location.region_id,
@@ -71,16 +86,16 @@ def build_optimize_payload(db: Session) -> dict:
         .all()
     )
 
-    # A visit is schedulable unless it has a pinned assignment; an unpinned
-    # assignment moves it from "existing fact" to "candidate" rather than
-    # appearing in both.
-    schedulable_visits = [v for v in all_visits if v.assignment is None or not v.assignment.pinned]
-    pinned_assignments = [v.assignment for v in all_visits if v.assignment is not None and v.assignment.pinned]
+    # A visit is schedulable unless it has a locked assignment (pinned, or
+    # already started); a not-yet-started unpinned assignment moves it from
+    # "existing fact" to "candidate" rather than appearing in both.
+    schedulable_visits = [v for v in all_visits if v.assignment is None or not _is_locked(v.assignment)]
+    locked_assignments = [v.assignment for v in all_visits if v.assignment is not None and _is_locked(v.assignment)]
 
     return {
         "employees": [_employee_payload(e) for e in employees],
         "visits": [_visit_payload(v) for v in schedulable_visits],
-        "existing_assignments": [_existing_assignment_payload(a) for a in pinned_assignments],
+        "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "time_limit_seconds": settings.solver_time_limit_seconds,
     }
 

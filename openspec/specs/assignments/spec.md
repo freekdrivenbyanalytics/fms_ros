@@ -53,6 +53,17 @@ The system SHALL allow a user to pin or unpin an assigned service visit's assign
 - **WHEN** a user attempts to pin a service visit that has no assignment
 - **THEN** the system rejects the request
 
+### Requirement: An assignment locks automatically once it has started
+The system SHALL treat an assignment as pinned — regardless of its stored pin flag — once its planned start time has passed. This lock is based on elapsed time, not the stored flag, and cannot be removed by unpinning.
+
+#### Scenario: An already-started assignment is shown as pinned
+- **WHEN** a user views an assignment whose planned start time has already passed
+- **THEN** the system shows that assignment as pinned, even if it was never manually pinned
+
+#### Scenario: Unpinning an already-started assignment does not unlock it
+- **WHEN** a user unpins an assignment whose planned start time has already passed
+- **THEN** the system updates the stored pin flag, but the assignment continues to be shown as pinned and remains excluded from schedule runs
+
 ### Requirement: View employees and visits for assignment
 The system SHALL provide a page showing the list of employees, the list of unassigned service visits, and the list of assigned service visits, with each employee card showing its region(s) and skills, and each visit card showing its customer name, region, and required skills, all expandable to show additional detail. Each of the three lists SHALL provide its own independent text search and region/skill filtering, narrowing that list without affecting the other two lists. Each assigned visit card SHALL show whether its assignment is pinned, and offer controls to unassign it and to pin or unpin it.
 

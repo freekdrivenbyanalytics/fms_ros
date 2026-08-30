@@ -106,27 +106,40 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
                   <th className="px-3 py-2 text-left font-medium text-slate-500">Visit</th>
                   <th className="px-3 py-2 text-left font-medium text-slate-500">Customer</th>
                   <th className="px-3 py-2 text-left font-medium text-slate-500">Employee</th>
+                  <th className="px-3 py-2 text-left font-medium text-slate-500">Requested</th>
                   <th className="px-3 py-2 text-left font-medium text-slate-500">
                     Proposed time
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {proposal.scheduled.map((item) => (
-                  <tr key={item.service_visit_id}>
-                    <td className="px-3 py-2 text-slate-900">#{item.service_visit_id}</td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {item.service_visit.contract.customer_location.customer.name}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{item.employee.name}</td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {formatDateTime(item.planned_start)} – {formatDateTime(item.planned_end)}
-                    </td>
-                  </tr>
-                ))}
+                {proposal.scheduled.map((item) => {
+                  const rescheduled =
+                    item.planned_start.slice(0, 10) !== item.service_visit.requested_date;
+                  return (
+                    <tr key={item.service_visit_id}>
+                      <td className="px-3 py-2 text-slate-900">#{item.service_visit_id}</td>
+                      <td className="px-3 py-2 text-slate-600">
+                        {item.service_visit.contract.customer_location.customer.name}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{item.employee.name}</td>
+                      <td
+                        className={`px-3 py-2 ${
+                          rescheduled ? "text-amber-700 font-medium" : "text-slate-600"
+                        }`}
+                      >
+                        {item.service_visit.requested_date}
+                        {rescheduled ? " (rescheduled)" : ""}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">
+                        {formatDateTime(item.planned_start)} – {formatDateTime(item.planned_end)}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {proposal.scheduled.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
+                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
                       No visits could be scheduled.
                     </td>
                   </tr>

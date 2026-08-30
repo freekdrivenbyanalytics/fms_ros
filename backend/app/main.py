@@ -35,7 +35,7 @@ from app.schemas import (
     ServiceVisitOut,
     SkillOut,
 )
-from app.solver_client import build_optimize_payload, request_proposal
+from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
 from app.tripletex import sync_customers
 
 logging.basicConfig(level=logging.INFO)
@@ -275,7 +275,7 @@ def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
     for item in result["scheduled"]:
         visit = visits_by_id[item["visit_id"]]
         employee = employees_by_id[item["employee_id"]]
-        day_start = datetime.combine(visit.requested_date, time())
+        day_start = datetime.combine(effective_schedule_date(visit), time())
         scheduled.append(
             ProposedAssignmentOut(
                 service_visit_id=visit.id,
