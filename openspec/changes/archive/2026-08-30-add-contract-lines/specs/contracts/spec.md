@@ -1,17 +1,4 @@
-# contracts Specification
-
-## Purpose
-
-Represents a customer's recurring service agreement (a contract) and the per-location schedules under it (contract lines), each defining the interval, duration, and skill requirements of the service visits it generates.
-
-## Requirements
-
-### Requirement: Contract data model
-The system SHALL persist each contract with a unique identifier, the customer it belongs to, and a soft-delete flag.
-
-#### Scenario: Contract is persisted with required fields
-- **WHEN** a contract is created with id and customer_id
-- **THEN** the system persists the contract and both fields are retrievable unchanged
+## ADDED Requirements
 
 ### Requirement: Contract Line data model
 The system SHALL persist each contract line with a unique identifier, the contract it belongs to, the customer location it applies to, a start date, an optional end date, an interval in days, a visit duration in minutes, the skills it requires, and a soft-delete flag.
@@ -81,3 +68,18 @@ The system SHALL exclude soft-deleted contracts from the contract list, and soft
 #### Scenario: Deleted contract line is excluded from its contract's lines
 - **WHEN** a caller requests a contract's lines
 - **THEN** contract lines marked deleted are not included in the result
+
+## MODIFIED Requirements
+
+### Requirement: Contract data model
+The system SHALL persist each contract with a unique identifier, the customer it belongs to, and a soft-delete flag.
+
+#### Scenario: Contract is persisted with required fields
+- **WHEN** a contract is created with id and customer_id
+- **THEN** the system persists the contract and both fields are retrievable unchanged
+
+## REMOVED Requirements
+
+### Requirement: A contract can require multiple skills
+**Reason**: Required skills now belong to a contract line, not a contract directly, since a contract can span multiple locations each needing different skills.
+**Migration**: See "A contract line can require multiple skills".

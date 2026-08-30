@@ -4,7 +4,7 @@ import httpx
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
-from app.models import Assignment, Contract, CustomerLocation, Employee, ServiceVisit
+from app.models import Assignment, ContractLine, CustomerLocation, Employee, ServiceVisit
 
 
 def _minutes_since_midnight(t: time) -> int:
@@ -39,12 +39,12 @@ def _employee_payload(employee: Employee) -> dict:
 
 
 def _visit_payload(visit: ServiceVisit) -> dict:
-    location = visit.contract.customer_location
+    location = visit.contract_line.customer_location
     return {
         "id": visit.id,
         "requested_date": effective_schedule_date(visit).isoformat(),
-        "duration_minutes": visit.contract.duration_minutes,
-        "required_skill_ids": [s.id for s in visit.contract.required_skills],
+        "duration_minutes": visit.contract_line.duration_minutes,
+        "required_skill_ids": [s.id for s in visit.contract_line.required_skills],
         "region_id": location.region_id,
         "latitude": location.latitude,
         "longitude": location.longitude,
@@ -52,7 +52,7 @@ def _visit_payload(visit: ServiceVisit) -> dict:
 
 
 def _existing_assignment_payload(assignment: Assignment) -> dict:
-    location = assignment.service_visit.contract.customer_location
+    location = assignment.service_visit.contract_line.customer_location
     duration = int((assignment.planned_end - assignment.planned_start).total_seconds() // 60)
     start_minutes = _minutes_since_midnight(assignment.planned_start.time())
     return {
@@ -70,7 +70,7 @@ def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
     """A visit the optimizer can consider: its location has resolved
     coordinates and an assigned region. Neither is guaranteed for a
     Tripletex-synced location until geocoding/region-assignment happens."""
-    location = visit.contract.customer_location
+    location = visit.contract_line.customer_location
     return (
         location.latitude is not None
         and location.longitude is not None
@@ -95,9 +95,9 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     all_visits = (
         db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
-            joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),
             joinedload(ServiceVisit.assignment),
         )

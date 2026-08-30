@@ -16,8 +16,10 @@ export function SkillsView({ skills, employees, contracts }: Props) {
     const skillEmployees = employees.filter((employee) =>
       employee.skills.some((skill) => skill.id === selected.id)
     );
-    const skillContracts = contracts.filter((contract) =>
-      contract.required_skills.some((skill) => skill.id === selected.id)
+    const skillLines = contracts.flatMap((contract) =>
+      contract.lines.filter((line) =>
+        line.required_skills.some((skill) => skill.id === selected.id)
+      )
     );
     return (
       <div>
@@ -28,15 +30,14 @@ export function SkillsView({ skills, employees, contracts }: Props) {
             ? "—"
             : skillEmployees.map((employee) => employee.name).join(", ")}
         </DetailField>
-        <DetailField label="Contracts requiring this skill">
-          {skillContracts.length === 0 ? (
+        <DetailField label="Contract lines requiring this skill">
+          {skillLines.length === 0 ? (
             "—"
           ) : (
             <ul className="space-y-1">
-              {skillContracts.map((contract) => (
-                <li key={contract.id}>
-                  {contract.customer_location.customer.name} —{" "}
-                  {contract.customer_location.address}
+              {skillLines.map((line) => (
+                <li key={line.id}>
+                  {line.customer_location.customer.name} — {line.customer_location.address}
                 </li>
               ))}
             </ul>

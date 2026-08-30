@@ -87,15 +87,51 @@ class CustomerLocationOut(BaseModel):
     region: RegionOut | None = None
 
 
-class ContractOut(BaseModel):
+class ContractLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    contract_id: int
     start_date: date
+    end_date: date | None = None
     interval_days: int
     duration_minutes: int
     customer_location: CustomerLocationOut
     required_skills: list[SkillOut]
+
+
+class ContractOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    customer: CustomerOut
+    lines: list[ContractLineOut]
+
+
+class ContractCreate(BaseModel):
+    customer_id: int
+
+
+class ContractUpdate(BaseModel):
+    customer_id: int
+
+
+class ContractLineCreate(BaseModel):
+    customer_location_id: int
+    start_date: date
+    end_date: date | None = None
+    interval_days: int
+    duration_minutes: int
+    required_skill_ids: list[int]
+
+
+class ContractLineUpdate(BaseModel):
+    customer_location_id: int
+    start_date: date
+    end_date: date | None = None
+    interval_days: int
+    duration_minutes: int
+    required_skill_ids: list[int]
 
 
 class EmployeeOut(BaseModel):
@@ -117,7 +153,7 @@ class ServiceVisitOut(BaseModel):
     id: int
     requested_date: date
     status: VisitStatus
-    contract: ContractOut
+    contract_line: ContractLineOut
 
 
 class AssignmentCreate(BaseModel):

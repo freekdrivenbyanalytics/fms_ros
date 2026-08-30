@@ -120,7 +120,7 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
                     <tr key={item.service_visit_id}>
                       <td className="px-3 py-2 text-slate-900">#{item.service_visit_id}</td>
                       <td className="px-3 py-2 text-slate-600">
-                        {item.service_visit.contract.customer_location.customer.name}
+                        {item.service_visit.contract_line.customer_location.customer.name}
                       </td>
                       <td className="px-3 py-2 text-slate-600">{item.employee.name}</td>
                       <td

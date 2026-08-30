@@ -29,8 +29,8 @@ export function CustomerLocationsView({
   }, []);
 
   if (selected) {
-    const locationContracts = contracts.filter(
-      (contract) => contract.customer_location.id === selected.id
+    const locationLines = contracts.flatMap((contract) =>
+      contract.lines.filter((line) => line.customer_location.id === selected.id)
     );
     return (
       <div>
@@ -43,15 +43,15 @@ export function CustomerLocationsView({
             ? `${selected.latitude.toFixed(4)}, ${selected.longitude.toFixed(4)}`
             : "Not yet resolved"}
         </DetailField>
-        <DetailField label="Contracts">
-          {locationContracts.length === 0 ? (
+        <DetailField label="Contract Lines">
+          {locationLines.length === 0 ? (
             "—"
           ) : (
             <ul className="space-y-1">
-              {locationContracts.map((contract) => (
-                <li key={contract.id}>
-                  Every {contract.interval_days} days, {contract.duration_minutes} min —{" "}
-                  {contract.required_skills.map((skill) => skill.name).join(", ") ||
+              {locationLines.map((line) => (
+                <li key={line.id}>
+                  Every {line.interval_days} days, {line.duration_minutes} min —{" "}
+                  {line.required_skills.map((skill) => skill.name).join(", ") ||
                     "no skills required"}
                 </li>
               ))}

@@ -13,10 +13,10 @@ interface ListProps {
 
 function extract(visit: ServiceVisit) {
   return {
-    name: visit.contract.customer_location.customer.name,
-    address: visit.contract.customer_location.address,
-    regions: visit.contract.customer_location.region ? [visit.contract.customer_location.region] : [],
-    skills: visit.contract.required_skills,
+    name: visit.contract_line.customer_location.customer.name,
+    address: visit.contract_line.customer_location.address,
+    regions: visit.contract_line.customer_location.region ? [visit.contract_line.customer_location.region] : [],
+    skills: visit.contract_line.required_skills,
   };
 }
 
@@ -110,13 +110,13 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
           summary={
             <div>
               <div className="font-medium text-slate-800">
-                {visit.contract.customer_location.customer.name}
+                {visit.contract_line.customer_location.customer.name}
               </div>
               <div className="flex flex-wrap gap-1 mt-1">
                 <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                  {visit.contract.customer_location.region?.name ?? "No region"}
+                  {visit.contract_line.customer_location.region?.name ?? "No region"}
                 </span>
-                {visit.contract.required_skills.map((skill) => (
+                {visit.contract_line.required_skills.map((skill) => (
                   <span
                     key={skill.id}
                     className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
@@ -126,17 +126,17 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
                 ))}
               </div>
               <div className="text-xs text-slate-500 mt-1">
-                {visit.contract.duration_minutes} min · requested {visit.requested_date}
+                {visit.contract_line.duration_minutes} min · requested {visit.requested_date}
               </div>
             </div>
           }
         >
-          <div>{visit.contract.customer_location.customer.name}</div>
-          <div>{visit.contract.customer_location.address}</div>
+          <div>{visit.contract_line.customer_location.customer.name}</div>
+          <div>{visit.contract_line.customer_location.address}</div>
           <div>
-            {visit.contract.customer_location.latitude !== null &&
-            visit.contract.customer_location.longitude !== null
-              ? `${visit.contract.customer_location.latitude.toFixed(4)}, ${visit.contract.customer_location.longitude.toFixed(4)}`
+            {visit.contract_line.customer_location.latitude !== null &&
+            visit.contract_line.customer_location.longitude !== null
+              ? `${visit.contract_line.customer_location.latitude.toFixed(4)}, ${visit.contract_line.customer_location.longitude.toFixed(4)}`
               : "Coordinates not yet resolved"}
           </div>
         </InfoBox>

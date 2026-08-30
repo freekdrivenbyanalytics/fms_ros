@@ -66,13 +66,47 @@ export interface CustomerLocation {
   region: Region | null;
 }
 
-export interface Contract {
+export interface ContractLine {
   id: number;
+  contract_id: number;
   start_date: string;
+  end_date: string | null;
   interval_days: number;
   duration_minutes: number;
   customer_location: CustomerLocation;
   required_skills: Skill[];
+}
+
+export interface Contract {
+  id: number;
+  customer: Customer;
+  lines: ContractLine[];
+}
+
+export interface ContractCreateInput {
+  customer_id: number;
+}
+
+export interface ContractUpdateInput {
+  customer_id: number;
+}
+
+export interface ContractLineCreateInput {
+  customer_location_id: number;
+  start_date: string;
+  end_date: string | null;
+  interval_days: number;
+  duration_minutes: number;
+  required_skill_ids: number[];
+}
+
+export interface ContractLineUpdateInput {
+  customer_location_id: number;
+  start_date: string;
+  end_date: string | null;
+  interval_days: number;
+  duration_minutes: number;
+  required_skill_ids: number[];
 }
 
 export interface Employee {
@@ -90,7 +124,7 @@ export interface ServiceVisit {
   id: number;
   requested_date: string;
   status: VisitStatus;
-  contract: Contract;
+  contract_line: ContractLine;
 }
 
 export interface Assignment {

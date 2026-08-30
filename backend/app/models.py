@@ -40,10 +40,10 @@ employee_skills = Table(
     Column("skill_id", ForeignKey("skills.id"), primary_key=True),
 )
 
-contract_skills = Table(
-    "contract_skills",
+contract_line_skills = Table(
+    "contract_line_skills",
     Base.metadata,
-    Column("contract_id", ForeignKey("contracts.id"), primary_key=True),
+    Column("contract_line_id", ForeignKey("contract_lines.id"), primary_key=True),
     Column("skill_id", ForeignKey("skills.id"), primary_key=True),
 )
 
@@ -71,8 +71,8 @@ class Skill(Base):
     employees: Mapped[list["Employee"]] = relationship(
         secondary=employee_skills, back_populates="skills"
     )
-    contracts: Mapped[list["Contract"]] = relationship(
-        secondary=contract_skills, back_populates="required_skills"
+    contract_lines: Mapped[list["ContractLine"]] = relationship(
+        secondary=contract_line_skills, back_populates="required_skills"
     )
 
 
@@ -144,6 +144,7 @@ class Customer(Base):
     locations: Mapped[list["CustomerLocation"]] = relationship(
         back_populates="customer"
     )
+    contracts: Mapped[list["Contract"]] = relationship(back_populates="customer")
 
 
 class CustomerSyncLog(Base):
@@ -198,7 +199,7 @@ class CustomerLocation(Base):
 
     customer: Mapped["Customer"] = relationship(back_populates="locations")
     region: Mapped["Region | None"] = relationship(back_populates="customer_locations")
-    contracts: Mapped[list["Contract"]] = relationship(
+    contract_lines: Mapped[list["ContractLine"]] = relationship(
         back_populates="customer_location"
     )
 
@@ -227,21 +228,40 @@ class Contract(Base):
     __tablename__ = "contracts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    customer: Mapped["Customer"] = relationship(back_populates="contracts")
+    lines: Mapped[list["ContractLine"]] = relationship(back_populates="contract")
+
+
+class ContractLine(Base):
+    __tablename__ = "contract_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id"), nullable=False)
     customer_location_id: Mapped[int] = mapped_column(
         ForeignKey("customer_locations.id"), nullable=False
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date)
     interval_days: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
+    contract: Mapped["Contract"] = relationship(back_populates="lines")
     customer_location: Mapped["CustomerLocation"] = relationship(
-        back_populates="contracts"
+        back_populates="contract_lines"
     )
     required_skills: Mapped[list["Skill"]] = relationship(
-        secondary=contract_skills, back_populates="contracts"
+        secondary=contract_line_skills, back_populates="contract_lines"
     )
     service_visits: Mapped[list["ServiceVisit"]] = relationship(
-        back_populates="contract"
+        back_populates="contract_line"
     )
 
 
@@ -268,7 +288,9 @@ class ServiceVisit(Base):
     __tablename__ = "service_visits"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id"), nullable=False)
+    contract_line_id: Mapped[int] = mapped_column(
+        ForeignKey("contract_lines.id"), nullable=False
+    )
     requested_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[VisitStatus] = mapped_column(
         Enum(
@@ -281,7 +303,7 @@ class ServiceVisit(Base):
         server_default=VisitStatus.UNASSIGNED.value,
     )
 
-    contract: Mapped["Contract"] = relationship(back_populates="service_visits")
+    contract_line: Mapped["ContractLine"] = relationship(back_populates="service_visits")
     assignment: Mapped["Assignment | None"] = relationship(
         back_populates="service_visit", uselist=False
     )

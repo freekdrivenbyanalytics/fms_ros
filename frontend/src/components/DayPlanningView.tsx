@@ -105,7 +105,7 @@ export function DayPlanningView({ employees, assignments }: Props) {
                       const right = timeOffsetPercent(assignment.planned_end);
                       const width = Math.max(right - left, 2);
                       const visit = assignment.service_visit;
-                      const location = visit.contract.customer_location;
+                      const location = visit.contract_line.customer_location;
 
                       return (
                         <div
@@ -124,7 +124,7 @@ export function DayPlanningView({ employees, assignments }: Props) {
                             <div>{location.address}</div>
                             <div>{location.region?.name ?? "No region"}</div>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {visit.contract.required_skills.map((skill) => (
+                              {visit.contract_line.required_skills.map((skill) => (
                                 <span
                                   key={skill.id}
                                   className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"

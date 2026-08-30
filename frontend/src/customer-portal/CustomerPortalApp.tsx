@@ -124,6 +124,10 @@ export function CustomerPortalApp() {
     }
   }
 
+  async function handleContractsChanged() {
+    setContracts(await listContracts());
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-56 shrink-0 bg-white border-r border-slate-200 p-4">
@@ -193,7 +197,15 @@ export function CustomerPortalApp() {
             onInitialSelectionConsumed={() => setPendingLocationId(null)}
           />
         )}
-        {entity === "contracts" && <ContractsView contracts={contracts} />}
+        {entity === "contracts" && (
+          <ContractsView
+            contracts={contracts}
+            customers={customers}
+            customerLocations={customerLocations}
+            skills={skills}
+            onChanged={handleContractsChanged}
+          />
+        )}
         {entity === "skills" && (
           <SkillsView skills={skills} employees={employees} contracts={contracts} />
         )}

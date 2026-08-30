@@ -14,10 +14,10 @@ interface Props {
 
 function extract(visit: ServiceVisit) {
   return {
-    name: visit.contract.customer_location.customer.name,
-    address: visit.contract.customer_location.address,
-    regions: visit.contract.customer_location.region ? [visit.contract.customer_location.region] : [],
-    skills: visit.contract.required_skills,
+    name: visit.contract_line.customer_location.customer.name,
+    address: visit.contract_line.customer_location.address,
+    regions: visit.contract_line.customer_location.region ? [visit.contract_line.customer_location.region] : [],
+    skills: visit.contract_line.required_skills,
   };
 }
 
@@ -122,7 +122,7 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
           summary={
             <div>
               <div className="font-medium text-slate-800 flex items-center gap-2">
-                {visit.contract.customer_location.customer.name}
+                {visit.contract_line.customer_location.customer.name}
                 {assignment.pinned && (
                   <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                     Pinned
@@ -131,9 +131,9 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
               </div>
               <div className="flex flex-wrap gap-1 mt-1">
                 <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                  {visit.contract.customer_location.region?.name ?? "No region"}
+                  {visit.contract_line.customer_location.region?.name ?? "No region"}
                 </span>
-                {visit.contract.required_skills.map((skill) => (
+                {visit.contract_line.required_skills.map((skill) => (
                   <span
                     key={skill.id}
                     className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
@@ -157,12 +157,12 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
             </div>
           }
         >
-          <div>{visit.contract.customer_location.customer.name}</div>
-          <div>{visit.contract.customer_location.address}</div>
+          <div>{visit.contract_line.customer_location.customer.name}</div>
+          <div>{visit.contract_line.customer_location.address}</div>
           <div>
-            {visit.contract.customer_location.latitude !== null &&
-            visit.contract.customer_location.longitude !== null
-              ? `${visit.contract.customer_location.latitude.toFixed(4)}, ${visit.contract.customer_location.longitude.toFixed(4)}`
+            {visit.contract_line.customer_location.latitude !== null &&
+            visit.contract_line.customer_location.longitude !== null
+              ? `${visit.contract_line.customer_location.latitude.toFixed(4)}, ${visit.contract_line.customer_location.longitude.toFixed(4)}`
               : "Coordinates not yet resolved"}
           </div>
         </InfoBox>

@@ -4,6 +4,7 @@ from datetime import date, time, timedelta
 from app.database import SessionLocal
 from app.models import (
     Contract,
+    ContractLine,
     CustomerLocation,
     Employee,
     Region,
@@ -100,7 +101,7 @@ def seed() -> None:
             print("Contract/visit fixtures already present, skipping (customers/locations synced).")
             return
 
-        contract_fixtures = [
+        contract_line_fixtures = [
             {
                 "start_date": date(2026, 8, 20),
                 "interval_days": 30,
@@ -127,27 +128,38 @@ def seed() -> None:
             },
         ]
 
-        contracts = [
-            Contract(
+        # One contract per customer; a customer with multiple locations among
+        # the fixtures gets one contract line per location, all under the
+        # same contract.
+        contracts_by_customer_id: dict[int, Contract] = {}
+        lines = []
+        for location, fixture in zip(locations, contract_line_fixtures):
+            contract = contracts_by_customer_id.get(location.customer_id)
+            if contract is None:
+                contract = Contract(customer_id=location.customer_id)
+                db.add(contract)
+                db.flush()
+                contracts_by_customer_id[location.customer_id] = contract
+            line = ContractLine(
+                contract=contract,
                 customer_location=location,
                 start_date=fixture["start_date"],
                 interval_days=fixture["interval_days"],
                 duration_minutes=fixture["duration_minutes"],
                 required_skills=fixture["required_skills"],
             )
-            for location, fixture in zip(locations, contract_fixtures)
-        ]
-        db.add_all(contracts)
+            db.add(line)
+            lines.append(line)
         db.flush()
 
         visits = []
-        for contract in contracts:
+        for line in lines:
             for occurrence in range(2):
                 visits.append(
                     ServiceVisit(
-                        contract=contract,
-                        requested_date=contract.start_date
-                        + timedelta(days=occurrence * contract.interval_days),
+                        contract_line=line,
+                        requested_date=line.start_date
+                        + timedelta(days=occurrence * line.interval_days),
                     )
                 )
         db.add_all(visits)
@@ -156,8 +168,8 @@ def seed() -> None:
         print(
             f"Synced customers/locations from Tripletex; seeded {len(regions)} regions, "
             f"{len(skills)} skills, {len(locations)} customer locations, "
-            f"{len(contracts)} contracts, {len(employees)} employees, "
-            f"and {len(visits)} service visits."
+            f"{len(contracts_by_customer_id)} contracts, {len(lines)} contract lines, "
+            f"{len(employees)} employees, and {len(visits)} service visits."
         )
     finally:
         db.close()

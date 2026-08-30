@@ -1,6 +1,11 @@
 import type {
   Assignment,
   Contract,
+  ContractCreateInput,
+  ContractLine,
+  ContractLineCreateInput,
+  ContractLineUpdateInput,
+  ContractUpdateInput,
   CreateAssignmentInput,
   Customer,
   CustomerLocation,
@@ -59,6 +64,65 @@ export function listCustomerLocations(): Promise<CustomerLocation[]> {
 
 export function listContracts(): Promise<Contract[]> {
   return fetch(`${API_URL}/contracts`).then((res) => handleResponse<Contract[]>(res));
+}
+
+export function createContract(input: ContractCreateInput): Promise<Contract> {
+  return fetch(`${API_URL}/contracts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Contract>(res));
+}
+
+export function updateContract(
+  id: number,
+  input: ContractUpdateInput
+): Promise<Contract> {
+  return fetch(`${API_URL}/contracts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Contract>(res));
+}
+
+export async function deleteContract(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/contracts/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export function createContractLine(
+  contractId: number,
+  input: ContractLineCreateInput
+): Promise<ContractLine> {
+  return fetch(`${API_URL}/contracts/${contractId}/lines`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<ContractLine>(res));
+}
+
+export function updateContractLine(
+  id: number,
+  input: ContractLineUpdateInput
+): Promise<ContractLine> {
+  return fetch(`${API_URL}/contract-lines/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<ContractLine>(res));
+}
+
+export async function deleteContractLine(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/contract-lines/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
 }
 
 export function syncCustomers(): Promise<Customer[]> {

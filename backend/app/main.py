@@ -11,6 +11,7 @@ from app.database import SessionLocal, get_db
 from app.models import (
     Assignment,
     Contract,
+    ContractLine,
     Customer,
     CustomerLocation,
     Employee,
@@ -23,7 +24,12 @@ from app.schemas import (
     AssignmentCreate,
     AssignmentOut,
     AssignmentPinUpdate,
+    ContractCreate,
+    ContractLineCreate,
+    ContractLineOut,
+    ContractLineUpdate,
     ContractOut,
+    ContractUpdate,
     CustomerLocationOut,
     CustomerOut,
     EmployeeOut,
@@ -127,18 +133,158 @@ def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocat
     )
 
 
+def _contract_out(contract: Contract) -> ContractOut:
+    return ContractOut(
+        id=contract.id,
+        customer=CustomerOut.model_validate(contract.customer),
+        lines=[
+            ContractLineOut.model_validate(line)
+            for line in contract.lines
+            if not line.delete_flag
+        ],
+    )
+
+
 @app.get("/contracts", response_model=list[ContractOut])
-def list_contracts(db: Session = Depends(get_db)) -> list[Contract]:
-    return (
+def list_contracts(db: Session = Depends(get_db)) -> list[ContractOut]:
+    contracts = (
         db.query(Contract)
+        .filter(Contract.delete_flag.is_(False))
         .options(
-            joinedload(Contract.customer_location).joinedload(CustomerLocation.customer),
-            joinedload(Contract.customer_location).joinedload(CustomerLocation.region),
-            joinedload(Contract.required_skills),
+            joinedload(Contract.customer),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.region),
+            joinedload(Contract.lines).joinedload(ContractLine.required_skills),
         )
         .order_by(Contract.id)
         .all()
     )
+    return [_contract_out(contract) for contract in contracts]
+
+
+@app.post("/contracts", response_model=ContractOut, status_code=201)
+def create_contract(payload: ContractCreate, db: Session = Depends(get_db)) -> ContractOut:
+    customer = db.get(Customer, payload.customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    contract = Contract(customer_id=customer.id)
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    return _contract_out(contract)
+
+
+@app.patch("/contracts/{contract_id}", response_model=ContractOut)
+def update_contract(
+    contract_id: int, payload: ContractUpdate, db: Session = Depends(get_db)
+) -> ContractOut:
+    contract = db.get(Contract, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    customer = db.get(Customer, payload.customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    contract.customer_id = customer.id
+    db.commit()
+    db.refresh(contract)
+    return _contract_out(contract)
+
+
+@app.delete("/contracts/{contract_id}", status_code=204)
+def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
+    contract = db.get(Contract, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    contract.delete_flag = True
+    for line in contract.lines:
+        line.delete_flag = True
+    db.commit()
+
+
+@app.post("/contracts/{contract_id}/lines", response_model=ContractLineOut, status_code=201)
+def create_contract_line(
+    contract_id: int, payload: ContractLineCreate, db: Session = Depends(get_db)
+) -> ContractLine:
+    contract = db.get(Contract, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    customer_location = db.get(CustomerLocation, payload.customer_location_id)
+    if customer_location is None:
+        raise HTTPException(status_code=404, detail="Customer location not found")
+    if customer_location.customer_id != contract.customer_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Customer location does not belong to the contract's customer",
+        )
+
+    required_skills = db.query(Skill).filter(Skill.id.in_(payload.required_skill_ids)).all()
+    if len(required_skills) != len(set(payload.required_skill_ids)):
+        raise HTTPException(status_code=404, detail="One or more skills not found")
+
+    line = ContractLine(
+        contract_id=contract.id,
+        customer_location_id=customer_location.id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        interval_days=payload.interval_days,
+        duration_minutes=payload.duration_minutes,
+        required_skills=required_skills,
+    )
+    db.add(line)
+    db.commit()
+    db.refresh(line)
+    return line
+
+
+@app.patch("/contract-lines/{line_id}", response_model=ContractLineOut)
+def update_contract_line(
+    line_id: int, payload: ContractLineUpdate, db: Session = Depends(get_db)
+) -> ContractLine:
+    line = db.get(ContractLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Contract line not found")
+
+    customer_location = db.get(CustomerLocation, payload.customer_location_id)
+    if customer_location is None:
+        raise HTTPException(status_code=404, detail="Customer location not found")
+    if customer_location.customer_id != line.contract.customer_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Customer location does not belong to the contract's customer",
+        )
+
+    required_skills = db.query(Skill).filter(Skill.id.in_(payload.required_skill_ids)).all()
+    if len(required_skills) != len(set(payload.required_skill_ids)):
+        raise HTTPException(status_code=404, detail="One or more skills not found")
+
+    line.customer_location_id = customer_location.id
+    line.start_date = payload.start_date
+    line.end_date = payload.end_date
+    line.interval_days = payload.interval_days
+    line.duration_minutes = payload.duration_minutes
+    line.required_skills = required_skills
+    db.commit()
+    db.refresh(line)
+    return line
+
+
+@app.delete("/contract-lines/{line_id}", status_code=204)
+def delete_contract_line(line_id: int, db: Session = Depends(get_db)) -> None:
+    line = db.get(ContractLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Contract line not found")
+
+    line.delete_flag = True
+    db.commit()
 
 
 @app.get("/service-visits", response_model=list[ServiceVisitOut])
@@ -146,12 +292,12 @@ def list_service_visits(db: Session = Depends(get_db)) -> list[ServiceVisit]:
     return (
         db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
-            joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.customer),
-            joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),
         )
         .order_by(ServiceVisit.id)
@@ -167,15 +313,15 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
             joinedload(Assignment.employee).joinedload(Employee.regions),
             joinedload(Assignment.employee).joinedload(Employee.skills),
             joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.contract)
-            .joinedload(Contract.required_skills),
+            .joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.required_skills),
             joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            .joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.customer),
             joinedload(Assignment.service_visit)
-            .joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            .joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),
         )
         .order_by(Assignment.service_visit_id)
@@ -201,7 +347,7 @@ def create_assignment(
         )
 
     planned_end = payload.planned_start + timedelta(
-        minutes=visit.contract.duration_minutes
+        minutes=visit.contract_line.duration_minutes
     )
     assignment = Assignment(
         service_visit_id=visit.id,
@@ -257,12 +403,12 @@ def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
         v.id: v
         for v in db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract).joinedload(Contract.required_skills),
-            joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.customer),
-            joinedload(ServiceVisit.contract)
-            .joinedload(Contract.customer_location)
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),
         )
         .all()
@@ -326,7 +472,7 @@ def apply_optimization(
         assignment.employee_id = employee.id
         assignment.planned_start = item.planned_start
         assignment.planned_end = item.planned_start + timedelta(
-            minutes=visit.contract.duration_minutes
+            minutes=visit.contract_line.duration_minutes
         )
         db.commit()
         db.refresh(assignment)
