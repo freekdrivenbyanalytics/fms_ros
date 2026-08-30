@@ -66,7 +66,26 @@ def _existing_assignment_payload(assignment: Assignment) -> dict:
     }
 
 
-def build_optimize_payload(db: Session) -> dict:
+def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
+    """A visit the optimizer can consider: its location has resolved
+    coordinates and an assigned region. Neither is guaranteed for a
+    Tripletex-synced location until geocoding/region-assignment happens."""
+    location = visit.contract.customer_location
+    return (
+        location.latitude is not None
+        and location.longitude is not None
+        and location.region_id is not None
+    )
+
+
+def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
+    """Build the solver request payload.
+
+    Returns (payload, excluded_visit_ids): payload is what's sent to the
+    solver; excluded_visit_ids are candidate visits the solver never even
+    sees (no resolved location), which the caller should still report as
+    unscheduled since the solver's own response won't mention them.
+    """
     employees = (
         db.query(Employee)
         .options(joinedload(Employee.regions), joinedload(Employee.skills))
@@ -92,12 +111,16 @@ def build_optimize_payload(db: Session) -> dict:
     schedulable_visits = [v for v in all_visits if v.assignment is None or not _is_locked(v.assignment)]
     locked_assignments = [v.assignment for v in all_visits if v.assignment is not None and _is_locked(v.assignment)]
 
-    return {
+    ready_visits = [v for v in schedulable_visits if _is_ready_to_schedule(v)]
+    excluded_visit_ids = [v.id for v in schedulable_visits if not _is_ready_to_schedule(v)]
+
+    payload = {
         "employees": [_employee_payload(e) for e in employees],
-        "visits": [_visit_payload(v) for v in schedulable_visits],
+        "visits": [_visit_payload(v) for v in ready_visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "time_limit_seconds": settings.solver_time_limit_seconds,
     }
+    return payload, excluded_visit_ids
 
 
 def request_proposal(payload: dict) -> dict:

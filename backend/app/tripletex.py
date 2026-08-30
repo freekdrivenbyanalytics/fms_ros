@@ -7,7 +7,15 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Customer, CustomerChangeType, CustomerSyncLog
+from app.geocoding import geocode_address
+from app.models import (
+    Customer,
+    CustomerChangeType,
+    CustomerLocation,
+    CustomerLocationChangeType,
+    CustomerLocationSyncLog,
+    CustomerSyncLog,
+)
 
 API_KEY_PATH = Path(__file__).resolve().parent.parent / ".local" / "api_key"
 
@@ -141,6 +149,35 @@ class TripletexClient:
 
         return customers
 
+    def get_delivery_addresses(self) -> list[dict]:
+        page_size = 100
+        offset = 0
+        addresses: list[dict] = []
+        fields = (
+            "id,version,url,addressLine1,addressLine2,postalCode,city,country,"
+            "addressAsString,displayName,name,customerVendor(id)"
+        )
+
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            while True:
+                response = client.get(
+                    f"{self._base_url}/deliveryAddress",
+                    auth=self._auth(),
+                    params={"from": offset, "count": page_size, "fields": fields},
+                )
+                if response.status_code >= 400:
+                    raise TripletexAuthError(
+                        f"Tripletex delivery address fetch failed: {response.status_code} {response.text}"
+                    )
+                body = response.json()
+                page = body["values"]
+                addresses.extend(page)
+                if len(page) < page_size or len(addresses) >= body["fullResultSize"]:
+                    break
+                offset += page_size
+
+        return addresses
+
 
 def _apply_fields(customer: Customer, data: dict) -> bool:
     changed = False
@@ -194,6 +231,138 @@ def sync_customers(db: Session) -> None:
             db.add(
                 CustomerSyncLog(
                     customer_id=customer_id, change_type=CustomerChangeType.DELETED
+                )
+            )
+
+    db.commit()
+
+
+_LOCATION_SCALAR_FIELD_MAP = {
+    "version": "version",
+    "url": "url",
+    "addressLine1": "address_line_1",
+    "addressLine2": "address_line_2",
+    "postalCode": "postal_code",
+    "city": "city",
+    "country": "country",
+    "name": "name",
+}
+
+_LOCATION_ADDRESS_ATTRS = {"address_line_1", "address_line_2", "postal_code", "city", "country"}
+
+
+def _location_display_address(data: dict) -> str:
+    return data.get("addressAsString") or data.get("displayName") or ""
+
+
+def _apply_location_fields(location: CustomerLocation, data: dict) -> tuple[bool, bool]:
+    """Apply Tripletex fields to a location. Returns (changed, address_changed)."""
+    changed = False
+    address_changed = False
+    for tripletex_key, attr in _LOCATION_SCALAR_FIELD_MAP.items():
+        new_value = data.get(tripletex_key)
+        if getattr(location, attr) != new_value:
+            setattr(location, attr, new_value)
+            changed = True
+            if attr in _LOCATION_ADDRESS_ATTRS:
+                address_changed = True
+
+    new_address = _location_display_address(data)
+    if location.address != new_address:
+        location.address = new_address
+        changed = True
+        address_changed = True
+
+    return changed, address_changed
+
+
+def _geocode_location(location: CustomerLocation) -> None:
+    """Resolve and store coordinates for a location's address.
+
+    Only overwrites latitude/longitude on a successful geocode, so a
+    transient failure leaves whatever coordinates (if any) were already
+    persisted rather than clearing them.
+    """
+    resolved = geocode_address(location.address)
+    if resolved is not None:
+        location.latitude, location.longitude = resolved
+
+
+def sync_customer_locations(db: Session) -> None:
+    """Sync customer locations from Tripletex delivery addresses.
+
+    Must run after sync_customers, since a delivery address is only eligible
+    when its linked customer is already known locally. Never touches
+    region_id — region assignment is deferred to a future geofencing-based
+    lookup against region masterdata.
+    """
+    client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
+    delivery_addresses = client.get_delivery_addresses()
+
+    known_customer_ids = {row[0] for row in db.query(Customer.id).all()}
+
+    eligible: list[tuple[dict, int]] = []
+    for data in delivery_addresses:
+        vendor = data.get("customerVendor")
+        if not vendor:
+            continue
+        customer_id = vendor.get("id")
+        if customer_id not in known_customer_ids:
+            continue
+        eligible.append((data, customer_id))
+
+    tripletex_ids = {data["id"] for data, _ in eligible}
+    existing = {location.id: location for location in db.query(CustomerLocation).all()}
+
+    for data, customer_id in eligible:
+        location_id = data["id"]
+        location = existing.get(location_id)
+
+        if location is None:
+            location = CustomerLocation(id=location_id, customer_id=customer_id)
+            _apply_location_fields(location, data)
+            location.delete_flag = False
+            db.add(location)
+            _geocode_location(location)
+            db.add(
+                CustomerLocationSyncLog(
+                    customer_location_id=location_id,
+                    change_type=CustomerLocationChangeType.CREATED,
+                )
+            )
+        elif location.delete_flag:
+            _apply_location_fields(location, data)
+            location.customer_id = customer_id
+            location.delete_flag = False
+            _geocode_location(location)
+            db.add(
+                CustomerLocationSyncLog(
+                    customer_location_id=location_id,
+                    change_type=CustomerLocationChangeType.RESTORED,
+                )
+            )
+        else:
+            changed, address_changed = _apply_location_fields(location, data)
+            if location.customer_id != customer_id:
+                location.customer_id = customer_id
+                changed = True
+            if address_changed:
+                _geocode_location(location)
+            if changed:
+                db.add(
+                    CustomerLocationSyncLog(
+                        customer_location_id=location_id,
+                        change_type=CustomerLocationChangeType.UPDATED,
+                    )
+                )
+
+    for location_id, location in existing.items():
+        if location_id not in tripletex_ids and not location.delete_flag:
+            location.delete_flag = True
+            db.add(
+                CustomerLocationSyncLog(
+                    customer_location_id=location_id,
+                    change_type=CustomerLocationChangeType.DELETED,
                 )
             )
 

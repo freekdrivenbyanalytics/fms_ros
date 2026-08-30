@@ -37,9 +37,11 @@ export function CustomerLocationsView({
         <BackButton label="Customer Locations" onClick={() => setSelected(null)} />
         <h2 className="text-xl font-semibold text-slate-900 mb-4">{selected.address}</h2>
         <DetailField label="Customer">{selected.customer.name}</DetailField>
-        <DetailField label="Region">{selected.region.name}</DetailField>
+        <DetailField label="Region">{selected.region?.name ?? "Not yet assigned"}</DetailField>
         <DetailField label="Coordinates">
-          {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
+          {selected.latitude !== null && selected.longitude !== null
+            ? `${selected.latitude.toFixed(4)}, ${selected.longitude.toFixed(4)}`
+            : "Not yet resolved"}
         </DetailField>
         <DetailField label="Contracts">
           {locationContracts.length === 0 ? (
@@ -71,7 +73,7 @@ export function CustomerLocationsView({
         columns={[
           { header: "Address", render: (location) => location.address },
           { header: "Customer", render: (location) => location.customer.name },
-          { header: "Region", render: (location) => location.region.name },
+          { header: "Region", render: (location) => location.region?.name ?? "—" },
         ]}
       />
     </div>

@@ -72,11 +72,19 @@ class CustomerLocationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    version: int | None = None
+    url: str | None = None
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    postal_code: str | None = None
+    city: str | None = None
+    country: dict | None = None
+    name: str | None = None
     address: str
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
     customer: CustomerOut
-    region: RegionOut
+    region: RegionOut | None = None
 
 
 class ContractOut(BaseModel):

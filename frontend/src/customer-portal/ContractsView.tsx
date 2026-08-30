@@ -18,7 +18,7 @@ export function ContractsView({ contracts }: Props) {
           Contract #{selected.id} — {selected.customer_location.customer.name}
         </h2>
         <DetailField label="Customer Location">
-          {selected.customer_location.address} ({selected.customer_location.region.name})
+          {selected.customer_location.address} ({selected.customer_location.region?.name ?? "region not yet assigned"})
         </DetailField>
         <DetailField label="Start Date">{selected.start_date}</DetailField>
         <DetailField label="Interval">Every {selected.interval_days} days</DetailField>

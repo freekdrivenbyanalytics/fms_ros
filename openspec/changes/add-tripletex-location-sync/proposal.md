@@ -1,0 +1,32 @@
+## Why
+
+Customer locations are currently hand-seeded fixture data with no connection to Tripletex, unlike customers themselves, which are already synced from Tripletex as the source of truth. That leaves locations stale and manually maintained. Tripletex has a `deliveryAddress` resource for exactly this purpose — each delivery address can be linked to a customer — so locations should be synced the same way customers already are: Tripletex owns the data, a removed one is soft-deleted, and the sync runs at startup and on demand.
+
+Confirmed via live inspection of the connected Tripletex account's API (`/deliveryAddress`, matched via Swagger): the endpoint exists and returns full address records, each with a `customerVendor` link back to the owning customer — 9 delivery addresses across 4 customers are linked as of this writing, several customers with more than one. The delivery address record itself has no latitude/longitude field (only Norwegian cadastral numbers — `knr`/`gnr`/`bnr`/`fnr`/`snr` — which are property registry ids, not GPS coordinates), confirming geocoding is genuinely needed to get coordinates.
+
+## What Changes
+
+- Sync customer locations from Tripletex's `/deliveryAddress` endpoint, using the same reconciliation pattern as customer sync: a Tripletex delivery address not yet persisted locally is created, one already persisted has its fields updated, and one no longer present in Tripletex is soft-deleted via a delete flag rather than removed (existing contracts/service visits/assignments that depend on it are unaffected). A delivery address without a linked customer (`customerVendor` unset) is skipped — it can't become a customer location without a customer to belong to.
+- This sync runs automatically at backend startup and is triggered by the same on-demand sync action the Customer Portal already exposes for customers (no new button — the existing "Refresh" call now also refreshes locations).
+- Tripletex has no concept of "region" (that's local to this app), and region assignment is going to become GPS/geofence-based against region masterdata in a later change. For now, sync never sets or changes a customer location's region — it stays a local-only field on the table, left unset for a newly-synced location until something else assigns it. Seed data assigns regions itself (see below) so the demo keeps working in the meantime.
+- Tripletex's delivery address doesn't include geographic coordinates, only a postal address. Coordinates are resolved by geocoding that address through an open-source geocoding library. A location whose address hasn't been (or couldn't be) geocoded yet has no coordinates and is excluded from optimizer scheduling until it does — the same way a visit with a date or eligibility problem is already excluded.
+- Seed data no longer hand-creates customer locations; it syncs them from Tripletex (same as it already does for customers) and assigns each synced location a region — reusing the current seed file's existing per-location region choices where they still line up, and a random existing region for any location beyond what the seed file already accounts for (Tripletex may now return a different number of locations than the seed file was written for) — then builds its demo contracts against whichever locations come back, dropping fixtures that no longer have a location to attach to.
+- Every sync-driven change to a customer location (created, updated, deleted, restored) is logged, the same way customer changes already are.
+
+## Capabilities
+
+### New Capabilities
+
+(none)
+
+### Modified Capabilities
+
+- `customers`: "Customer location data model" is updated to describe Tripletex as the source of truth for a location's identity and address fields, with its region and coordinates present only once assigned/resolved; adds "Customer locations are synced from Tripletex", "Deleted customer locations are hidden by default", "Customer location sync triggers", "Sync does not assign a customer location's region", "A customer location's coordinates are geocoded from its address", and "Customer location changes are logged".
+- `route-optimization`: adds requirements that a visit at a location without resolved coordinates, or without an assigned region, is never scheduled by a run (reported unscheduled, like any other visit the optimizer can't place).
+
+## Impact
+
+- **Backend**: `backend/app/models.py`'s `CustomerLocation` gains Tripletex-sourced fields (mirroring how `Customer` was extended) and a `delete_flag`; `id` becomes Tripletex-owned (non-autoincrement) — this requires a migration that truncates `customer_locations` and its dependents (`contracts`, `service_visits`, `assignments`), the same disruptive shape as the original customer-id migration. `latitude`/`longitude` and `region_id` become nullable. A new `CustomerLocationChangeType` enum and `CustomerLocationSyncLog` table mirror `CustomerChangeType`/`CustomerSyncLog`. `backend/app/tripletex.py` gains `sync_customer_locations`, called alongside `sync_customers` at startup and from the existing `POST /customers/sync` endpoint — it never touches `region_id`. A new geocoding module resolves coordinates from an address, with results cached on the row so unchanged addresses aren't re-geocoded on every sync. `backend/app/solver_client.py` excludes a candidate visit whose location lacks resolved coordinates or an assigned region.
+- **Frontend**: region/coordinates becoming nullable (a real, reachable state now, not hypothetical) meant every existing unguarded `.region.name`/`.latitude`/`.longitude` access on a customer location would crash — found via a full grep sweep and fixed with null-safe fallbacks across `AssignedVisitList.tsx`, `UnassignedVisitList.tsx`, `DayPlanningView.tsx`, `CustomerLocationsView.tsx`, `CustomersView.tsx`, `ContractsView.tsx`, and `RegionsView.tsx`; `CustomerLocation`'s type now declares `region`/`latitude`/`longitude` as nullable. The Customer Portal's "Refresh" action itself needed no change.
+- **Dependencies**: a new open-source geocoding library (e.g. `geopy` against the OpenStreetMap Nominatim service) is added to `backend/requirements.txt`.
+- **Seed data**: `backend/app/seed.py` stops hand-creating customer locations; it syncs them from Tripletex and assigns each one a region itself (current seed mapping, then random for any extra locations), then builds its demo contracts against whatever locations come back.

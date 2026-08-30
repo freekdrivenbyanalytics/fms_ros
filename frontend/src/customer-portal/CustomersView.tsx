@@ -121,7 +121,7 @@ function CustomerDetail({ customer, customerLocations, onSelectLocation }: Custo
                   onClick={() => onSelectLocation(location.id)}
                   className="text-sky-700 hover:underline"
                 >
-                  {location.address} ({location.region.name})
+                  {location.address} ({location.region?.name ?? "region not yet assigned"})
                 </button>
               </li>
             ))}

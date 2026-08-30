@@ -1,16 +1,16 @@
+import random
 from datetime import date, time, timedelta
 
 from app.database import SessionLocal
 from app.models import (
     Contract,
-    Customer,
     CustomerLocation,
     Employee,
     Region,
     ServiceVisit,
     Skill,
 )
-from app.tripletex import sync_customers
+from app.tripletex import sync_customer_locations, sync_customers
 
 
 def _get_or_create(db, model, name: str, **extra):
@@ -26,24 +26,7 @@ def seed() -> None:
     db = SessionLocal()
     try:
         sync_customers(db)
-
-        # Migrating to Tripletex-sourced customers truncates customer_locations
-        # (and its dependents) but leaves regions/skills/employees untouched,
-        # so an already-migrated dev database can have employees without
-        # having customer locations. Guard on customer_locations specifically,
-        # and get-or-create regions/skills/employees so re-running this after
-        # migrating doesn't duplicate them.
-        if db.query(CustomerLocation).count():
-            print("Seed fixtures already present, skipping (customers synced).")
-            return
-
-        customers = db.query(Customer).order_by(Customer.id).limit(3).all()
-        if len(customers) < 3:
-            raise RuntimeError(
-                "Expected at least 3 customers from Tripletex to seed demo "
-                f"fixtures, got {len(customers)}."
-            )
-        customer_a, customer_b, customer_c = customers
+        sync_customer_locations(db)
 
         north_holland = _get_or_create(db, Region, "North Holland")
         utrecht = _get_or_create(db, Region, "Utrecht")
@@ -90,72 +73,69 @@ def seed() -> None:
             ]
             db.add_all(employees)
 
-        customer_a_location = CustomerLocation(
-            customer=customer_a,
-            region=north_holland,
-            address="Prinsengracht 12, Amsterdam",
-            latitude=52.3738,
-            longitude=4.8910,
+        # Tripletex is the source of truth for locations themselves; region
+        # assignment is local and deferred (see sync_customer_locations), so
+        # the demo needs to fill it in itself. Reuse this file's original
+        # per-location region choices for as many locations as they cover,
+        # and a random existing region for any location beyond that list —
+        # Tripletex may return a different number of locations than this
+        # fixture list was written for.
+        locations = (
+            db.query(CustomerLocation)
+            .filter(CustomerLocation.delete_flag.is_(False))
+            .order_by(CustomerLocation.id)
+            .all()
         )
-        customer_b_location = CustomerLocation(
-            customer=customer_b,
-            region=utrecht,
-            address="Neude 5, Utrecht",
-            latitude=52.0925,
-            longitude=5.1197,
-        )
-        customer_c_hq = CustomerLocation(
-            customer=customer_c,
-            region=south_holland,
-            address="Coolsingel 40, Rotterdam",
-            latitude=51.9233,
-            longitude=4.4792,
-        )
-        customer_c_branch = CustomerLocation(
-            customer=customer_c,
-            region=south_holland,
-            address="Blaak 10, Rotterdam",
-            latitude=51.9214,
-            longitude=4.4886,
-        )
-        locations = [
-            customer_a_location,
-            customer_b_location,
-            customer_c_hq,
-            customer_c_branch,
+        default_regions_by_position = [north_holland, utrecht, south_holland, south_holland]
+        for index, location in enumerate(locations):
+            if location.region_id is not None:
+                continue
+            if index < len(default_regions_by_position):
+                location.region = default_regions_by_position[index]
+            else:
+                location.region = random.choice(regions)
+
+        if db.query(Contract).count():
+            db.commit()
+            print("Contract/visit fixtures already present, skipping (customers/locations synced).")
+            return
+
+        contract_fixtures = [
+            {
+                "start_date": date(2026, 8, 20),
+                "interval_days": 30,
+                "duration_minutes": 60,
+                "required_skills": [general_maintenance],
+            },
+            {
+                "start_date": date(2026, 8, 20),
+                "interval_days": 14,
+                "duration_minutes": 90,
+                "required_skills": [plumbing],
+            },
+            {
+                "start_date": date(2026, 8, 21),
+                "interval_days": 7,
+                "duration_minutes": 45,
+                "required_skills": [electrical],
+            },
+            {
+                "start_date": date(2026, 8, 22),
+                "interval_days": 21,
+                "duration_minutes": 30,
+                "required_skills": [hvac, general_maintenance],
+            },
         ]
-        db.add_all(locations)
-        db.flush()
 
         contracts = [
             Contract(
-                customer_location=customer_a_location,
-                start_date=date(2026, 8, 20),
-                interval_days=30,
-                duration_minutes=60,
-                required_skills=[general_maintenance],
-            ),
-            Contract(
-                customer_location=customer_b_location,
-                start_date=date(2026, 8, 20),
-                interval_days=14,
-                duration_minutes=90,
-                required_skills=[plumbing],
-            ),
-            Contract(
-                customer_location=customer_c_hq,
-                start_date=date(2026, 8, 21),
-                interval_days=7,
-                duration_minutes=45,
-                required_skills=[electrical],
-            ),
-            Contract(
-                customer_location=customer_c_branch,
-                start_date=date(2026, 8, 22),
-                interval_days=21,
-                duration_minutes=30,
-                required_skills=[hvac, general_maintenance],
-            ),
+                customer_location=location,
+                start_date=fixture["start_date"],
+                interval_days=fixture["interval_days"],
+                duration_minutes=fixture["duration_minutes"],
+                required_skills=fixture["required_skills"],
+            )
+            for location, fixture in zip(locations, contract_fixtures)
         ]
         db.add_all(contracts)
         db.flush()
@@ -174,7 +154,7 @@ def seed() -> None:
 
         db.commit()
         print(
-            f"Synced customers from Tripletex; seeded {len(regions)} regions, "
+            f"Synced customers/locations from Tripletex; seeded {len(regions)} regions, "
             f"{len(skills)} skills, {len(locations)} customer locations, "
             f"{len(contracts)} contracts, {len(employees)} employees, "
             f"and {len(visits)} service visits."

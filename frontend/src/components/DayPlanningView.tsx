@@ -122,7 +122,7 @@ export function DayPlanningView({ employees, assignments }: Props) {
                           >
                             <div>{location.customer.name}</div>
                             <div>{location.address}</div>
-                            <div>{location.region.name}</div>
+                            <div>{location.region?.name ?? "No region"}</div>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {visit.contract.required_skills.map((skill) => (
                                 <span

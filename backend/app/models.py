@@ -164,20 +164,62 @@ class CustomerSyncLog(Base):
     )
 
 
+class CustomerLocationChangeType(str, enum.Enum):
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+    RESTORED = "restored"
+
+
 class CustomerLocation(Base):
     __tablename__ = "customer_locations"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Tripletex-sourced fields. id is Tripletex's own delivery address id, not app-generated.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    version: Mapped[int | None] = mapped_column(Integer)
+    url: Mapped[str | None] = mapped_column(String)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
-    region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), nullable=False)
+    address_line_1: Mapped[str | None] = mapped_column(String)
+    address_line_2: Mapped[str | None] = mapped_column(String)
+    postal_code: Mapped[str | None] = mapped_column(String)
+    city: Mapped[str | None] = mapped_column(String)
+    country: Mapped[dict | None] = mapped_column(JSONB)
+    name: Mapped[str | None] = mapped_column(String)
     address: Mapped[str] = mapped_column(String, nullable=False)
-    latitude: Mapped[float] = mapped_column(Float, nullable=False)
-    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Local fields. region is deferred to a future geofencing-based assignment;
+    # coordinates are geocoded locally since Tripletex doesn't provide them.
+    region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id"))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     customer: Mapped["Customer"] = relationship(back_populates="locations")
-    region: Mapped["Region"] = relationship(back_populates="customer_locations")
+    region: Mapped["Region | None"] = relationship(back_populates="customer_locations")
     contracts: Mapped[list["Contract"]] = relationship(
         back_populates="customer_location"
+    )
+
+
+class CustomerLocationSyncLog(Base):
+    __tablename__ = "customer_location_sync_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_location_id: Mapped[int] = mapped_column(
+        ForeignKey("customer_locations.id"), nullable=False
+    )
+    change_type: Mapped[CustomerLocationChangeType] = mapped_column(
+        Enum(
+            CustomerLocationChangeType,
+            name="customer_location_change_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
     )
 
 

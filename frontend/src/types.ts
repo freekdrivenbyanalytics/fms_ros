@@ -60,10 +60,10 @@ export interface Customer {
 export interface CustomerLocation {
   id: number;
   address: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   customer: Customer;
-  region: Region;
+  region: Region | null;
 }
 
 export interface Contract {

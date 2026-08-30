@@ -36,7 +36,7 @@ from app.schemas import (
     SkillOut,
 )
 from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
-from app.tripletex import sync_customers
+from app.tripletex import sync_customer_locations, sync_customers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,9 +47,10 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         sync_customers(db)
-        logger.info("Tripletex customer sync succeeded at startup")
+        sync_customer_locations(db)
+        logger.info("Tripletex customer/location sync succeeded at startup")
     except Exception:
-        logger.warning("Tripletex customer sync failed at startup", exc_info=True)
+        logger.warning("Tripletex customer/location sync failed at startup", exc_info=True)
     finally:
         db.close()
     yield
@@ -99,6 +100,7 @@ def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
 def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
     try:
         sync_customers(db)
+        sync_customer_locations(db)
     except Exception as exc:
         raise HTTPException(
             status_code=502, detail=f"Tripletex sync failed: {exc}"
@@ -115,6 +117,7 @@ def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
 def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocation]:
     return (
         db.query(CustomerLocation)
+        .filter(CustomerLocation.delete_flag.is_(False))
         .options(
             joinedload(CustomerLocation.customer),
             joinedload(CustomerLocation.region),
@@ -242,7 +245,7 @@ def update_assignment_pin(
 
 @app.post("/optimize/propose", response_model=OptimizationProposal)
 def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
-    payload = build_optimize_payload(db)
+    payload, excluded_visit_ids = build_optimize_payload(db)
     try:
         result = request_proposal(payload)
     except httpx.HTTPError as exc:
@@ -288,7 +291,8 @@ def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
         )
 
     return OptimizationProposal(
-        scheduled=scheduled, unscheduled_visit_ids=result["unscheduled_visit_ids"]
+        scheduled=scheduled,
+        unscheduled_visit_ids=result["unscheduled_visit_ids"] + excluded_visit_ids,
     )
 
 

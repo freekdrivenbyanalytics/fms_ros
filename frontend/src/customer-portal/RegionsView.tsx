@@ -17,7 +17,7 @@ export function RegionsView({ regions, employees, customerLocations }: Props) {
       employee.regions.some((region) => region.id === selected.id)
     );
     const regionLocations = customerLocations.filter(
-      (location) => location.region.id === selected.id
+      (location) => location.region?.id === selected.id
     );
     return (
       <div>
