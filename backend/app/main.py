@@ -15,6 +15,7 @@ from app.employee_schedule import (
     override_exists_for_date,
     templates_overlap,
 )
+from app.visit_generation import generate_occurrence_dates
 from app.models import (
     Assignment,
     Contract,
@@ -688,6 +689,14 @@ def create_contract_line(
         required_skills=required_skills,
     )
     db.add(line)
+    db.flush()
+
+    occurrence_dates = generate_occurrence_dates(
+        line.start_date, line.interval_days, line.end_date
+    )
+    for occurrence_date in occurrence_dates:
+        db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))
+
     db.commit()
     db.refresh(line)
     return line
@@ -736,21 +745,25 @@ def delete_contract_line(line_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @app.get("/service-visits", response_model=list[ServiceVisitOut])
-def list_service_visits(db: Session = Depends(get_db)) -> list[ServiceVisit]:
-    return (
-        db.query(ServiceVisit)
-        .options(
-            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
-            joinedload(ServiceVisit.contract_line)
-            .joinedload(ContractLine.customer_location)
-            .joinedload(CustomerLocation.customer),
-            joinedload(ServiceVisit.contract_line)
-            .joinedload(ContractLine.customer_location)
-            .joinedload(CustomerLocation.region),
-        )
-        .order_by(ServiceVisit.id)
-        .all()
+def list_service_visits(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: Session = Depends(get_db),
+) -> list[ServiceVisit]:
+    query = db.query(ServiceVisit).options(
+        joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
+        joinedload(ServiceVisit.contract_line)
+        .joinedload(ContractLine.customer_location)
+        .joinedload(CustomerLocation.customer),
+        joinedload(ServiceVisit.contract_line)
+        .joinedload(ContractLine.customer_location)
+        .joinedload(CustomerLocation.region),
     )
+    if start_date is not None:
+        query = query.filter(ServiceVisit.requested_date >= start_date)
+    if end_date is not None:
+        query = query.filter(ServiceVisit.requested_date <= end_date)
+    return query.order_by(ServiceVisit.id).all()
 
 
 @app.get("/assignments", response_model=list[AssignmentOut])

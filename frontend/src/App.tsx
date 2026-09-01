@@ -15,6 +15,31 @@ const VIEW_TITLES: Record<View, string> = {
   optimize: "Optimize",
 };
 
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(d: Date, days: number): Date {
+  const result = new Date(d);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function defaultEndDate(): string {
+  return toIsoDate(addDays(new Date(), 7));
+}
+
+function endOfCurrentWeek(): string {
+  const today = new Date();
+  const day = today.getDay(); // Sunday = 0 ... Saturday = 6
+  const daysUntilSunday = day === 0 ? 0 : 7 - day;
+  return toIsoDate(addDays(today, daysUntilSunday));
+}
+
+function fourWeeksOut(): string {
+  return toIsoDate(addDays(new Date(), 28));
+}
+
 function App() {
   const [view, setView] = useState<View>("assign");
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -22,19 +47,32 @@ function App() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [visitsEndDate, setVisitsEndDate] = useState(defaultEndDate());
+  const [visitsLoading, setVisitsLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([listEmployees(), listServiceVisits(), listAssignments()])
-      .then(([employeesData, visitsData, assignmentsData]) => {
+    Promise.all([listEmployees(), listAssignments()])
+      .then(([employeesData, assignmentsData]) => {
         setEmployees(employeesData);
-        setVisits(visitsData);
         setAssignments(assignmentsData);
       })
       .catch((err) =>
         setLoadError(err instanceof Error ? err.message : "Failed to load data")
-      )
-      .finally(() => setLoading(false));
+      );
   }, []);
+
+  useEffect(() => {
+    setVisitsLoading(true);
+    listServiceVisits({ endDate: visitsEndDate })
+      .then(setVisits)
+      .catch((err) =>
+        setLoadError(err instanceof Error ? err.message : "Failed to load data")
+      )
+      .finally(() => {
+        setVisitsLoading(false);
+        setLoading(false);
+      });
+  }, [visitsEndDate]);
 
   function handleAssigned(assignment: Assignment) {
     setAssignments((prev) => [...prev, assignment]);
@@ -147,20 +185,48 @@ function App() {
       </div>
 
       {view === "assign" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <EmployeeList employees={employees} />
-          <UnassignedVisitList
-            visits={unassignedVisits}
-            employees={employees}
-            onAssigned={handleAssigned}
-          />
-          <AssignedVisitList
-            visits={assignedVisits}
-            assignments={assignments}
-            onUnassigned={handleUnassigned}
-            onPinChanged={handlePinChanged}
-          />
-        </div>
+        <>
+          <div className="flex flex-wrap items-center gap-2 mb-4 bg-white rounded-lg border border-slate-200 p-3">
+            <label className="text-sm text-slate-500">
+              Show visits requested before today through
+            </label>
+            <input
+              type="date"
+              value={visitsEndDate}
+              onChange={(event) => setVisitsEndDate(event.target.value)}
+              className="text-sm border border-slate-300 rounded-md px-2 py-1"
+            />
+            <button
+              type="button"
+              onClick={() => setVisitsEndDate(endOfCurrentWeek())}
+              className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50"
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisitsEndDate(fourWeeksOut())}
+              className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50"
+            >
+              4 Weeks
+            </button>
+            {visitsLoading && <span className="text-xs text-slate-400">Refreshing…</span>}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <EmployeeList employees={employees} />
+            <UnassignedVisitList
+              visits={unassignedVisits}
+              employees={employees}
+              onAssigned={handleAssigned}
+            />
+            <AssignedVisitList
+              visits={assignedVisits}
+              assignments={assignments}
+              onUnassigned={handleUnassigned}
+              onPinChanged={handlePinChanged}
+            />
+          </div>
+        </>
       )}
       {view === "planning" && (
         <DayPlanningView employees={employees} assignments={assignments} />

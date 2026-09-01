@@ -3,10 +3,11 @@ import {
   listContracts,
   listCustomerLocations,
   listCustomers,
+  listServiceVisits,
   listSkills,
   syncCustomers,
 } from "../api";
-import type { Contract, Customer, CustomerLocation, Skill } from "../types";
+import type { Contract, Customer, CustomerLocation, ServiceVisit, Skill } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
@@ -26,6 +27,7 @@ export function CustomerPortalApp() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [serviceVisits, setServiceVisits] = useState<ServiceVisit[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -35,11 +37,18 @@ export function CustomerPortalApp() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listSkills()])
-      .then(([customersData, customerLocationsData, contractsData, skillsData]) => {
+    Promise.all([
+      listCustomers(),
+      listCustomerLocations(),
+      listContracts(),
+      listServiceVisits(),
+      listSkills(),
+    ])
+      .then(([customersData, customerLocationsData, contractsData, serviceVisitsData, skillsData]) => {
         setCustomers(customersData);
         setCustomerLocations(customerLocationsData);
         setContracts(contractsData);
+        setServiceVisits(serviceVisitsData);
         setSkills(skillsData);
       })
       .catch((err) =>
@@ -84,7 +93,12 @@ export function CustomerPortalApp() {
   }
 
   async function handleContractsChanged() {
-    setContracts(await listContracts());
+    const [contractsData, serviceVisitsData] = await Promise.all([
+      listContracts(),
+      listServiceVisits(),
+    ]);
+    setContracts(contractsData);
+    setServiceVisits(serviceVisitsData);
   }
 
   return (
@@ -160,6 +174,7 @@ export function CustomerPortalApp() {
             contracts={contracts}
             customers={customers}
             customerLocations={customerLocations}
+            serviceVisits={serviceVisits}
             skills={skills}
             onChanged={handleContractsChanged}
           />

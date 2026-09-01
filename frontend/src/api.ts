@@ -141,8 +141,14 @@ export function createScheduleOverridesBulk(
   }).then((res) => handleResponse<EmployeeScheduleDayOverride[]>(res));
 }
 
-export function listServiceVisits(): Promise<ServiceVisit[]> {
-  return fetch(`${API_URL}/service-visits`).then((res) =>
+export function listServiceVisits(
+  range?: { startDate?: string; endDate?: string }
+): Promise<ServiceVisit[]> {
+  const params = new URLSearchParams();
+  if (range?.startDate) params.set("start_date", range.startDate);
+  if (range?.endDate) params.set("end_date", range.endDate);
+  const query = params.toString();
+  return fetch(`${API_URL}/service-visits${query ? `?${query}` : ""}`).then((res) =>
     handleResponse<ServiceVisit[]>(res)
   );
 }

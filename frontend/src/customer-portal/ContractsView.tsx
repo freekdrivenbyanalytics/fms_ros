@@ -6,7 +6,14 @@ import {
   deleteContractLine,
   updateContractLine,
 } from "../api";
-import type { Contract, ContractLine, Customer, CustomerLocation, Skill } from "../types";
+import type {
+  Contract,
+  ContractLine,
+  Customer,
+  CustomerLocation,
+  ServiceVisit,
+  Skill,
+} from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
@@ -14,6 +21,7 @@ interface Props {
   contracts: Contract[];
   customers: Customer[];
   customerLocations: CustomerLocation[];
+  serviceVisits: ServiceVisit[];
   skills: Skill[];
   onChanged: () => void | Promise<void>;
 }
@@ -22,6 +30,7 @@ export function ContractsView({
   contracts,
   customers,
   customerLocations,
+  serviceVisits,
   skills,
   onChanged,
 }: Props) {
@@ -35,6 +44,7 @@ export function ContractsView({
       <ContractDetail
         contract={selected}
         customerLocations={customerLocations}
+        serviceVisits={serviceVisits}
         skills={skills}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
@@ -146,6 +156,7 @@ function CreateContractForm({ customers, onCreated }: CreateContractFormProps) {
 interface ContractDetailProps {
   contract: Contract;
   customerLocations: CustomerLocation[];
+  serviceVisits: ServiceVisit[];
   skills: Skill[];
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
@@ -155,6 +166,7 @@ interface ContractDetailProps {
 function ContractDetail({
   contract,
   customerLocations,
+  serviceVisits,
   skills,
   onChanged,
   onDeleted,
@@ -209,6 +221,7 @@ function ContractDetail({
                 key={line.id}
                 line={line}
                 locations={ownLocations}
+                visits={serviceVisits.filter((visit) => visit.contract_line.id === line.id)}
                 skills={skills}
                 onChanged={onChanged}
               />
@@ -244,11 +257,12 @@ function ContractDetail({
 interface ContractLineRowProps {
   line: ContractLine;
   locations: CustomerLocation[];
+  visits: ServiceVisit[];
   skills: Skill[];
   onChanged: () => void | Promise<void>;
 }
 
-function ContractLineRow({ line, locations, skills, onChanged }: ContractLineRowProps) {
+function ContractLineRow({ line, locations, visits, skills, onChanged }: ContractLineRowProps) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -326,6 +340,29 @@ function ContractLineRow({ line, locations, skills, onChanged }: ContractLineRow
             {deleting ? "Deleting…" : "Delete"}
           </button>
         </div>
+      </div>
+      <div className="mt-2 pt-2 border-t border-slate-100">
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">
+          Generated Visits
+        </div>
+        {visits.length === 0 ? (
+          <p className="text-xs text-slate-400">No visits generated yet.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-1">
+            {visits.map((visit) => (
+              <li
+                key={visit.id}
+                className={`inline-block rounded-full px-2 py-0.5 text-xs ${
+                  visit.status === "assigned"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {visit.requested_date} — {visit.status}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </li>
