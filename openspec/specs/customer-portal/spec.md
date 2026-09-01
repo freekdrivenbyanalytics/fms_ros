@@ -15,17 +15,17 @@ The system SHALL provide the Customer Portal as a top-level area reachable via a
 
 #### Scenario: Customer Portal and Planning share the same data
 - **WHEN** the same backend/database that serves the Planning application also serves the Customer Portal
-- **THEN** any customer, customer location, contract, or skill visible in the Planning application is also visible in the Customer Portal, and vice versa
+- **THEN** any customer, customer location, or contract visible in the Planning application is also visible in the Customer Portal, and vice versa
 
 ### Requirement: List view for each master-data entity
-The system SHALL provide, within the Customer Portal, a list view for each of: Customers, Customer Locations, Contracts, and Skills.
+The system SHALL provide, within the Customer Portal, a list view for each of: Customers, Customer Locations, and Contracts.
 
 #### Scenario: User browses an entity list
-- **WHEN** a user opens one of the four entity list views in the Customer Portal
+- **WHEN** a user opens one of the three entity list views in the Customer Portal
 - **THEN** the system shows every record of that entity type currently in the database
 
 ### Requirement: Customer switcher scopes the Customers view
-The system SHALL provide a customer switcher, present on every page of the Customer Portal, that lets a user select "All customers" (the default) or one specific customer. Selecting a specific customer SHALL cause the Customers view to show that customer's own detail page instead of the list of all customers; the other three entity views (Customer Locations, Contracts, Skills) SHALL remain unaffected by the switcher's selection. The system SHALL NOT perform any authentication or authorization based on the switcher's selection.
+The system SHALL provide a customer switcher, present on every page of the Customer Portal, that lets a user select "All customers" (the default) or one specific customer. Selecting a specific customer SHALL cause the Customers view to show that customer's own detail page instead of the list of all customers; the other two entity views (Customer Locations, Contracts) SHALL remain unaffected by the switcher's selection. The system SHALL NOT perform any authentication or authorization based on the switcher's selection.
 
 #### Scenario: Switcher defaults to All customers
 - **WHEN** a user opens the Customer Portal without having made a selection
@@ -37,7 +37,7 @@ The system SHALL provide a customer switcher, present on every page of the Custo
 
 #### Scenario: Other views remain unaffected
 - **WHEN** a specific customer is selected in the switcher
-- **THEN** the Customer Locations, Contracts, and Skills views continue to show every record, unfiltered
+- **THEN** the Customer Locations and Contracts views continue to show every record, unfiltered
 
 #### Scenario: Switcher selection persists across pages
 - **WHEN** a user navigates between the Customer Portal's entity views while a specific customer is selected
@@ -62,8 +62,8 @@ The system SHALL display each customer's unique identifier on the Customers list
 - **WHEN** a user opens a Customer's detail view
 - **THEN** the view shows that customer's id
 
-### Requirement: Detail view shows a Customer Portal item's own fields and relationships
-The system SHALL let a user open an item from any of the four list views to see a detail view containing that item's own fields and its relationships to other master-data entities.
+### Requirement: Detail view shows a Customer Portal record's own fields and relationships
+The system SHALL let a user open an item from any of the three list views to see a detail view containing that item's own fields and its relationships to other master-data entities.
 
 #### Scenario: Customer detail
 - **WHEN** a user opens a Customer's detail view
@@ -77,10 +77,6 @@ The system SHALL let a user open an item from any of the four list views to see 
 - **WHEN** a user opens a Contract's detail view
 - **THEN** the system shows that contract's own fields, the Customer it belongs to, and its Contract Lines, each showing its Customer Location, dates, interval, duration, and required Skills
 
-#### Scenario: Skill detail
-- **WHEN** a user opens a Skill's detail view
-- **THEN** the system shows that skill's own fields and the Contract Lines that require it
-
 ### Requirement: Refresh customers from Tripletex
 The system SHALL provide a control on the Customer Portal's Customers view that triggers an on-demand Tripletex customer sync, and SHALL refresh the Customers, Customer Locations, and Contracts views' data after the sync completes.
 
@@ -89,10 +85,10 @@ The system SHALL provide a control on the Customer Portal's Customers view that 
 - **THEN** the system triggers a Tripletex customer sync, and once it completes, the Customers, Customer Locations, and Contracts views reflect the resulting data
 
 ### Requirement: Customer Portal is read-only
-The system SHALL NOT provide any create, edit, or delete action for Customers, Customer Locations, or Skills anywhere in the Customer Portal. Contracts and Contract Lines are the exception: the Customer Portal SHALL let a user create, update, and soft-delete both.
+The system SHALL NOT provide any create, edit, or delete action for Customers or Customer Locations anywhere in the Customer Portal. Contracts and Contract Lines are the exception: the Customer Portal SHALL let a user create, update, and soft-delete both.
 
 #### Scenario: No mutation affordance
-- **WHEN** a user views any Customers, Customer Locations, or Skills list or detail view in the Customer Portal
+- **WHEN** a user views any Customers or Customer Locations list or detail view in the Customer Portal
 - **THEN** the system provides no control to create, edit, or delete that entity
 
 #### Scenario: Contracts and Contract Lines are the exception
