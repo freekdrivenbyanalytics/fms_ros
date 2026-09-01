@@ -10,18 +10,16 @@ import type { Contract, Customer, CustomerLocation, Skill } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
-import { SkillsView } from "./SkillsView";
 
-type Entity = "customers" | "customer-locations" | "contracts" | "skills";
+type Entity = "customers" | "customer-locations" | "contracts";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   customers: "Customers",
   "customer-locations": "Customer Locations",
   contracts: "Contracts",
-  skills: "Skills",
 };
 
-const ENTITY_ORDER: Entity[] = ["customers", "customer-locations", "contracts", "skills"];
+const ENTITY_ORDER: Entity[] = ["customers", "customer-locations", "contracts"];
 
 export function CustomerPortalApp() {
   const [entity, setEntity] = useState<Entity>("customers");
@@ -166,7 +164,6 @@ export function CustomerPortalApp() {
             onChanged={handleContractsChanged}
           />
         )}
-        {entity === "skills" && <SkillsView skills={skills} contracts={contracts} />}
       </main>
     </div>
   );

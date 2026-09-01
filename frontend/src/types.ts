@@ -26,6 +26,14 @@ export interface Skill {
   name: string;
 }
 
+export interface SkillCreateInput {
+  name: string;
+}
+
+export interface SkillUpdateInput {
+  name: string;
+}
+
 export interface Customer {
   id: number;
   version: number | null;

@@ -51,6 +51,14 @@ class SkillOut(BaseModel):
     name: str
 
 
+class SkillCreate(BaseModel):
+    name: str
+
+
+class SkillUpdate(BaseModel):
+    name: str
+
+
 class CustomerOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

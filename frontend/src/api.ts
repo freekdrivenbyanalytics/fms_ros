@@ -24,6 +24,8 @@ import type {
   RegionUpdateInput,
   ServiceVisit,
   Skill,
+  SkillCreateInput,
+  SkillUpdateInput,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -182,6 +184,31 @@ export async function deleteRegion(id: number): Promise<void> {
 
 export function listSkills(): Promise<Skill[]> {
   return fetch(`${API_URL}/skills`).then((res) => handleResponse<Skill[]>(res));
+}
+
+export function createSkill(input: SkillCreateInput): Promise<Skill> {
+  return fetch(`${API_URL}/skills`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Skill>(res));
+}
+
+export function updateSkill(id: number, input: SkillUpdateInput): Promise<Skill> {
+  return fetch(`${API_URL}/skills/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Skill>(res));
+}
+
+export async function deleteSkill(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/skills/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
 }
 
 export function listCustomers(): Promise<Customer[]> {

@@ -60,7 +60,9 @@ from app.schemas import (
     RegionOut,
     RegionUpdate,
     ServiceVisitOut,
+    SkillCreate,
     SkillOut,
+    SkillUpdate,
 )
 from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
 from app.tripletex import sync_customer_locations, sync_customers
@@ -499,7 +501,43 @@ def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
 
 @app.get("/skills", response_model=list[SkillOut])
 def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
-    return db.query(Skill).order_by(Skill.id).all()
+    return (
+        db.query(Skill)
+        .filter(Skill.delete_flag.is_(False))
+        .order_by(Skill.id)
+        .all()
+    )
+
+
+@app.post("/skills", response_model=SkillOut, status_code=201)
+def create_skill(payload: SkillCreate, db: Session = Depends(get_db)) -> Skill:
+    skill = Skill(name=payload.name)
+    db.add(skill)
+    db.commit()
+    db.refresh(skill)
+    return skill
+
+
+@app.patch("/skills/{skill_id}", response_model=SkillOut)
+def update_skill(skill_id: int, payload: SkillUpdate, db: Session = Depends(get_db)) -> Skill:
+    skill = db.get(Skill, skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    skill.name = payload.name
+    db.commit()
+    db.refresh(skill)
+    return skill
+
+
+@app.delete("/skills/{skill_id}", status_code=204)
+def delete_skill(skill_id: int, db: Session = Depends(get_db)) -> None:
+    skill = db.get(Skill, skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    skill.delete_flag = True
+    db.commit()
 
 
 @app.get("/customers", response_model=list[CustomerOut])

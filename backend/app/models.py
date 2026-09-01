@@ -71,6 +71,9 @@ class Skill(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     employees: Mapped[list["Employee"]] = relationship(
         secondary=employee_skills, back_populates="skills"
