@@ -20,6 +20,8 @@ import type {
   OptimizationApplyResult,
   OptimizationProposal,
   Region,
+  RegionCreateInput,
+  RegionUpdateInput,
   ServiceVisit,
   Skill,
 } from "./types";
@@ -151,6 +153,31 @@ export function listAssignments(): Promise<Assignment[]> {
 
 export function listRegions(): Promise<Region[]> {
   return fetch(`${API_URL}/regions`).then((res) => handleResponse<Region[]>(res));
+}
+
+export function createRegion(input: RegionCreateInput): Promise<Region> {
+  return fetch(`${API_URL}/regions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Region>(res));
+}
+
+export function updateRegion(id: number, input: RegionUpdateInput): Promise<Region> {
+  return fetch(`${API_URL}/regions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Region>(res));
+}
+
+export async function deleteRegion(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/regions/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
 }
 
 export function listSkills(): Promise<Skill[]> {

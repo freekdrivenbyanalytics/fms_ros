@@ -1,8 +1,19 @@
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.models import DayType, LunchType, VisitStatus
+
+
+class GeoPoint(BaseModel):
+    lat: float
+    lng: float
+
+
+def _validate_geo_shape(geo_shape: list[GeoPoint] | None) -> list[GeoPoint] | None:
+    if geo_shape is not None and len(geo_shape) < 3:
+        raise ValueError("geo_shape must have at least 3 coordinate pairs")
+    return geo_shape
 
 
 class RegionOut(BaseModel):
@@ -10,6 +21,27 @@ class RegionOut(BaseModel):
 
     id: int
     name: str
+    geo_shape: list[GeoPoint] | None = None
+
+
+class RegionCreate(BaseModel):
+    name: str
+    geo_shape: list[GeoPoint] | None = None
+
+    @field_validator("geo_shape")
+    @classmethod
+    def _check_geo_shape(cls, value: list[GeoPoint] | None) -> list[GeoPoint] | None:
+        return _validate_geo_shape(value)
+
+
+class RegionUpdate(BaseModel):
+    name: str
+    geo_shape: list[GeoPoint] | None = None
+
+    @field_validator("geo_shape")
+    @classmethod
+    def _check_geo_shape(cls, value: list[GeoPoint] | None) -> list[GeoPoint] | None:
+        return _validate_geo_shape(value)
 
 
 class SkillOut(BaseModel):

@@ -56,7 +56,9 @@ from app.schemas import (
     OptimizationApplyResult,
     OptimizationProposal,
     ProposedAssignmentOut,
+    RegionCreate,
     RegionOut,
+    RegionUpdate,
     ServiceVisitOut,
     SkillOut,
 )
@@ -444,7 +446,55 @@ def create_schedule_overrides_bulk(
 
 @app.get("/regions", response_model=list[RegionOut])
 def list_regions(db: Session = Depends(get_db)) -> list[Region]:
-    return db.query(Region).order_by(Region.id).all()
+    return (
+        db.query(Region)
+        .filter(Region.delete_flag.is_(False))
+        .order_by(Region.id)
+        .all()
+    )
+
+
+@app.post("/regions", response_model=RegionOut, status_code=201)
+def create_region(payload: RegionCreate, db: Session = Depends(get_db)) -> Region:
+    region = Region(
+        name=payload.name,
+        geo_shape=[point.model_dump() for point in payload.geo_shape]
+        if payload.geo_shape is not None
+        else None,
+    )
+    db.add(region)
+    db.commit()
+    db.refresh(region)
+    return region
+
+
+@app.patch("/regions/{region_id}", response_model=RegionOut)
+def update_region(
+    region_id: int, payload: RegionUpdate, db: Session = Depends(get_db)
+) -> Region:
+    region = db.get(Region, region_id)
+    if region is None:
+        raise HTTPException(status_code=404, detail="Region not found")
+
+    region.name = payload.name
+    region.geo_shape = (
+        [point.model_dump() for point in payload.geo_shape]
+        if payload.geo_shape is not None
+        else None
+    )
+    db.commit()
+    db.refresh(region)
+    return region
+
+
+@app.delete("/regions/{region_id}", status_code=204)
+def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
+    region = db.get(Region, region_id)
+    if region is None:
+        raise HTTPException(status_code=404, detail="Region not found")
+
+    region.delete_flag = True
+    db.commit()
 
 
 @app.get("/skills", response_model=list[SkillOut])

@@ -3,41 +3,31 @@ import {
   listContracts,
   listCustomerLocations,
   listCustomers,
-  listRegions,
   listSkills,
   syncCustomers,
 } from "../api";
-import type { Contract, Customer, CustomerLocation, Region, Skill } from "../types";
+import type { Contract, Customer, CustomerLocation, Skill } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
-import { RegionsView } from "./RegionsView";
 import { SkillsView } from "./SkillsView";
 
-type Entity = "customers" | "customer-locations" | "contracts" | "skills" | "regions";
+type Entity = "customers" | "customer-locations" | "contracts" | "skills";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   customers: "Customers",
   "customer-locations": "Customer Locations",
   contracts: "Contracts",
   skills: "Skills",
-  regions: "Regions",
 };
 
-const ENTITY_ORDER: Entity[] = [
-  "customers",
-  "customer-locations",
-  "contracts",
-  "skills",
-  "regions",
-];
+const ENTITY_ORDER: Entity[] = ["customers", "customer-locations", "contracts", "skills"];
 
 export function CustomerPortalApp() {
   const [entity, setEntity] = useState<Entity>("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -47,12 +37,11 @@ export function CustomerPortalApp() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listRegions(), listSkills()])
-      .then(([customersData, customerLocationsData, contractsData, regionsData, skillsData]) => {
+    Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listSkills()])
+      .then(([customersData, customerLocationsData, contractsData, skillsData]) => {
         setCustomers(customersData);
         setCustomerLocations(customerLocationsData);
         setContracts(contractsData);
-        setRegions(regionsData);
         setSkills(skillsData);
       })
       .catch((err) =>
@@ -178,9 +167,6 @@ export function CustomerPortalApp() {
           />
         )}
         {entity === "skills" && <SkillsView skills={skills} contracts={contracts} />}
-        {entity === "regions" && (
-          <RegionsView regions={regions} customerLocations={customerLocations} />
-        )}
       </main>
     </div>
   );

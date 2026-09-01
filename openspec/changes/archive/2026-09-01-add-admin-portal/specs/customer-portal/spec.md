@@ -1,10 +1,4 @@
-# customer-portal Specification
-
-## Purpose
-
-Gives a business user a simple, read-only way to browse the master data already held by the shared backend — employees, customers, customer locations, contracts, skills, and regions — and how those entities relate to each other, in a frontend area kept clearly separate from the Planning application.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Customer Portal is a separate top-level area
 The system SHALL provide the Customer Portal as a top-level area reachable via a landing entry point distinct from the Planning application's own navigation, sharing no header or navigation elements with Manual Assignment or Day Planning.
@@ -51,16 +45,24 @@ The system SHALL provide a customer switcher, present on every page of the Custo
 - **WHEN** a specific customer is selected in the switcher
 - **THEN** the system does not prevent selecting any other customer, and does not restrict what data any other view shows — the selection is a display convenience only, not an access control
 
-### Requirement: Customer id is visible
-The system SHALL display each customer's unique identifier on the Customers list view and on that customer's detail view.
+### Requirement: Customer Portal is read-only
+The system SHALL NOT provide any create, edit, or delete action for Customers, Customer Locations, or Skills anywhere in the Customer Portal. Contracts and Contract Lines are the exception: the Customer Portal SHALL let a user create, update, and soft-delete both.
 
-#### Scenario: Customers list shows id
-- **WHEN** a user opens the Customers list view
-- **THEN** each row shows that customer's id alongside its name
+#### Scenario: No mutation affordance
+- **WHEN** a user views any Customers, Customer Locations, or Skills list or detail view in the Customer Portal
+- **THEN** the system provides no control to create, edit, or delete that entity
 
-#### Scenario: Customer detail shows id
-- **WHEN** a user opens a Customer's detail view
-- **THEN** the view shows that customer's id
+#### Scenario: Contracts and Contract Lines are the exception
+- **WHEN** a user views the Contracts area of the Customer Portal
+- **THEN** the system provides controls to create, update, and soft-delete both contracts and contract lines
+
+## REMOVED Requirements
+
+### Requirement: Detail view shows a master-data item and its relationships
+**Reason**: Regions are no longer part of the Customer Portal — region management, including its detail view, moves to the new Admin Portal.
+**Migration**: Replaced by "Detail view shows a Customer Portal item's own fields and relationships" below, which keeps every remaining detail scenario and drops the Region detail scenario.
+
+## ADDED Requirements
 
 ### Requirement: Detail view shows a Customer Portal item's own fields and relationships
 The system SHALL let a user open an item from any of the four list views to see a detail view containing that item's own fields and its relationships to other master-data entities.
@@ -80,51 +82,3 @@ The system SHALL let a user open an item from any of the four list views to see 
 #### Scenario: Skill detail
 - **WHEN** a user opens a Skill's detail view
 - **THEN** the system shows that skill's own fields and the Contract Lines that require it
-
-### Requirement: Refresh customers from Tripletex
-The system SHALL provide a control on the Customer Portal's Customers view that triggers an on-demand Tripletex customer sync, and SHALL refresh the Customers, Customer Locations, and Contracts views' data after the sync completes.
-
-#### Scenario: Planner refreshes customers
-- **WHEN** a user activates the Refresh control on the Customers view
-- **THEN** the system triggers a Tripletex customer sync, and once it completes, the Customers, Customer Locations, and Contracts views reflect the resulting data
-
-### Requirement: Customer Portal is read-only
-The system SHALL NOT provide any create, edit, or delete action for Customers, Customer Locations, or Skills anywhere in the Customer Portal. Contracts and Contract Lines are the exception: the Customer Portal SHALL let a user create, update, and soft-delete both.
-
-#### Scenario: No mutation affordance
-- **WHEN** a user views any Customers, Customer Locations, or Skills list or detail view in the Customer Portal
-- **THEN** the system provides no control to create, edit, or delete that entity
-
-#### Scenario: Contracts and Contract Lines are the exception
-- **WHEN** a user views the Contracts area of the Customer Portal
-- **THEN** the system provides controls to create, update, and soft-delete both contracts and contract lines
-
-### Requirement: Create, update, and soft-delete a contract from the Customer Portal
-The system SHALL let a user create a contract for a customer, update which customer it belongs to, and soft-delete it, from the Customer Portal's Contracts view.
-
-#### Scenario: Creating a contract in the portal
-- **WHEN** a user creates a contract for a customer from the Customer Portal
-- **THEN** the system persists the new contract and it appears in the Contracts list
-
-#### Scenario: Updating a contract in the portal
-- **WHEN** a user updates a contract's customer from the Customer Portal
-- **THEN** the system persists the change
-
-#### Scenario: Soft-deleting a contract in the portal
-- **WHEN** a user soft-deletes a contract from the Customer Portal
-- **THEN** the system marks it deleted, it no longer appears in the Contracts list, and its contract lines are also marked deleted
-
-### Requirement: Create, update, and soft-delete a contract line from the Customer Portal
-The system SHALL let a user create a contract line under a contract — for one of that contract's customer's locations — update its customer location, dates, interval, duration, and required skills, and soft-delete it, from the Customer Portal's Contract detail view.
-
-#### Scenario: Creating a contract line in the portal
-- **WHEN** a user creates a contract line under a contract from the Customer Portal, selecting one of that contract's customer's locations
-- **THEN** the system persists the new contract line and it appears under that contract
-
-#### Scenario: Updating a contract line in the portal
-- **WHEN** a user updates a contract line's customer location, dates, interval, duration, or required skills from the Customer Portal
-- **THEN** the system persists the change
-
-#### Scenario: Soft-deleting a contract line in the portal
-- **WHEN** a user soft-deletes a contract line from the Customer Portal
-- **THEN** the system marks it deleted and it no longer appears under its contract, while any service visits already generated from it remain visible elsewhere in the app

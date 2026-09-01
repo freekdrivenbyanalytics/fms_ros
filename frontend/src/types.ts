@@ -1,8 +1,24 @@
 export type VisitStatus = "unassigned" | "assigned";
 
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
 export interface Region {
   id: number;
   name: string;
+  geo_shape: GeoPoint[] | null;
+}
+
+export interface RegionCreateInput {
+  name: string;
+  geo_shape: GeoPoint[] | null;
+}
+
+export interface RegionUpdateInput {
+  name: string;
+  geo_shape: GeoPoint[] | null;
 }
 
 export interface Skill {

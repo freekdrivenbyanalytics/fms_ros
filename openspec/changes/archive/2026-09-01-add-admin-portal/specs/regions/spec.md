@@ -1,10 +1,4 @@
-# regions Specification
-
-## Purpose
-
-Represents named geographic regions used to group employees and customer locations for regional visibility on the assignment page.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Region data model
 The system SHALL persist each region with a unique identifier, a name, an optional geo-shape describing its geographic extent, and a soft-delete flag. A region's geo-shape is an ordered list of two or more latitude/longitude coordinate pairs forming a polygon. A region with no geo-shape SHALL remain otherwise usable.
@@ -20,6 +14,8 @@ The system SHALL persist each region with a unique identifier, a name, an option
 #### Scenario: An existing region without a geo-shape remains usable
 - **WHEN** a region has no geo-shape
 - **THEN** the region is still retrievable and usable everywhere a region is referenced (employee regions, customer location region)
+
+## ADDED Requirements
 
 ### Requirement: Create, update, and soft-delete a region
 The system SHALL allow a user to create a region with a name and an optional geo-shape, update its name and geo-shape, and soft-delete it. A soft-deleted region SHALL NOT be permanently removed.

@@ -53,6 +53,10 @@ class Region(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    geo_shape: Mapped[list | None] = mapped_column(JSONB)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     employees: Mapped[list["Employee"]] = relationship(
         secondary=employee_regions, back_populates="regions"
