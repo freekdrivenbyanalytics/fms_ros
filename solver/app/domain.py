@@ -31,12 +31,22 @@ def default_start_time_range() -> list[int]:
 @dataclass(frozen=True)
 class Employee:
     id: Annotated[int, PlanningId]
-    work_start_minutes: int
-    work_end_minutes: int
     skill_ids: frozenset
     region_ids: frozenset
     latitude: float
     longitude: float
+
+
+@dataclass(frozen=True)
+class EmployeeDaySchedule:
+    """An employee's resolved working-hours window for one date. Not a value
+    range - just data the constraints join against. Absence of a fact for a
+    given (employee_id, date) means the employee has no schedule that date."""
+
+    employee_id: int
+    date: date
+    start_minutes: int
+    end_minutes: int
 
 
 @dataclass(frozen=True)
@@ -84,6 +94,7 @@ class Schedule:
     employees: Annotated[
         list[Employee], ProblemFactCollectionProperty, ValueRangeProvider(id="employee_range")
     ]
+    employee_day_schedules: Annotated[list[EmployeeDaySchedule], ProblemFactCollectionProperty]
     existing_assignments: Annotated[list[ExistingAssignmentFact], ProblemFactCollectionProperty]
     start_times: Annotated[list[int], ValueRangeProvider(id="start_time_range")]
     visits: Annotated[list[VisitAssignment], PlanningEntityCollectionProperty]

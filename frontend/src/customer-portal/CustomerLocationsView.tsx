@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Contract, CustomerLocation } from "../types";
-import { BackButton, DetailField } from "./DetailField";
-import { ListTable } from "./ListTable";
+import { BackButton, DetailField } from "../shared/DetailField";
+import { ListTable } from "../shared/ListTable";
 
 interface Props {
   customerLocations: CustomerLocation[];

@@ -1,10 +1,4 @@
-# employees Specification
-
-## Purpose
-
-Represents the field service employees who can be manually assigned to service visits, including the working hours and home location used to judge assignment feasibility.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Employee data model
 The system SHALL persist each employee with a unique identifier, name, geographic location (latitude, longitude), one or more regions they belong to, zero or more skills they hold, and a soft-delete flag. An employee's working hours are not part of this record; they are resolved per date from that employee's schedule templates and day overrides.
@@ -37,6 +31,8 @@ The system SHALL allow an employee to be associated with more than one skill.
 #### Scenario: Employee with multiple skills
 - **WHEN** an employee is associated with two or more skills
 - **THEN** each association is retrievable and the employee's skills include all of them
+
+## ADDED Requirements
 
 ### Requirement: Create, update, and soft-delete an employee
 The system SHALL allow a user to create an employee with a name, home location, one or more regions, and zero or more skills; update any of those fields; and soft-delete the employee. A soft-deleted employee SHALL NOT be permanently removed.

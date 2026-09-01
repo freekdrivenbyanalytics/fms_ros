@@ -1,5 +1,12 @@
 from app.constraints import define_constraints
-from app.domain import Employee, ExistingAssignmentFact, Schedule, VisitAssignment, default_start_time_range
+from app.domain import (
+    Employee,
+    EmployeeDaySchedule,
+    ExistingAssignmentFact,
+    Schedule,
+    VisitAssignment,
+    default_start_time_range,
+)
 from app.schemas import DEFAULT_TIME_LIMIT_SECONDS, OptimizeRequest, OptimizeResponse, ScheduledVisitOut
 from timefold.solver import SolverFactory
 from timefold.solver.config import Duration, ScoreDirectorFactoryConfig, SolverConfig, TerminationConfig
@@ -9,8 +16,6 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
     employees_by_id = {
         e.id: Employee(
             id=e.id,
-            work_start_minutes=e.work_start_minutes,
-            work_end_minutes=e.work_end_minutes,
             skill_ids=frozenset(e.skill_ids),
             region_ids=frozenset(e.region_ids),
             latitude=e.latitude,
@@ -18,6 +23,16 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
         )
         for e in request.employees
     }
+
+    employee_day_schedules = [
+        EmployeeDaySchedule(
+            employee_id=s.employee_id,
+            date=s.date,
+            start_minutes=s.start_minutes,
+            end_minutes=s.end_minutes,
+        )
+        for s in request.employee_day_schedules
+    ]
 
     existing_assignments = [
         ExistingAssignmentFact(
@@ -47,6 +62,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
 
     return Schedule(
         employees=list(employees_by_id.values()),
+        employee_day_schedules=employee_day_schedules,
         existing_assignments=existing_assignments,
         start_times=default_start_time_range(),
         visits=visits,

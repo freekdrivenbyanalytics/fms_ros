@@ -8,7 +8,7 @@ from timefold.solver.score import (
     constraint_provider,
 )
 
-from app.domain import ExistingAssignmentFact, VisitAssignment
+from app.domain import EmployeeDaySchedule, ExistingAssignmentFact, VisitAssignment
 
 # Travel-distance penalties are pairwise proximity, not a literal route/path
 # length: every pair of same-employee-same-day visits (proposed and/or
@@ -41,12 +41,10 @@ def _wrong_region(visit: VisitAssignment) -> bool:
     return _is_scheduled(visit) and visit.region_id not in visit.employee.region_ids
 
 
-def _outside_working_hours(visit: VisitAssignment) -> bool:
-    if not _is_scheduled(visit):
-        return False
+def _outside_schedule_window(visit: VisitAssignment, schedule: EmployeeDaySchedule) -> bool:
     return (
-        visit.start_minutes < visit.employee.work_start_minutes
-        or visit.end_minutes() > visit.employee.work_end_minutes
+        visit.start_minutes < schedule.start_minutes
+        or visit.end_minutes() > schedule.end_minutes
     )
 
 
@@ -75,6 +73,10 @@ def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint
         Joiners.equal(lambda v: v.employee, lambda e: e.employee),
         Joiners.equal(lambda v: v.requested_date, lambda e: e.requested_date),
     ]
+    visit_employee_id_same_date_schedule = [
+        Joiners.equal(lambda v: v.employee.id, lambda s: s.employee_id),
+        Joiners.equal(lambda v: v.requested_date, lambda s: s.date),
+    ]
 
     return [
         # Medium: prefer scheduling every visit over leaving it unassigned.
@@ -92,9 +94,16 @@ def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint
         .penalize(HardMediumSoftScore.ONE_HARD)
         .as_constraint("Employee not scoped to region"),
         constraint_factory.for_each(VisitAssignment)
-        .filter(_outside_working_hours)
+        .filter(_is_scheduled)
+        .join(EmployeeDaySchedule, *visit_employee_id_same_date_schedule)
+        .filter(_outside_schedule_window)
         .penalize(HardMediumSoftScore.ONE_HARD)
         .as_constraint("Outside working hours"),
+        constraint_factory.for_each(VisitAssignment)
+        .filter(_is_scheduled)
+        .if_not_exists(EmployeeDaySchedule, *visit_employee_id_same_date_schedule)
+        .penalize(HardMediumSoftScore.ONE_HARD)
+        .as_constraint("No resolved schedule for this date"),
         constraint_factory.for_each_unique_pair(
             VisitAssignment,
             *same_employee_same_date,

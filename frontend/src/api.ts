@@ -10,6 +10,13 @@ import type {
   Customer,
   CustomerLocation,
   Employee,
+  EmployeeCreateInput,
+  EmployeeScheduleDayOverride,
+  EmployeeScheduleDayOverrideBulkInput,
+  EmployeeScheduleDayOverrideInput,
+  EmployeeScheduleTemplate,
+  EmployeeScheduleTemplateInput,
+  EmployeeUpdateInput,
   OptimizationApplyResult,
   OptimizationProposal,
   Region,
@@ -30,6 +37,104 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export function listEmployees(): Promise<Employee[]> {
   return fetch(`${API_URL}/employees`).then((res) => handleResponse<Employee[]>(res));
+}
+
+export function createEmployee(input: EmployeeCreateInput): Promise<Employee> {
+  return fetch(`${API_URL}/employees`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Employee>(res));
+}
+
+export function updateEmployee(id: number, input: EmployeeUpdateInput): Promise<Employee> {
+  return fetch(`${API_URL}/employees/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Employee>(res));
+}
+
+export async function deleteEmployee(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/employees/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export function createScheduleTemplate(
+  employeeId: number,
+  input: EmployeeScheduleTemplateInput
+): Promise<EmployeeScheduleTemplate> {
+  return fetch(`${API_URL}/employees/${employeeId}/schedule-templates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<EmployeeScheduleTemplate>(res));
+}
+
+export function updateScheduleTemplate(
+  id: number,
+  input: EmployeeScheduleTemplateInput
+): Promise<EmployeeScheduleTemplate> {
+  return fetch(`${API_URL}/schedule-templates/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<EmployeeScheduleTemplate>(res));
+}
+
+export async function deleteScheduleTemplate(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/schedule-templates/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export function createScheduleOverride(
+  employeeId: number,
+  input: EmployeeScheduleDayOverrideInput
+): Promise<EmployeeScheduleDayOverride> {
+  return fetch(`${API_URL}/employees/${employeeId}/schedule-overrides`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<EmployeeScheduleDayOverride>(res));
+}
+
+export function updateScheduleOverride(
+  id: number,
+  input: EmployeeScheduleDayOverrideInput
+): Promise<EmployeeScheduleDayOverride> {
+  return fetch(`${API_URL}/schedule-overrides/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<EmployeeScheduleDayOverride>(res));
+}
+
+export async function deleteScheduleOverride(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/schedule-overrides/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.detail ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+export function createScheduleOverridesBulk(
+  employeeId: number,
+  input: EmployeeScheduleDayOverrideBulkInput
+): Promise<EmployeeScheduleDayOverride[]> {
+  return fetch(`${API_URL}/employees/${employeeId}/schedule-overrides/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<EmployeeScheduleDayOverride[]>(res));
 }
 
 export function listServiceVisits(): Promise<ServiceVisit[]> {

@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname,'index.html'),
         customerPortal: resolve(import.meta.dirname,'customer-portal.html'),
+        employeeManagement: resolve(import.meta.dirname,'employee-management.html'),
       },
     },
   },

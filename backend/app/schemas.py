@@ -2,7 +2,7 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.models import VisitStatus
+from app.models import DayType, LunchType, VisitStatus
 
 
 class RegionOut(BaseModel):
@@ -134,17 +134,109 @@ class ContractLineUpdate(BaseModel):
     required_skill_ids: list[int]
 
 
+class EmployeeScheduleTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    employee_id: int
+    start_date: date
+    end_date: date | None = None
+    work_start: time
+    work_end: time
+    max_hours_per_day: float
+    lunch_type: LunchType
+    lunch_start: time | None = None
+    lunch_end: time | None = None
+    lunch_duration_minutes: int | None = None
+
+
+class EmployeeScheduleTemplateCreate(BaseModel):
+    start_date: date
+    end_date: date | None = None
+    work_start: time
+    work_end: time
+    max_hours_per_day: float
+    lunch_type: LunchType = LunchType.NONE
+    lunch_start: time | None = None
+    lunch_end: time | None = None
+    lunch_duration_minutes: int | None = None
+
+
+class EmployeeScheduleTemplateUpdate(BaseModel):
+    start_date: date
+    end_date: date | None = None
+    work_start: time
+    work_end: time
+    max_hours_per_day: float
+    lunch_type: LunchType = LunchType.NONE
+    lunch_start: time | None = None
+    lunch_end: time | None = None
+    lunch_duration_minutes: int | None = None
+
+
+class EmployeeScheduleDayOverrideOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    employee_id: int
+    date: date
+    day_type: DayType
+    work_start: time | None = None
+    work_end: time | None = None
+    max_hours_per_day: float | None = None
+    overtime_minutes: int | None = None
+
+
+class EmployeeScheduleDayOverrideCreate(BaseModel):
+    date: date
+    day_type: DayType
+    work_start: time | None = None
+    work_end: time | None = None
+    max_hours_per_day: float | None = None
+    overtime_minutes: int | None = None
+
+
+class EmployeeScheduleDayOverrideUpdate(BaseModel):
+    day_type: DayType
+    work_start: time | None = None
+    work_end: time | None = None
+    max_hours_per_day: float | None = None
+    overtime_minutes: int | None = None
+
+
+class EmployeeScheduleDayOverrideBulkCreate(BaseModel):
+    start_date: date
+    end_date: date
+    day_type: DayType
+
+
 class EmployeeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
-    work_start: time
-    work_end: time
     latitude: float
     longitude: float
     regions: list[RegionOut]
     skills: list[SkillOut]
+    schedule_templates: list[EmployeeScheduleTemplateOut]
+    schedule_overrides: list[EmployeeScheduleDayOverrideOut]
+
+
+class EmployeeCreate(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    region_ids: list[int]
+    skill_ids: list[int] = []
+
+
+class EmployeeUpdate(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    region_ids: list[int]
+    skill_ids: list[int] = []
 
 
 class ServiceVisitOut(BaseModel):

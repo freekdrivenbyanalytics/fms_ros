@@ -270,10 +270,11 @@ class Employee(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    work_start: Mapped[time] = mapped_column(Time, nullable=False)
-    work_end: Mapped[time] = mapped_column(Time, nullable=False)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     regions: Mapped[list["Region"]] = relationship(
         secondary=employee_regions, back_populates="employees"
@@ -282,6 +283,79 @@ class Employee(Base):
         secondary=employee_skills, back_populates="employees"
     )
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="employee")
+    schedule_templates: Mapped[list["EmployeeScheduleTemplate"]] = relationship(
+        back_populates="employee"
+    )
+    schedule_overrides: Mapped[list["EmployeeScheduleDayOverride"]] = relationship(
+        back_populates="employee"
+    )
+
+
+class LunchType(str, enum.Enum):
+    NONE = "none"
+    FIXED = "fixed"
+    FLEXIBLE = "flexible"
+
+
+class DayType(str, enum.Enum):
+    WORKING = "working"
+    HOLIDAY = "holiday"
+    SICK = "sick"
+
+
+class EmployeeScheduleTemplate(Base):
+    __tablename__ = "employee_schedule_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    work_start: Mapped[time] = mapped_column(Time, nullable=False)
+    work_end: Mapped[time] = mapped_column(Time, nullable=False)
+    max_hours_per_day: Mapped[float] = mapped_column(Float, nullable=False)
+    lunch_type: Mapped[LunchType] = mapped_column(
+        Enum(
+            LunchType,
+            name="lunch_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=LunchType.NONE,
+        server_default=LunchType.NONE.value,
+    )
+    lunch_start: Mapped[time | None] = mapped_column(Time)
+    lunch_end: Mapped[time | None] = mapped_column(Time)
+    lunch_duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    employee: Mapped["Employee"] = relationship(back_populates="schedule_templates")
+
+
+class EmployeeScheduleDayOverride(Base):
+    __tablename__ = "employee_schedule_day_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    day_type: Mapped[DayType] = mapped_column(
+        Enum(
+            DayType,
+            name="day_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    work_start: Mapped[time | None] = mapped_column(Time)
+    work_end: Mapped[time | None] = mapped_column(Time)
+    max_hours_per_day: Mapped[float | None] = mapped_column(Float)
+    overtime_minutes: Mapped[int | None] = mapped_column(Integer)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    employee: Mapped["Employee"] = relationship(back_populates="schedule_overrides")
 
 
 class ServiceVisit(Base):

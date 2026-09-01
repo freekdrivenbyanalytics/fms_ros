@@ -3,29 +3,20 @@ import {
   listContracts,
   listCustomerLocations,
   listCustomers,
-  listEmployees,
   listRegions,
   listSkills,
   syncCustomers,
 } from "../api";
-import type { Contract, Customer, CustomerLocation, Employee, Region, Skill } from "../types";
+import type { Contract, Customer, CustomerLocation, Region, Skill } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
-import { EmployeesView } from "./EmployeesView";
 import { RegionsView } from "./RegionsView";
 import { SkillsView } from "./SkillsView";
 
-type Entity =
-  | "employees"
-  | "customers"
-  | "customer-locations"
-  | "contracts"
-  | "skills"
-  | "regions";
+type Entity = "customers" | "customer-locations" | "contracts" | "skills" | "regions";
 
 const ENTITY_LABELS: Record<Entity, string> = {
-  employees: "Employees",
   customers: "Customers",
   "customer-locations": "Customer Locations",
   contracts: "Contracts",
@@ -34,7 +25,6 @@ const ENTITY_LABELS: Record<Entity, string> = {
 };
 
 const ENTITY_ORDER: Entity[] = [
-  "employees",
   "customers",
   "customer-locations",
   "contracts",
@@ -43,8 +33,7 @@ const ENTITY_ORDER: Entity[] = [
 ];
 
 export function CustomerPortalApp() {
-  const [entity, setEntity] = useState<Entity>("employees");
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [entity, setEntity] = useState<Entity>("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -58,31 +47,14 @@ export function CustomerPortalApp() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      listEmployees(),
-      listCustomers(),
-      listCustomerLocations(),
-      listContracts(),
-      listRegions(),
-      listSkills(),
-    ])
-      .then(
-        ([
-          employeesData,
-          customersData,
-          customerLocationsData,
-          contractsData,
-          regionsData,
-          skillsData,
-        ]) => {
-          setEmployees(employeesData);
-          setCustomers(customersData);
-          setCustomerLocations(customerLocationsData);
-          setContracts(contractsData);
-          setRegions(regionsData);
-          setSkills(skillsData);
-        }
-      )
+    Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listRegions(), listSkills()])
+      .then(([customersData, customerLocationsData, contractsData, regionsData, skillsData]) => {
+        setCustomers(customersData);
+        setCustomerLocations(customerLocationsData);
+        setContracts(contractsData);
+        setRegions(regionsData);
+        setSkills(skillsData);
+      })
       .catch((err) =>
         setLoadError(err instanceof Error ? err.message : "Failed to load data")
       )
@@ -171,7 +143,6 @@ export function CustomerPortalApp() {
         </nav>
       </aside>
       <main className="flex-1 p-8">
-        {entity === "employees" && <EmployeesView employees={employees} />}
         {entity === "customers" && (
           <div>
             {refreshError && (
@@ -206,15 +177,9 @@ export function CustomerPortalApp() {
             onChanged={handleContractsChanged}
           />
         )}
-        {entity === "skills" && (
-          <SkillsView skills={skills} employees={employees} contracts={contracts} />
-        )}
+        {entity === "skills" && <SkillsView skills={skills} contracts={contracts} />}
         {entity === "regions" && (
-          <RegionsView
-            regions={regions}
-            employees={employees}
-            customerLocations={customerLocations}
-          />
+          <RegionsView regions={regions} customerLocations={customerLocations} />
         )}
       </main>
     </div>

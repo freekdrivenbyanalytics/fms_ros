@@ -4,6 +4,7 @@ import httpx
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
+from app.employee_schedule import resolve_employee_schedule
 from app.models import Assignment, ContractLine, CustomerLocation, Employee, ServiceVisit
 
 
@@ -29,13 +30,36 @@ def _is_locked(assignment: Assignment) -> bool:
 def _employee_payload(employee: Employee) -> dict:
     return {
         "id": employee.id,
-        "work_start_minutes": _minutes_since_midnight(employee.work_start),
-        "work_end_minutes": _minutes_since_midnight(employee.work_end),
         "skill_ids": [s.id for s in employee.skills],
         "region_ids": [r.id for r in employee.regions],
         "latitude": employee.latitude,
         "longitude": employee.longitude,
     }
+
+
+def _employee_day_schedule_payloads(
+    db: Session, employees: list[Employee], dates: set[date]
+) -> list[dict]:
+    """One EmployeeDaySchedule entry per (employee, date) that resolves to an
+    actual working-hours window; pairs with no schedule are omitted rather
+    than sent with null hours, so the solver's if_not_exists constraint can
+    tell an employee has no schedule that date."""
+    schedules = []
+    for employee in employees:
+        for target_date in dates:
+            resolved = resolve_employee_schedule(db, employee.id, target_date)
+            if resolved is None:
+                continue
+            work_start, work_end = resolved
+            schedules.append(
+                {
+                    "employee_id": employee.id,
+                    "date": target_date.isoformat(),
+                    "start_minutes": _minutes_since_midnight(work_start),
+                    "end_minutes": _minutes_since_midnight(work_end),
+                }
+            )
+    return schedules
 
 
 def _visit_payload(visit: ServiceVisit) -> dict:
@@ -88,6 +112,7 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     """
     employees = (
         db.query(Employee)
+        .filter(Employee.delete_flag.is_(False))
         .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .order_by(Employee.id)
         .all()
@@ -114,8 +139,11 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     ready_visits = [v for v in schedulable_visits if _is_ready_to_schedule(v)]
     excluded_visit_ids = [v.id for v in schedulable_visits if not _is_ready_to_schedule(v)]
 
+    candidate_dates = {effective_schedule_date(v) for v in ready_visits}
+
     payload = {
         "employees": [_employee_payload(e) for e in employees],
+        "employee_day_schedules": _employee_day_schedule_payloads(db, employees, candidate_dates),
         "visits": [_visit_payload(v) for v in ready_visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "time_limit_seconds": settings.solver_time_limit_seconds,

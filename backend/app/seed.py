@@ -6,7 +6,10 @@ from app.models import (
     Contract,
     ContractLine,
     CustomerLocation,
+    DayType,
     Employee,
+    EmployeeScheduleDayOverride,
+    EmployeeScheduleTemplate,
     Region,
     ServiceVisit,
     Skill,
@@ -43,36 +46,75 @@ def seed() -> None:
 
         employees = []
         if not db.query(Employee).count():
-            employees = [
-                Employee(
-                    name="Alice Johnson",
-                    work_start=time(8, 0),
-                    work_end=time(16, 0),
-                    latitude=52.3676,
-                    longitude=4.9041,
-                    regions=[north_holland, utrecht],
-                    skills=[electrical, general_maintenance],
-                ),
-                Employee(
-                    name="Bram de Vries",
+            employee_fixtures = [
+                {
+                    "name": "Alice Johnson",
+                    "work_start": time(8, 0),
+                    "work_end": time(16, 0),
+                    "latitude": 52.3676,
+                    "longitude": 4.9041,
+                    "regions": [north_holland, utrecht],
+                    "skills": [electrical, general_maintenance],
+                },
+                {
+                    "name": "Bram de Vries",
+                    "work_start": time(9, 0),
+                    "work_end": time(17, 0),
+                    "latitude": 52.0907,
+                    "longitude": 5.1214,
+                    "regions": [utrecht],
+                    "skills": [plumbing],
+                },
+                {
+                    "name": "Chen Wei",
+                    "work_start": time(7, 30),
+                    "work_end": time(15, 30),
+                    "latitude": 51.9244,
+                    "longitude": 4.4777,
+                    "regions": [south_holland, groningen],
+                    "skills": [hvac, general_maintenance],
+                },
+            ]
+            for fixture in employee_fixtures:
+                employee = Employee(
+                    name=fixture["name"],
+                    latitude=fixture["latitude"],
+                    longitude=fixture["longitude"],
+                    regions=fixture["regions"],
+                    skills=fixture["skills"],
+                )
+                db.add(employee)
+                db.flush()
+                employees.append(employee)
+
+                template = EmployeeScheduleTemplate(
+                    employee_id=employee.id,
+                    start_date=date(2026, 1, 1),
+                    end_date=None,
+                    work_start=fixture["work_start"],
+                    work_end=fixture["work_end"],
+                    max_hours_per_day=8,
+                )
+                db.add(template)
+
+            # Sample overrides on the first employee to exercise the
+            # resolution logic: one holiday, one manually-adjusted working day.
+            db.add(
+                EmployeeScheduleDayOverride(
+                    employee_id=employees[0].id,
+                    date=date(2026, 9, 1),
+                    day_type=DayType.HOLIDAY,
+                )
+            )
+            db.add(
+                EmployeeScheduleDayOverride(
+                    employee_id=employees[0].id,
+                    date=date(2026, 9, 2),
+                    day_type=DayType.WORKING,
                     work_start=time(9, 0),
                     work_end=time(17, 0),
-                    latitude=52.0907,
-                    longitude=5.1214,
-                    regions=[utrecht],
-                    skills=[plumbing],
-                ),
-                Employee(
-                    name="Chen Wei",
-                    work_start=time(7, 30),
-                    work_end=time(15, 30),
-                    latitude=51.9244,
-                    longitude=4.4777,
-                    regions=[south_holland, groningen],
-                    skills=[hvac, general_maintenance],
-                ),
-            ]
-            db.add_all(employees)
+                )
+            )
 
         # Tripletex is the source of truth for locations themselves; region
         # assignment is local and deferred (see sync_customer_locations), so

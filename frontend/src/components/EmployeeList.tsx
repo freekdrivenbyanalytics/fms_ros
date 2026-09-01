@@ -54,9 +54,6 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
                 summary={
                   <div>
                     <div className="font-medium text-slate-800">{employee.name}</div>
-                    <div className="text-slate-500">
-                      {employee.work_start.slice(0, 5)}–{employee.work_end.slice(0, 5)}
-                    </div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {employee.regions.map((region) => (
                         <span

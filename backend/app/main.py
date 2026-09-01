@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
@@ -8,13 +8,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal, get_db
+from app.employee_schedule import (
+    covering_template,
+    effective_max_hours_per_day,
+    hours_exceed_cap,
+    override_exists_for_date,
+    templates_overlap,
+)
 from app.models import (
     Assignment,
     Contract,
     ContractLine,
     Customer,
     CustomerLocation,
+    DayType,
     Employee,
+    EmployeeScheduleDayOverride,
+    EmployeeScheduleTemplate,
     Region,
     ServiceVisit,
     Skill,
@@ -32,7 +42,16 @@ from app.schemas import (
     ContractUpdate,
     CustomerLocationOut,
     CustomerOut,
+    EmployeeCreate,
     EmployeeOut,
+    EmployeeScheduleDayOverrideBulkCreate,
+    EmployeeScheduleDayOverrideCreate,
+    EmployeeScheduleDayOverrideOut,
+    EmployeeScheduleDayOverrideUpdate,
+    EmployeeScheduleTemplateCreate,
+    EmployeeScheduleTemplateOut,
+    EmployeeScheduleTemplateUpdate,
+    EmployeeUpdate,
     OptimizationApplyRequest,
     OptimizationApplyResult,
     OptimizationProposal,
@@ -72,14 +91,355 @@ app.add_middleware(
 )
 
 
+def _employee_out(employee: Employee) -> EmployeeOut:
+    return EmployeeOut(
+        id=employee.id,
+        name=employee.name,
+        latitude=employee.latitude,
+        longitude=employee.longitude,
+        regions=[RegionOut.model_validate(region) for region in employee.regions],
+        skills=[SkillOut.model_validate(skill) for skill in employee.skills],
+        schedule_templates=[
+            EmployeeScheduleTemplateOut.model_validate(template)
+            for template in employee.schedule_templates
+            if not template.delete_flag
+        ],
+        schedule_overrides=[
+            EmployeeScheduleDayOverrideOut.model_validate(override)
+            for override in employee.schedule_overrides
+            if not override.delete_flag
+        ],
+    )
+
+
+def _employee_query(db: Session):
+    return db.query(Employee).options(
+        joinedload(Employee.regions),
+        joinedload(Employee.skills),
+        joinedload(Employee.schedule_templates),
+        joinedload(Employee.schedule_overrides),
+    )
+
+
+def _lookup_regions_and_skills(
+    db: Session, region_ids: list[int], skill_ids: list[int]
+) -> tuple[list[Region], list[Skill]]:
+    regions = db.query(Region).filter(Region.id.in_(region_ids)).all()
+    if len(regions) != len(set(region_ids)):
+        raise HTTPException(status_code=404, detail="One or more regions not found")
+    skills = db.query(Skill).filter(Skill.id.in_(skill_ids)).all()
+    if len(skills) != len(set(skill_ids)):
+        raise HTTPException(status_code=404, detail="One or more skills not found")
+    return regions, skills
+
+
 @app.get("/employees", response_model=list[EmployeeOut])
-def list_employees(db: Session = Depends(get_db)) -> list[Employee]:
-    return (
-        db.query(Employee)
-        .options(joinedload(Employee.regions), joinedload(Employee.skills))
+def list_employees(db: Session = Depends(get_db)) -> list[EmployeeOut]:
+    employees = (
+        _employee_query(db)
+        .filter(Employee.delete_flag.is_(False))
         .order_by(Employee.id)
         .all()
     )
+    return [_employee_out(employee) for employee in employees]
+
+
+@app.post("/employees", response_model=EmployeeOut, status_code=201)
+def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> EmployeeOut:
+    regions, skills = _lookup_regions_and_skills(db, payload.region_ids, payload.skill_ids)
+
+    employee = Employee(
+        name=payload.name,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        regions=regions,
+        skills=skills,
+    )
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+    return _employee_out(employee)
+
+
+@app.patch("/employees/{employee_id}", response_model=EmployeeOut)
+def update_employee(
+    employee_id: int, payload: EmployeeUpdate, db: Session = Depends(get_db)
+) -> EmployeeOut:
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    regions, skills = _lookup_regions_and_skills(db, payload.region_ids, payload.skill_ids)
+
+    employee.name = payload.name
+    employee.latitude = payload.latitude
+    employee.longitude = payload.longitude
+    employee.regions = regions
+    employee.skills = skills
+    db.commit()
+    db.refresh(employee)
+    return _employee_out(employee)
+
+
+@app.delete("/employees/{employee_id}", status_code=204)
+def delete_employee(employee_id: int, db: Session = Depends(get_db)) -> None:
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    employee.delete_flag = True
+    db.commit()
+
+
+def _validate_template_hours(
+    db: Session, employee_id: int, payload: EmployeeScheduleTemplateCreate | EmployeeScheduleTemplateUpdate
+) -> None:
+    if templates_overlap(db, employee_id, payload.start_date, payload.end_date):
+        raise HTTPException(
+            status_code=422,
+            detail="Template date range overlaps an existing template for this employee",
+        )
+    if hours_exceed_cap(payload.work_start, payload.work_end, payload.max_hours_per_day):
+        raise HTTPException(
+            status_code=422,
+            detail="Template hours exceed its own max hours per day",
+        )
+
+
+@app.get(
+    "/employees/{employee_id}/schedule-templates",
+    response_model=list[EmployeeScheduleTemplateOut],
+)
+def list_schedule_templates(
+    employee_id: int, db: Session = Depends(get_db)
+) -> list[EmployeeScheduleTemplate]:
+    return (
+        db.query(EmployeeScheduleTemplate)
+        .filter(
+            EmployeeScheduleTemplate.employee_id == employee_id,
+            EmployeeScheduleTemplate.delete_flag.is_(False),
+        )
+        .order_by(EmployeeScheduleTemplate.start_date)
+        .all()
+    )
+
+
+@app.post(
+    "/employees/{employee_id}/schedule-templates",
+    response_model=EmployeeScheduleTemplateOut,
+    status_code=201,
+)
+def create_schedule_template(
+    employee_id: int,
+    payload: EmployeeScheduleTemplateCreate,
+    db: Session = Depends(get_db),
+) -> EmployeeScheduleTemplate:
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    _validate_template_hours(db, employee_id, payload)
+
+    template = EmployeeScheduleTemplate(employee_id=employee_id, **payload.model_dump())
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+@app.patch(
+    "/schedule-templates/{template_id}", response_model=EmployeeScheduleTemplateOut
+)
+def update_schedule_template(
+    template_id: int,
+    payload: EmployeeScheduleTemplateUpdate,
+    db: Session = Depends(get_db),
+) -> EmployeeScheduleTemplate:
+    template = db.get(EmployeeScheduleTemplate, template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="Schedule template not found")
+
+    if templates_overlap(
+        db, template.employee_id, payload.start_date, payload.end_date, exclude_id=template.id
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Template date range overlaps an existing template for this employee",
+        )
+    if hours_exceed_cap(payload.work_start, payload.work_end, payload.max_hours_per_day):
+        raise HTTPException(
+            status_code=422,
+            detail="Template hours exceed its own max hours per day",
+        )
+
+    for field, value in payload.model_dump().items():
+        setattr(template, field, value)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+@app.delete("/schedule-templates/{template_id}", status_code=204)
+def delete_schedule_template(template_id: int, db: Session = Depends(get_db)) -> None:
+    template = db.get(EmployeeScheduleTemplate, template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="Schedule template not found")
+
+    template.delete_flag = True
+    db.commit()
+
+
+def _validate_override_hours(
+    db: Session,
+    employee_id: int,
+    target_date: date,
+    day_type: DayType,
+    work_start: time | None,
+    work_end: time | None,
+    max_hours_per_day: float | None,
+) -> None:
+    if day_type != DayType.WORKING:
+        return
+    if work_start is None or work_end is None:
+        return
+    template = covering_template(db, employee_id, target_date)
+    cap = effective_max_hours_per_day(max_hours_per_day, template)
+    if cap is not None and hours_exceed_cap(work_start, work_end, cap):
+        raise HTTPException(
+            status_code=422,
+            detail="Override hours exceed the effective max hours per day",
+        )
+
+
+@app.get(
+    "/employees/{employee_id}/schedule-overrides",
+    response_model=list[EmployeeScheduleDayOverrideOut],
+)
+def list_schedule_overrides(
+    employee_id: int, db: Session = Depends(get_db)
+) -> list[EmployeeScheduleDayOverride]:
+    return (
+        db.query(EmployeeScheduleDayOverride)
+        .filter(
+            EmployeeScheduleDayOverride.employee_id == employee_id,
+            EmployeeScheduleDayOverride.delete_flag.is_(False),
+        )
+        .order_by(EmployeeScheduleDayOverride.date)
+        .all()
+    )
+
+
+@app.post(
+    "/employees/{employee_id}/schedule-overrides",
+    response_model=EmployeeScheduleDayOverrideOut,
+    status_code=201,
+)
+def create_schedule_override(
+    employee_id: int,
+    payload: EmployeeScheduleDayOverrideCreate,
+    db: Session = Depends(get_db),
+) -> EmployeeScheduleDayOverride:
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    if override_exists_for_date(db, employee_id, payload.date):
+        raise HTTPException(
+            status_code=422,
+            detail="An override already exists for this employee and date",
+        )
+    _validate_override_hours(
+        db,
+        employee_id,
+        payload.date,
+        payload.day_type,
+        payload.work_start,
+        payload.work_end,
+        payload.max_hours_per_day,
+    )
+
+    override = EmployeeScheduleDayOverride(employee_id=employee_id, **payload.model_dump())
+    db.add(override)
+    db.commit()
+    db.refresh(override)
+    return override
+
+
+@app.patch(
+    "/schedule-overrides/{override_id}", response_model=EmployeeScheduleDayOverrideOut
+)
+def update_schedule_override(
+    override_id: int,
+    payload: EmployeeScheduleDayOverrideUpdate,
+    db: Session = Depends(get_db),
+) -> EmployeeScheduleDayOverride:
+    override = db.get(EmployeeScheduleDayOverride, override_id)
+    if override is None:
+        raise HTTPException(status_code=404, detail="Schedule override not found")
+
+    _validate_override_hours(
+        db,
+        override.employee_id,
+        override.date,
+        payload.day_type,
+        payload.work_start,
+        payload.work_end,
+        payload.max_hours_per_day,
+    )
+
+    for field, value in payload.model_dump().items():
+        setattr(override, field, value)
+    db.commit()
+    db.refresh(override)
+    return override
+
+
+@app.delete("/schedule-overrides/{override_id}", status_code=204)
+def delete_schedule_override(override_id: int, db: Session = Depends(get_db)) -> None:
+    override = db.get(EmployeeScheduleDayOverride, override_id)
+    if override is None:
+        raise HTTPException(status_code=404, detail="Schedule override not found")
+
+    override.delete_flag = True
+    db.commit()
+
+
+@app.post(
+    "/employees/{employee_id}/schedule-overrides/bulk",
+    response_model=list[EmployeeScheduleDayOverrideOut],
+    status_code=201,
+)
+def create_schedule_overrides_bulk(
+    employee_id: int,
+    payload: EmployeeScheduleDayOverrideBulkCreate,
+    db: Session = Depends(get_db),
+) -> list[EmployeeScheduleDayOverride]:
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=422, detail="end_date must not be before start_date")
+
+    dates = [
+        payload.start_date + timedelta(days=offset)
+        for offset in range((payload.end_date - payload.start_date).days + 1)
+    ]
+    conflicting = [d for d in dates if override_exists_for_date(db, employee_id, d)]
+    if conflicting:
+        raise HTTPException(
+            status_code=422,
+            detail=f"An override already exists for this employee on: {conflicting[0].isoformat()}",
+        )
+
+    overrides = [
+        EmployeeScheduleDayOverride(employee_id=employee_id, date=d, day_type=payload.day_type)
+        for d in dates
+    ]
+    db.add_all(overrides)
+    db.commit()
+    for override in overrides:
+        db.refresh(override)
+    return overrides
 
 
 @app.get("/regions", response_model=list[RegionOut])

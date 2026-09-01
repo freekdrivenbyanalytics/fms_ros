@@ -1,21 +1,17 @@
 import { useState } from "react";
-import type { CustomerLocation, Employee, Region } from "../types";
-import { BackButton, DetailField } from "./DetailField";
-import { ListTable } from "./ListTable";
+import type { CustomerLocation, Region } from "../types";
+import { BackButton, DetailField } from "../shared/DetailField";
+import { ListTable } from "../shared/ListTable";
 
 interface Props {
   regions: Region[];
-  employees: Employee[];
   customerLocations: CustomerLocation[];
 }
 
-export function RegionsView({ regions, employees, customerLocations }: Props) {
+export function RegionsView({ regions, customerLocations }: Props) {
   const [selected, setSelected] = useState<Region | null>(null);
 
   if (selected) {
-    const regionEmployees = employees.filter((employee) =>
-      employee.regions.some((region) => region.id === selected.id)
-    );
     const regionLocations = customerLocations.filter(
       (location) => location.region?.id === selected.id
     );
@@ -23,11 +19,6 @@ export function RegionsView({ regions, employees, customerLocations }: Props) {
       <div>
         <BackButton label="Regions" onClick={() => setSelected(null)} />
         <h2 className="text-xl font-semibold text-slate-900 mb-4">{selected.name}</h2>
-        <DetailField label="Employees scoped to this region">
-          {regionEmployees.length === 0
-            ? "—"
-            : regionEmployees.map((employee) => employee.name).join(", ")}
-        </DetailField>
         <DetailField label="Customer Locations in this region">
           {regionLocations.length === 0 ? (
             "—"

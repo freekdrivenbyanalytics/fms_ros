@@ -131,6 +131,12 @@ function App() {
           >
             Customer Portal
           </a>
+          <a
+            href="/employee-management.html"
+            className="rounded-md px-3 py-1.5 text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+          >
+            Employee Management
+          </a>
         </nav>
       </div>
 

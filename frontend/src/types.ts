@@ -109,15 +109,86 @@ export interface ContractLineUpdateInput {
   required_skill_ids: number[];
 }
 
+export type LunchType = "none" | "fixed" | "flexible";
+export type DayType = "working" | "holiday" | "sick";
+
+export interface EmployeeScheduleTemplate {
+  id: number;
+  employee_id: number;
+  start_date: string;
+  end_date: string | null;
+  work_start: string;
+  work_end: string;
+  max_hours_per_day: number;
+  lunch_type: LunchType;
+  lunch_start: string | null;
+  lunch_end: string | null;
+  lunch_duration_minutes: number | null;
+}
+
+export interface EmployeeScheduleTemplateInput {
+  start_date: string;
+  end_date: string | null;
+  work_start: string;
+  work_end: string;
+  max_hours_per_day: number;
+  lunch_type: LunchType;
+  lunch_start: string | null;
+  lunch_end: string | null;
+  lunch_duration_minutes: number | null;
+}
+
+export interface EmployeeScheduleDayOverride {
+  id: number;
+  employee_id: number;
+  date: string;
+  day_type: DayType;
+  work_start: string | null;
+  work_end: string | null;
+  max_hours_per_day: number | null;
+  overtime_minutes: number | null;
+}
+
+export interface EmployeeScheduleDayOverrideInput {
+  date?: string;
+  day_type: DayType;
+  work_start: string | null;
+  work_end: string | null;
+  max_hours_per_day: number | null;
+  overtime_minutes: number | null;
+}
+
+export interface EmployeeScheduleDayOverrideBulkInput {
+  start_date: string;
+  end_date: string;
+  day_type: DayType;
+}
+
 export interface Employee {
   id: number;
   name: string;
-  work_start: string;
-  work_end: string;
   latitude: number;
   longitude: number;
   regions: Region[];
   skills: Skill[];
+  schedule_templates: EmployeeScheduleTemplate[];
+  schedule_overrides: EmployeeScheduleDayOverride[];
+}
+
+export interface EmployeeCreateInput {
+  name: string;
+  latitude: number;
+  longitude: number;
+  region_ids: number[];
+  skill_ids: number[];
+}
+
+export interface EmployeeUpdateInput {
+  name: string;
+  latitude: number;
+  longitude: number;
+  region_ids: number[];
+  skill_ids: number[];
 }
 
 export interface ServiceVisit {

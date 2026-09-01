@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Customer, CustomerLocation } from "../types";
-import { BackButton, DetailField } from "./DetailField";
-import { ListTable } from "./ListTable";
+import { BackButton, DetailField } from "../shared/DetailField";
+import { ListTable } from "../shared/ListTable";
 
 interface Props {
   customers: Customer[];

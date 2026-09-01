@@ -7,12 +7,17 @@ DEFAULT_TIME_LIMIT_SECONDS = 30
 
 class EmployeeIn(BaseModel):
     id: int
-    work_start_minutes: int
-    work_end_minutes: int
     skill_ids: list[int]
     region_ids: list[int]
     latitude: float
     longitude: float
+
+
+class EmployeeDayScheduleIn(BaseModel):
+    employee_id: int
+    date: date
+    start_minutes: int
+    end_minutes: int
 
 
 class VisitIn(BaseModel):
@@ -37,6 +42,7 @@ class ExistingAssignmentIn(BaseModel):
 
 class OptimizeRequest(BaseModel):
     employees: list[EmployeeIn]
+    employee_day_schedules: list[EmployeeDayScheduleIn] = []
     visits: list[VisitIn]
     existing_assignments: list[ExistingAssignmentIn] = []
     time_limit_seconds: int | None = None
