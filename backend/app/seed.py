@@ -14,6 +14,7 @@ from app.models import (
     ServiceVisit,
     Skill,
 )
+from app.geofencing import assign_regions_by_geofence
 from app.tripletex import sync_customer_locations, sync_customers
 
 
@@ -31,6 +32,7 @@ def seed() -> None:
     try:
         sync_customers(db)
         sync_customer_locations(db)
+        assign_regions_by_geofence(db)
 
         north_holland = _get_or_create(db, Region, "North Holland")
         utrecht = _get_or_create(db, Region, "Utrecht")
@@ -116,13 +118,14 @@ def seed() -> None:
                 )
             )
 
-        # Tripletex is the source of truth for locations themselves; region
-        # assignment is local and deferred (see sync_customer_locations), so
-        # the demo needs to fill it in itself. Reuse this file's original
-        # per-location region choices for as many locations as they cover,
-        # and a random existing region for any location beyond that list —
-        # Tripletex may return a different number of locations than this
-        # fixture list was written for.
+        # assign_regions_by_geofence above already placed every location whose
+        # coordinates fall inside a region's geo-shape (and cleared the rest).
+        # This is only a fallback for locations geofencing couldn't place (no
+        # coordinates, or outside every shape): reuse this file's original
+        # per-location region choices for as many as they cover, and a random
+        # existing region for any location beyond that list — Tripletex may
+        # return a different number of locations than this fixture list was
+        # written for.
         locations = (
             db.query(CustomerLocation)
             .filter(CustomerLocation.delete_flag.is_(False))

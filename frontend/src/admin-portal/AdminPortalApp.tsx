@@ -1,42 +1,75 @@
 import { useEffect, useState } from "react";
-import { listContracts, listCustomerLocations, listEmployees, listRegions, listSkills } from "../api";
-import type { Contract, CustomerLocation, Employee, Region, Skill } from "../types";
+import {
+  listContracts,
+  listCustomerLocations,
+  listCustomers,
+  listEmployees,
+  listRegions,
+  listServiceVisits,
+  listSkills,
+} from "../api";
+import type {
+  Contract,
+  Customer,
+  CustomerLocation,
+  Employee,
+  Region,
+  ServiceVisit,
+  Skill,
+} from "../types";
+import { ContractsView } from "./ContractsView";
+import { CustomerLocationsView } from "./CustomerLocationsView";
 import { RegionsView } from "./RegionsView";
 import { SkillsView } from "./SkillsView";
 
-type Entity = "regions" | "skills";
+type Entity = "regions" | "skills" | "contracts" | "customer-locations";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   regions: "Regions",
   skills: "Skills",
+  contracts: "Contracts",
+  "customer-locations": "Customer Locations",
 };
 
-const ENTITY_ORDER: Entity[] = ["regions", "skills"];
+const ENTITY_ORDER: Entity[] = ["regions", "skills", "contracts", "customer-locations"];
 
 export function AdminPortalApp() {
   const [entity, setEntity] = useState<Entity>("regions");
   const [regions, setRegions] = useState<Region[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [serviceVisits, setServiceVisits] = useState<ServiceVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   async function reload() {
-    const [regionsData, skillsData, employeesData, customerLocationsData, contractsData] =
-      await Promise.all([
-        listRegions(),
-        listSkills(),
-        listEmployees(),
-        listCustomerLocations(),
-        listContracts(),
-      ]);
+    const [
+      regionsData,
+      skillsData,
+      employeesData,
+      customersData,
+      customerLocationsData,
+      contractsData,
+      serviceVisitsData,
+    ] = await Promise.all([
+      listRegions(),
+      listSkills(),
+      listEmployees(),
+      listCustomers(),
+      listCustomerLocations(),
+      listContracts(),
+      listServiceVisits(),
+    ]);
     setRegions(regionsData);
     setSkills(skillsData);
     setEmployees(employeesData);
+    setCustomers(customersData);
     setCustomerLocations(customerLocationsData);
     setContracts(contractsData);
+    setServiceVisits(serviceVisitsData);
   }
 
   useEffect(() => {
@@ -85,6 +118,19 @@ export function AdminPortalApp() {
         )}
         {entity === "skills" && (
           <SkillsView skills={skills} employees={employees} contracts={contracts} onChanged={reload} />
+        )}
+        {entity === "contracts" && (
+          <ContractsView
+            contracts={contracts}
+            customers={customers}
+            customerLocations={customerLocations}
+            serviceVisits={serviceVisits}
+            skills={skills}
+            onChanged={reload}
+          />
+        )}
+        {entity === "customer-locations" && (
+          <CustomerLocationsView customerLocations={customerLocations} onChanged={reload} />
         )}
       </main>
     </div>

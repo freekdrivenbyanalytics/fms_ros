@@ -4,10 +4,9 @@ import {
   listCustomerLocations,
   listCustomers,
   listServiceVisits,
-  listSkills,
   syncCustomers,
 } from "../api";
-import type { Contract, Customer, CustomerLocation, ServiceVisit, Skill } from "../types";
+import type { Contract, Customer, CustomerLocation, ServiceVisit } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
@@ -28,7 +27,6 @@ export function CustomerPortalApp() {
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [serviceVisits, setServiceVisits] = useState<ServiceVisit[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewingAsCustomerId, setViewingAsCustomerId] = useState<number | null>(null);
@@ -37,19 +35,12 @@ export function CustomerPortalApp() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      listCustomers(),
-      listCustomerLocations(),
-      listContracts(),
-      listServiceVisits(),
-      listSkills(),
-    ])
-      .then(([customersData, customerLocationsData, contractsData, serviceVisitsData, skillsData]) => {
+    Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listServiceVisits()])
+      .then(([customersData, customerLocationsData, contractsData, serviceVisitsData]) => {
         setCustomers(customersData);
         setCustomerLocations(customerLocationsData);
         setContracts(contractsData);
         setServiceVisits(serviceVisitsData);
-        setSkills(skillsData);
       })
       .catch((err) =>
         setLoadError(err instanceof Error ? err.message : "Failed to load data")
@@ -90,15 +81,6 @@ export function CustomerPortalApp() {
     } finally {
       setRefreshing(false);
     }
-  }
-
-  async function handleContractsChanged() {
-    const [contractsData, serviceVisitsData] = await Promise.all([
-      listContracts(),
-      listServiceVisits(),
-    ]);
-    setContracts(contractsData);
-    setServiceVisits(serviceVisitsData);
   }
 
   return (
@@ -170,14 +152,7 @@ export function CustomerPortalApp() {
           />
         )}
         {entity === "contracts" && (
-          <ContractsView
-            contracts={contracts}
-            customers={customers}
-            customerLocations={customerLocations}
-            serviceVisits={serviceVisits}
-            skills={skills}
-            onChanged={handleContractsChanged}
-          />
+          <ContractsView contracts={contracts} serviceVisits={serviceVisits} />
         )}
       </main>
     </div>

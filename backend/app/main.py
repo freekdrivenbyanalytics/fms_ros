@@ -15,6 +15,7 @@ from app.employee_schedule import (
     override_exists_for_date,
     templates_overlap,
 )
+from app.geofencing import assign_regions_by_geofence
 from app.visit_generation import generate_occurrence_dates
 from app.models import (
     Assignment,
@@ -41,6 +42,7 @@ from app.schemas import (
     ContractLineUpdate,
     ContractOut,
     ContractUpdate,
+    CustomerLocationCoordinatesUpdate,
     CustomerLocationOut,
     CustomerOut,
     EmployeeCreate,
@@ -500,6 +502,22 @@ def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
+@app.post("/customer-locations/assign-regions", response_model=list[CustomerLocationOut])
+def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[CustomerLocation]:
+    assign_regions_by_geofence(db)
+    db.commit()
+    return (
+        db.query(CustomerLocation)
+        .filter(CustomerLocation.delete_flag.is_(False))
+        .options(
+            joinedload(CustomerLocation.customer),
+            joinedload(CustomerLocation.region),
+        )
+        .order_by(CustomerLocation.id)
+        .all()
+    )
+
+
 @app.get("/skills", response_model=list[SkillOut])
 def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
     return (
@@ -582,6 +600,24 @@ def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocat
     )
 
 
+@app.patch("/customer-locations/{location_id}/coordinates", response_model=CustomerLocationOut)
+def update_customer_location_coordinates(
+    location_id: int,
+    payload: CustomerLocationCoordinatesUpdate,
+    db: Session = Depends(get_db),
+) -> CustomerLocation:
+    location = db.get(CustomerLocation, location_id)
+    if location is None:
+        raise HTTPException(status_code=404, detail="Customer location not found")
+
+    location.latitude = payload.latitude
+    location.longitude = payload.longitude
+    location.coordinates_locked = payload.coordinates_locked
+    db.commit()
+    db.refresh(location)
+    return location
+
+
 def _contract_out(contract: Contract) -> ContractOut:
     return ContractOut(
         id=contract.id,
@@ -646,6 +682,22 @@ def update_contract(
     return _contract_out(contract)
 
 
+def _delete_service_visits_for_line(db: Session, line_id: int) -> None:
+    visit_ids = [
+        visit_id
+        for (visit_id,) in db.query(ServiceVisit.id).filter(
+            ServiceVisit.contract_line_id == line_id
+        )
+    ]
+    if visit_ids:
+        db.query(Assignment).filter(Assignment.service_visit_id.in_(visit_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ServiceVisit).filter(ServiceVisit.id.in_(visit_ids)).delete(
+            synchronize_session=False
+        )
+
+
 @app.delete("/contracts/{contract_id}", status_code=204)
 def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
     contract = db.get(Contract, contract_id)
@@ -655,6 +707,7 @@ def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
     contract.delete_flag = True
     for line in contract.lines:
         line.delete_flag = True
+        _delete_service_visits_for_line(db, line.id)
     db.commit()
 
 
@@ -741,6 +794,7 @@ def delete_contract_line(line_id: int, db: Session = Depends(get_db)) -> None:
         raise HTTPException(status_code=404, detail="Contract line not found")
 
     line.delete_flag = True
+    _delete_service_visits_for_line(db, line.id)
     db.commit()
 
 

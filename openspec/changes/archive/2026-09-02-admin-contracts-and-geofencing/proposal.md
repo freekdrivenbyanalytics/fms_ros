@@ -1,0 +1,23 @@
+## Why
+
+Contracts and Contract Lines are the last remaining editable entity in the Customer Portal — everything else (Regions, Skills) has already moved to the Admin Portal for internal masterdata management, and Contracts belong there too. Separately, customer locations still can't be corrected when Tripletex's address doesn't geocode cleanly, and region assignment has been sitting on manual seed data since the region geo-shape feature shipped — it's time to close that loop: let a planner fix a location's coordinates when needed, and derive its region automatically from those coordinates against each region's drawn geo-shape.
+
+## What Changes
+
+- **BREAKING**: Move Contract and Contract Line CRUD (create, update, soft-delete) from the Customer Portal to the Admin Portal. The Customer Portal keeps a read-only Contracts view exactly as it does for other entities today (list, detail, generated visits per line) — it just no longer has the create/edit/delete controls.
+- Add a new Customer Locations view in the Admin Portal, alongside Regions and Skills, letting a planner set or correct a customer location's latitude/longitude and check a "don't overwrite on refresh" box that protects those coordinates from a future Tripletex sync's geocoding step. The Customer Portal's existing read-only Customer Location view is unchanged.
+- Add a "Re-assign regions" action to the Admin Portal's Regions view: on demand, for every customer location, if its coordinates are resolved and exactly one region's geo-shape contains that point, its region is set to that region; otherwise (no coordinates yet, or coordinates matching no region's shape) its region is cleared. This is a manual, on-demand action — it does **not** run automatically as part of a Tripletex sync, so drawing or adjusting a region's geo-shape can be immediately followed by re-assigning locations with one click, with no dependency on triggering a Tripletex refresh first.
+- Double the height of the geo-shape map on a region's detail view, and show every customer location with resolved coordinates as a marker on it, so a planner can see which locations fall inside or outside the shape while drawing or adjusting it.
+
+## Capabilities
+
+### Modified Capabilities
+- `customer-portal`: remove the Contract/Contract Line create/update/soft-delete requirements and the read-only exception that named them; Customer Portal becomes uniformly read-only again.
+- `admin-portal`: add Contract/Contract Line list/detail views and CRUD; add a Customer Locations view with coordinate override and the refresh-lock checkbox; add the on-demand "re-assign regions" action to the Regions view; show customer locations on the region geo-shape map; update the shared-data and cross-reference wording to include contracts and the new geofencing-based region assignment.
+- `customers`: customer location data model gains a coordinates-locked flag; geocoding is skipped for a locked location. Region assignment itself is not a `customers`/sync concern — see `admin-portal` above; sync still never touches a location's region, unchanged from today.
+
+## Impact
+
+- Backend: no change to the `contracts` capability's own CRUD endpoints (they're portal-agnostic) — only which frontend calls them changes. `CustomerLocation` gains `coordinates_locked` (new migration); a new endpoint lets a user set a location's coordinates and lock flag; `tripletex.py`'s geocoding call sites skip a locked location; a new geofencing function (point-in-polygon against each region's `geo_shape`) is exposed via a new on-demand endpoint triggered from the Admin Portal's Regions view — it is not called from `sync_customer_locations`.
+- Frontend: `frontend/src/customer-portal/ContractsView.tsx`'s CRUD forms/handlers move into a new `frontend/src/admin-portal/ContractsView.tsx` (Customer Portal keeps a slimmed-down read-only rewrite); a new `frontend/src/admin-portal/CustomerLocationsView.tsx` for the coordinate override; `AdminPortalApp.tsx`'s nav gains "Contracts" and "Customer Locations" entries (it already fetches both, unused today); the Regions view gains a "Re-assign regions" button; `frontend/src/shared/GeoShapeEditor.tsx` grows to double its current map height and gains a `customerLocations` prop to render as markers.
+- `seed.py` calls the new geofencing function directly (once, after its own `sync_customer_locations` call) so seeded demo data reflects real geo-shapes where one exists, exactly as a planner clicking the button would produce; its existing `if location.region_id is not None: continue` guard already defers to whatever geofencing assigned, falling back to its own default/random region only for locations geofencing couldn't place.

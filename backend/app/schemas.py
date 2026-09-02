@@ -123,8 +123,15 @@ class CustomerLocationOut(BaseModel):
     address: str
     latitude: float | None = None
     longitude: float | None = None
+    coordinates_locked: bool = False
     customer: CustomerOut
     region: RegionOut | None = None
+
+
+class CustomerLocationCoordinatesUpdate(BaseModel):
+    latitude: float
+    longitude: float
+    coordinates_locked: bool
 
 
 class ContractLineOut(BaseModel):

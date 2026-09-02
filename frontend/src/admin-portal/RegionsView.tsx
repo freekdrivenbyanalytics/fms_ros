@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { createRegion, deleteRegion, updateRegion } from "../api";
+import { assignRegionsByGeofence, createRegion, deleteRegion, updateRegion } from "../api";
 import type { CustomerLocation, Employee, GeoPoint, Region } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { GeoShapeEditor } from "../shared/GeoShapeEditor";
@@ -15,6 +15,22 @@ interface Props {
 export function RegionsView({ regions, employees, customerLocations, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignMessage, setReassignMessage] = useState<string | null>(null);
+
+  async function handleReassignRegions() {
+    setReassigning(true);
+    setReassignMessage(null);
+    try {
+      await assignRegionsByGeofence();
+      await onChanged();
+      setReassignMessage("Customer locations re-assigned to regions.");
+    } catch (err) {
+      setReassignMessage(err instanceof Error ? err.message : "Failed to re-assign regions");
+    } finally {
+      setReassigning(false);
+    }
+  }
 
   const selected = regions.find((region) => region.id === selectedId) ?? null;
 
@@ -30,6 +46,7 @@ export function RegionsView({ regions, employees, customerLocations, onChanged }
         region={selected}
         regionEmployees={regionEmployees}
         regionLocations={regionLocations}
+        allCustomerLocations={customerLocations}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -41,14 +58,25 @@ export function RegionsView({ regions, employees, customerLocations, onChanged }
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Regions</h2>
-        <button
-          type="button"
-          onClick={() => setCreating((prev) => !prev)}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-        >
-          {creating ? "Cancel" : "Create Region"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleReassignRegions}
+            disabled={reassigning}
+            className="rounded-md px-3 py-1.5 text-sm font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {reassigning ? "Re-assigning…" : "Re-assign regions"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating((prev) => !prev)}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            {creating ? "Cancel" : "Create Region"}
+          </button>
+        </div>
       </div>
+      {reassignMessage && <p className="text-sm text-slate-600 mb-3">{reassignMessage}</p>}
 
       {creating && (
         <CreateRegionForm
@@ -142,6 +170,7 @@ interface RegionDetailProps {
   region: Region;
   regionEmployees: Employee[];
   regionLocations: CustomerLocation[];
+  allCustomerLocations: CustomerLocation[];
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -151,6 +180,7 @@ function RegionDetail({
   region,
   regionEmployees,
   regionLocations,
+  allCustomerLocations,
   onChanged,
   onDeleted,
   onBack,
@@ -230,6 +260,13 @@ function RegionDetail({
             setGeoShape(points);
             setDirty(true);
           }}
+          customerLocations={allCustomerLocations
+            .filter((location) => location.latitude !== null && location.longitude !== null)
+            .map((location) => ({
+              latitude: location.latitude as number,
+              longitude: location.longitude as number,
+              address: location.address,
+            }))}
         />
       </DetailField>
 

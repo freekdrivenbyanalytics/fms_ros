@@ -9,6 +9,7 @@ import type {
   CreateAssignmentInput,
   Customer,
   CustomerLocation,
+  CustomerLocationCoordinatesInput,
   Employee,
   EmployeeCreateInput,
   EmployeeScheduleDayOverride,
@@ -223,6 +224,23 @@ export function listCustomers(): Promise<Customer[]> {
 
 export function listCustomerLocations(): Promise<CustomerLocation[]> {
   return fetch(`${API_URL}/customer-locations`).then((res) =>
+    handleResponse<CustomerLocation[]>(res)
+  );
+}
+
+export function updateCustomerLocationCoordinates(
+  id: number,
+  input: CustomerLocationCoordinatesInput
+): Promise<CustomerLocation> {
+  return fetch(`${API_URL}/customer-locations/${id}/coordinates`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<CustomerLocation>(res));
+}
+
+export function assignRegionsByGeofence(): Promise<CustomerLocation[]> {
+  return fetch(`${API_URL}/customer-locations/assign-regions`, { method: "POST" }).then((res) =>
     handleResponse<CustomerLocation[]>(res)
   );
 }

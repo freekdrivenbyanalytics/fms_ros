@@ -62,14 +62,14 @@ The system SHALL allow a user to create a contract line under a contract for one
 
 #### Scenario: Soft-deleting a contract line
 - **WHEN** a user soft-deletes a contract line
-- **THEN** the system marks it deleted rather than removing it, and it no longer appears in the default contract line list, while any service visits already generated from it remain unaffected
+- **THEN** the system marks it deleted rather than removing it, it no longer appears in the default contract line list, and any service visits generated from it (and any assignment made against one of those visits) are permanently removed
 
 ### Requirement: Soft-deleting a contract cascades to its lines
-The system SHALL soft-delete every contract line belonging to a contract when that contract is soft-deleted.
+The system SHALL soft-delete every contract line belonging to a contract when that contract is soft-deleted, removing their generated service visits the same way a direct contract line deletion does.
 
 #### Scenario: Deleting a contract deletes its lines
 - **WHEN** a user soft-deletes a contract that has one or more contract lines
-- **THEN** the system also marks each of those contract lines deleted
+- **THEN** the system also marks each of those contract lines deleted and permanently removes their generated service visits (and any assignments against them)
 
 ### Requirement: Deleted contracts and contract lines are hidden by default
 The system SHALL exclude soft-deleted contracts from the contract list, and soft-deleted contract lines from a contract's list of lines, returned to callers by default.

@@ -323,7 +323,8 @@ def sync_customer_locations(db: Session) -> None:
             _apply_location_fields(location, data)
             location.delete_flag = False
             db.add(location)
-            _geocode_location(location)
+            if not location.coordinates_locked:
+                _geocode_location(location)
             db.add(
                 CustomerLocationSyncLog(
                     customer_location_id=location_id,
@@ -334,7 +335,8 @@ def sync_customer_locations(db: Session) -> None:
             _apply_location_fields(location, data)
             location.customer_id = customer_id
             location.delete_flag = False
-            _geocode_location(location)
+            if not location.coordinates_locked:
+                _geocode_location(location)
             db.add(
                 CustomerLocationSyncLog(
                     customer_location_id=location_id,
@@ -346,7 +348,7 @@ def sync_customer_locations(db: Session) -> None:
             if location.customer_id != customer_id:
                 location.customer_id = customer_id
                 changed = True
-            if address_changed:
+            if address_changed and not location.coordinates_locked:
                 _geocode_location(location)
             if changed:
                 db.add(

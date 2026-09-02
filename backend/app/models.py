@@ -195,11 +195,15 @@ class CustomerLocation(Base):
     name: Mapped[str | None] = mapped_column(String)
     address: Mapped[str] = mapped_column(String, nullable=False)
 
-    # Local fields. region is deferred to a future geofencing-based assignment;
-    # coordinates are geocoded locally since Tripletex doesn't provide them.
+    # Local fields. region is assigned via on-demand geofencing (see
+    # app.geofencing), not by Tripletex sync; coordinates are geocoded
+    # locally since Tripletex doesn't provide them, unless locked.
     region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id"))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
+    coordinates_locked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     delete_flag: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

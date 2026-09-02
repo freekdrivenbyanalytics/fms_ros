@@ -13,15 +13,30 @@ const pointIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+const customerLocationIcon = L.divIcon({
+  className: "",
+  html: '<div style="width:8px;height:8px;border-radius:50%;background:#64748b;border:1px solid white;box-shadow:0 0 2px rgba(0,0,0,0.5);"></div>',
+  iconSize: [8, 8],
+  iconAnchor: [4, 4],
+});
+
+interface CustomerLocationMarker {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
+
 interface Props {
   value: GeoPoint[] | null;
   onChange: (points: GeoPoint[]) => void;
+  customerLocations?: CustomerLocationMarker[];
 }
 
-export function GeoShapeEditor({ value, onChange }: Props) {
+export function GeoShapeEditor({ value, onChange, customerLocations = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const customerLocationMarkersRef = useRef<L.Marker[]>([]);
   const polygonRef = useRef<L.Polygon | L.Polyline | null>(null);
   const pointsRef = useRef<GeoPoint[]>(value ?? []);
   const onChangeRef = useRef(onChange);
@@ -90,6 +105,13 @@ export function GeoShapeEditor({ value, onChange }: Props) {
 
     redraw();
 
+    customerLocationMarkersRef.current = customerLocations.map((location) =>
+      L.marker([location.latitude, location.longitude], {
+        icon: customerLocationIcon,
+        interactive: false,
+      }).addTo(map)
+    );
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -108,7 +130,7 @@ export function GeoShapeEditor({ value, onChange }: Props) {
     <div>
       <div
         ref={containerRef}
-        style={{ height: "320px", width: "100%" }}
+        style={{ height: "640px", width: "100%" }}
         className="rounded-md border border-slate-200"
       />
       <div className="mt-2 flex items-center justify-between text-xs text-slate-500">

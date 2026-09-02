@@ -86,8 +86,15 @@ export interface CustomerLocation {
   address: string;
   latitude: number | null;
   longitude: number | null;
+  coordinates_locked: boolean;
   customer: Customer;
   region: Region | null;
+}
+
+export interface CustomerLocationCoordinatesInput {
+  latitude: number;
+  longitude: number;
+  coordinates_locked: boolean;
 }
 
 export interface ContractLine {
