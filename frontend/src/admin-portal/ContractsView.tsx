@@ -426,6 +426,7 @@ function ContractLineForm({
   );
   const [startDate, setStartDate] = useState(existingLine?.start_date ?? "");
   const [endDate, setEndDate] = useState(existingLine?.end_date ?? "");
+  const [noEndDate, setNoEndDate] = useState(existingLine ? existingLine.end_date === null : false);
   const [intervalDays, setIntervalDays] = useState(
     existingLine ? String(existingLine.interval_days) : ""
   );
@@ -451,7 +452,7 @@ function ContractLineForm({
       const payload = {
         customer_location_id: Number(customerLocationId),
         start_date: startDate,
-        end_date: endDate || null,
+        end_date: noEndDate ? null : (endDate || null),
         interval_days: Number(intervalDays),
         duration_minutes: Number(durationMinutes),
         required_product_ids: productIds,
@@ -499,11 +500,20 @@ function ContractLineForm({
         />
         <input
           type="date"
-          value={endDate}
+          value={noEndDate ? "2099-12-31" : endDate}
           onChange={(event) => setEndDate(event.target.value)}
           placeholder="End date (optional)"
-          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+          disabled={noEndDate}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1 disabled:bg-slate-100 disabled:text-slate-400"
         />
+        <label className="flex items-center gap-1 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={noEndDate}
+            onChange={(event) => setNoEndDate(event.target.checked)}
+          />
+          No end date
+        </label>
       </div>
       <div className="flex gap-2">
         <input

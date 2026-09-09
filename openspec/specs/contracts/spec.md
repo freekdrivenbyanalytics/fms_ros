@@ -58,7 +58,7 @@ The system SHALL allow a user to create a contract line under a contract for one
 
 #### Scenario: Updating a contract line
 - **WHEN** a user updates a contract line's customer location, dates, interval, duration, or required products
-- **THEN** the system persists the change and does not create, modify, or delete any service visits as a result
+- **THEN** the system persists the change and regenerates the line's not-yet-started service visits per the service-visits capability's regeneration rule
 
 #### Scenario: Soft-deleting a contract line
 - **WHEN** a user soft-deletes a contract line

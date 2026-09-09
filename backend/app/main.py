@@ -701,6 +701,61 @@ def _delete_service_visits_for_line(db: Session, line_id: int) -> None:
         )
 
 
+def _is_started(assignment: Assignment) -> bool:
+    """An assignment counts as started once its planned start time has
+    passed — the same definition the assignments capability uses to lock
+    an assignment regardless of its stored pin flag."""
+    return assignment.planned_start <= datetime.now()
+
+
+def _regenerate_future_visits(db: Session, line: ContractLine) -> None:
+    """Remove every one of this contract line's not-yet-started service
+    visits (unassigned, or assigned but not started, pinned or not) and
+    regenerate its future visits from the line's current terms, anchored
+    at its last-started visit if one exists, or its start_date otherwise.
+    Visits with a started assignment are never touched."""
+    visits = (
+        db.query(ServiceVisit)
+        .options(joinedload(ServiceVisit.assignment))
+        .filter(ServiceVisit.contract_line_id == line.id)
+        .all()
+    )
+    started_dates = [
+        visit.requested_date
+        for visit in visits
+        if visit.assignment is not None and _is_started(visit.assignment)
+    ]
+    not_started_ids = [
+        visit.id
+        for visit in visits
+        if visit.assignment is None or not _is_started(visit.assignment)
+    ]
+
+    if not_started_ids:
+        db.query(Assignment).filter(
+            Assignment.service_visit_id.in_(not_started_ids)
+        ).delete(synchronize_session=False)
+        db.query(ServiceVisit).filter(ServiceVisit.id.in_(not_started_ids)).delete(
+            synchronize_session=False
+        )
+
+    today = date.today()
+    horizon = line.end_date or (today + timedelta(days=OPEN_ENDED_HORIZON_DAYS))
+    anchor = max(started_dates) if started_dates else None
+
+    if anchor is not None:
+        occurrence_dates = extend_occurrence_dates(anchor, line.interval_days, horizon)
+    elif horizon < today:
+        occurrence_dates = []
+    else:
+        occurrence_dates = generate_occurrence_dates(line.start_date, line.interval_days, horizon)
+        if line.start_date < today and line.interval_days > 0:
+            occurrence_dates = [today] + [d for d in occurrence_dates if d > today]
+
+    for occurrence_date in occurrence_dates:
+        db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))
+
+
 @app.delete("/contracts/{contract_id}", status_code=204)
 def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
     contract = db.get(Contract, contract_id)
@@ -863,6 +918,8 @@ def update_contract_line(
     line.interval_days = payload.interval_days
     line.duration_minutes = payload.duration_minutes
     line.required_products = required_products
+    db.flush()
+    _regenerate_future_visits(db, line)
     db.commit()
     db.refresh(line)
     return line
