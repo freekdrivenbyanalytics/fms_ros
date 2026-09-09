@@ -7,11 +7,11 @@ Proposes an optimized employee/visit schedule for every currently unassigned ser
 ## Requirements
 
 ### Requirement: Generate a proposed schedule
-The system SHALL let a user request a proposed schedule covering every service visit that does not currently have a pinned assignment — whether it is unassigned or already has an unpinned assignment — computed from the current employees, all service visits, and all pinned assignments, without creating or changing any assignment as a result of generating the proposal.
+The system SHALL let a user request a proposed schedule covering every service visit whose effective schedule date is today or tomorrow and that does not currently have a pinned assignment — whether it is unassigned or already has an unpinned assignment — computed from the current employees, those service visits, and all pinned assignments, without creating or changing any assignment as a result of generating the proposal.
 
 #### Scenario: Planner requests a proposed schedule
 - **WHEN** a user requests a proposed schedule
-- **THEN** the system returns a proposal that, for each service visit without a pinned assignment, either names the employee and planned start/end time it proposes for that visit, or leaves it unscheduled if no feasible assignment exists, and no assignment is created or changed as a result
+- **THEN** the system returns a proposal that, for each service visit whose effective schedule date is today or tomorrow and that has no pinned assignment, either names the employee and planned start/end time it proposes for that visit, or leaves it unscheduled if no feasible assignment exists, and no assignment is created or changed as a result
 
 ### Requirement: Proposed schedule respects hard constraints
 The system SHALL only propose scheduling a service visit to an employee when the employee possesses every skill the visit's contract requires, the employee is scoped to the visit's region, the employee has a resolved working-hours window for the visit's proposed date and the visit's proposed time window falls entirely within it, and the employee has no time overlap between that proposed visit and any other visit already assigned to them or proposed to them in the same schedule.
@@ -120,3 +120,14 @@ The system SHALL leave a service visit unscheduled, rather than proposing it, wh
 #### Scenario: Visit is unscheduled when no qualifying employee has a schedule that day
 - **WHEN** a proposed schedule is generated and every employee with the required skills and region has no resolved working-hours window for a visit's proposed date
 - **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled
+
+### Requirement: Proposed schedule excludes visits outside the scheduling window
+The system SHALL NOT propose scheduling a service visit whose effective schedule date is not today or tomorrow, regardless of whether an otherwise-feasible assignment exists for it.
+
+#### Scenario: A visit requested further in the future is not scheduled
+- **WHEN** a proposed schedule is generated and a candidate service visit's effective schedule date is neither today nor tomorrow
+- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required skills, region, and availability exists
+
+#### Scenario: A visit rolls into the window as time passes
+- **WHEN** a service visit's effective schedule date, previously beyond tomorrow, becomes today or tomorrow
+- **THEN** a subsequently generated proposed schedule considers that visit like any other candidate

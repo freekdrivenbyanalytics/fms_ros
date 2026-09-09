@@ -177,6 +177,21 @@ The system SHALL show, for each contract line displayed in the Admin Portal's Co
 - **WHEN** a user views a contract line that has no service visits
 - **THEN** the system shows that it has no visits, rather than an error or a blank section
 
+### Requirement: Extend recurring visits from the Admin Portal
+The system SHALL let a user, from the Admin Portal's Contracts view, trigger the extend-visits operation for every open-ended contract line at once. While the operation is in progress the system SHALL indicate that it is running, and SHALL show a result or error message once it completes.
+
+#### Scenario: Triggering extend-visits
+- **WHEN** a user clicks the "Extend recurring visits" action in the Admin Portal's Contracts view
+- **THEN** the system triggers the extend-visits operation and, once it completes, shows a result message
+
+#### Scenario: Extension in progress is indicated
+- **WHEN** a user triggers extend-visits and it has not yet completed
+- **THEN** the system shows that it is in progress and disables re-triggering it until it finishes
+
+#### Scenario: A failed extension is reported
+- **WHEN** the extend-visits operation fails
+- **THEN** the system shows an error message rather than silently discarding the failure
+
 ### Requirement: Customer Locations view
 The system SHALL provide, within the Admin Portal, a list view of all non-deleted customer locations and a detail view for each showing its own fields, the customer it belongs to, the region it is in, and whether its coordinates are locked against sync overwrites.
 

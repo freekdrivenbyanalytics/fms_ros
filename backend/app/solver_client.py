@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 import httpx
 from sqlalchemy.orm import Session, joinedload
@@ -111,6 +111,13 @@ def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
     )
 
 
+def _is_within_scheduling_window(visit: ServiceVisit) -> bool:
+    """A schedule run only ever proposes today's and tomorrow's visits,
+    to keep the solver's problem size to what's actually actionable."""
+    today = date.today()
+    return effective_schedule_date(visit) in (today, today + timedelta(days=1))
+
+
 def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
     if not region_ids:
         return []
@@ -161,8 +168,16 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     schedulable_visits = [v for v in all_visits if v.assignment is None or not _is_locked(v.assignment)]
     locked_assignments = [v.assignment for v in all_visits if v.assignment is not None and _is_locked(v.assignment)]
 
-    ready_visits = [v for v in schedulable_visits if _is_ready_to_schedule(v)]
-    excluded_visit_ids = [v.id for v in schedulable_visits if not _is_ready_to_schedule(v)]
+    ready_visits = [
+        v
+        for v in schedulable_visits
+        if _is_ready_to_schedule(v) and _is_within_scheduling_window(v)
+    ]
+    excluded_visit_ids = [
+        v.id
+        for v in schedulable_visits
+        if not (_is_ready_to_schedule(v) and _is_within_scheduling_window(v))
+    ]
 
     candidate_dates = {effective_schedule_date(v) for v in ready_visits}
 

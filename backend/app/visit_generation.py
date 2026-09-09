@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-OPEN_ENDED_HORIZON_DAYS = 365
+OPEN_ENDED_HORIZON_DAYS = 90
 
 
 def generate_occurrence_dates(
@@ -17,6 +17,24 @@ def generate_occurrence_dates(
     dates = []
     current = start_date
     while current <= horizon:
+        dates.append(current)
+        current += timedelta(days=interval_days)
+    return dates
+
+
+def extend_occurrence_dates(
+    furthest_existing: date, interval_days: int, new_horizon: date
+) -> list[date]:
+    """Occurrence dates strictly after furthest_existing, continuing the same
+    interval_days cadence, up to and including new_horizon. A non-positive
+    interval_days line has only its single start_date occurrence and can't
+    be extended, so it yields no further dates."""
+    if interval_days <= 0:
+        return []
+
+    dates = []
+    current = furthest_existing + timedelta(days=interval_days)
+    while current <= new_horizon:
         dates.append(current)
         current += timedelta(days=interval_days)
     return dates

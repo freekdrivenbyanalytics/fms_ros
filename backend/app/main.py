@@ -5,8 +5,10 @@ from datetime import date, datetime, time, timedelta
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.ad_hoc_visits import find_free_slots
 from app.database import SessionLocal, get_db
 from app.employee_schedule import (
     covering_template,
@@ -17,7 +19,11 @@ from app.employee_schedule import (
 )
 from app.geofencing import assign_regions_by_geofence
 from app.tomtom_routing import compute_region_driving_times
-from app.visit_generation import generate_occurrence_dates
+from app.visit_generation import (
+    OPEN_ENDED_HORIZON_DAYS,
+    extend_occurrence_dates,
+    generate_occurrence_dates,
+)
 from app.models import (
     Assignment,
     Contract,
@@ -34,11 +40,13 @@ from app.models import (
     VisitStatus,
 )
 from app.schemas import (
+    AdHocVisitCreate,
     AssignmentCreate,
     AssignmentOut,
     AssignmentPinUpdate,
     ContractCreate,
     ContractLineCreate,
+    ContractLineExtendSummary,
     ContractLineOut,
     ContractLineUpdate,
     ContractOut,
@@ -57,6 +65,7 @@ from app.schemas import (
     EmployeeScheduleTemplateOut,
     EmployeeScheduleTemplateUpdate,
     EmployeeUpdate,
+    FreeSlotOut,
     OptimizationApplyRequest,
     OptimizationApplyResult,
     OptimizationProposal,
@@ -766,6 +775,84 @@ def create_contract_line(
     return line
 
 
+@app.post("/contract-lines/extend-visits", response_model=ContractLineExtendSummary)
+def extend_contract_line_visits(db: Session = Depends(get_db)) -> dict:
+    """Top up every open-ended contract line's generated visits back out to
+    OPEN_ENDED_HORIZON_DAYS ahead of today, generating only the occurrences
+    past each line's current furthest generated one."""
+    new_horizon = date.today() + timedelta(days=OPEN_ENDED_HORIZON_DAYS)
+
+    lines = (
+        db.query(ContractLine)
+        .filter(ContractLine.delete_flag.is_(False), ContractLine.end_date.is_(None))
+        .all()
+    )
+
+    lines_extended = 0
+    visits_created = 0
+    for line in lines:
+        furthest_existing = (
+            db.query(func.max(ServiceVisit.requested_date))
+            .filter(ServiceVisit.contract_line_id == line.id)
+            .scalar()
+        ) or line.start_date
+
+        occurrence_dates = extend_occurrence_dates(
+            furthest_existing, line.interval_days, new_horizon
+        )
+        if not occurrence_dates:
+            continue
+
+        for occurrence_date in occurrence_dates:
+            db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))
+        lines_extended += 1
+        visits_created += len(occurrence_dates)
+
+    db.commit()
+    return {"lines_extended": lines_extended, "visits_created": visits_created}
+
+
+@app.get("/contract-lines/{line_id}/free-slots", response_model=list[FreeSlotOut])
+def get_contract_line_free_slots(line_id: int, db: Session = Depends(get_db)) -> list[FreeSlotOut]:
+    line = db.get(ContractLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Contract line not found")
+
+    return [
+        FreeSlotOut(
+            employee_id=slot.employee_id,
+            employee_name=slot.employee_name,
+            start=slot.start,
+            end=slot.end,
+        )
+        for slot in find_free_slots(db, line)
+    ]
+
+
+@app.post(
+    "/contract-lines/{line_id}/ad-hoc-visits", response_model=AssignmentOut, status_code=201
+)
+def book_ad_hoc_visit(
+    line_id: int, payload: AdHocVisitCreate, db: Session = Depends(get_db)
+) -> Assignment:
+    line = db.get(ContractLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="Contract line not found")
+
+    employee = db.get(Employee, payload.employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    visit = ServiceVisit(contract_line_id=line.id, requested_date=payload.start.date())
+    db.add(visit)
+    db.flush()
+
+    assignment = _assign_visit(db, visit, employee, payload.start)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
 @app.patch("/contract-lines/{line_id}", response_model=ContractLineOut)
 def update_contract_line(
     line_id: int, payload: ContractLineUpdate, db: Session = Depends(get_db)
@@ -855,6 +942,23 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
     )
 
 
+def _assign_visit(
+    db: Session, visit: ServiceVisit, employee: Employee, planned_start: datetime
+) -> Assignment:
+    """Create an assignment for a visit and mark it assigned. Callers are
+    responsible for whatever existence/status checks their own flow needs."""
+    planned_end = planned_start + timedelta(minutes=visit.contract_line.duration_minutes)
+    assignment = Assignment(
+        service_visit_id=visit.id,
+        employee_id=employee.id,
+        planned_start=planned_start,
+        planned_end=planned_end,
+    )
+    visit.status = VisitStatus.ASSIGNED
+    db.add(assignment)
+    return assignment
+
+
 @app.post("/assignments", response_model=AssignmentOut, status_code=201)
 def create_assignment(
     payload: AssignmentCreate, db: Session = Depends(get_db)
@@ -872,18 +976,7 @@ def create_assignment(
             status_code=409, detail="Service visit is already assigned"
         )
 
-    planned_end = payload.planned_start + timedelta(
-        minutes=visit.contract_line.duration_minutes
-    )
-    assignment = Assignment(
-        service_visit_id=visit.id,
-        employee_id=employee.id,
-        planned_start=payload.planned_start,
-        planned_end=planned_end,
-    )
-    visit.status = VisitStatus.ASSIGNED
-
-    db.add(assignment)
+    assignment = _assign_visit(db, visit, employee, payload.planned_start)
     db.commit()
     db.refresh(assignment)
     return assignment

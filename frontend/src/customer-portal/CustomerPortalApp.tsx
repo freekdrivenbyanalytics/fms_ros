@@ -48,6 +48,15 @@ export function CustomerPortalApp() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function reloadContractsAndVisits() {
+    const [contractsData, serviceVisitsData] = await Promise.all([
+      listContracts(),
+      listServiceVisits(),
+    ]);
+    setContracts(contractsData);
+    setServiceVisits(serviceVisitsData);
+  }
+
   if (loading) {
     return <div className="p-8 text-slate-500">Loading…</div>;
   }
@@ -152,7 +161,11 @@ export function CustomerPortalApp() {
           />
         )}
         {entity === "contracts" && (
-          <ContractsView contracts={contracts} serviceVisits={serviceVisits} />
+          <ContractsView
+            contracts={contracts}
+            serviceVisits={serviceVisits}
+            onChanged={reloadContractsAndVisits}
+          />
         )}
       </main>
     </div>

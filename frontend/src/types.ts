@@ -245,6 +245,18 @@ export interface CreateAssignmentInput {
   planned_start: string;
 }
 
+export interface FreeSlot {
+  employee_id: number;
+  employee_name: string;
+  start: string;
+  end: string;
+}
+
+export interface AdHocVisitBookingInput {
+  employee_id: number;
+  start: string;
+}
+
 export interface ProposedAssignment {
   service_visit_id: number;
   employee_id: number;
@@ -267,4 +279,9 @@ export interface OptimizationApplyResult {
 export interface DrivingTimeComputeSummary {
   computed: number;
   skipped: number;
+}
+
+export interface ContractLineExtendSummary {
+  lines_extended: number;
+  visits_created: number;
 }

@@ -1,9 +1,11 @@
 import type {
+  AdHocVisitBookingInput,
   Assignment,
   Contract,
   ContractCreateInput,
   ContractLine,
   ContractLineCreateInput,
+  ContractLineExtendSummary,
   ContractLineUpdateInput,
   ContractUpdateInput,
   CreateAssignmentInput,
@@ -19,6 +21,7 @@ import type {
   EmployeeScheduleTemplate,
   EmployeeScheduleTemplateInput,
   EmployeeUpdateInput,
+  FreeSlot,
   OptimizationApplyResult,
   OptimizationProposal,
   Region,
@@ -313,6 +316,29 @@ export async function deleteContractLine(id: number): Promise<void> {
     const message = body?.detail ?? `Request failed with status ${res.status}`;
     throw new Error(message);
   }
+}
+
+export function extendContractLineVisits(): Promise<ContractLineExtendSummary> {
+  return fetch(`${API_URL}/contract-lines/extend-visits`, { method: "POST" }).then((res) =>
+    handleResponse<ContractLineExtendSummary>(res)
+  );
+}
+
+export function getFreeSlots(lineId: number): Promise<FreeSlot[]> {
+  return fetch(`${API_URL}/contract-lines/${lineId}/free-slots`).then((res) =>
+    handleResponse<FreeSlot[]>(res)
+  );
+}
+
+export function bookAdHocVisit(
+  lineId: number,
+  input: AdHocVisitBookingInput
+): Promise<Assignment> {
+  return fetch(`${API_URL}/contract-lines/${lineId}/ad-hoc-visits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<Assignment>(res));
 }
 
 export function syncCustomers(): Promise<Customer[]> {

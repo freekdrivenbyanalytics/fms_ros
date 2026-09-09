@@ -4,6 +4,7 @@ import {
   createContractLine,
   deleteContract,
   deleteContractLine,
+  extendContractLineVisits,
   updateContractLine,
 } from "../api";
 import type {
@@ -36,8 +37,29 @@ export function ContractsView({
 }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creatingContract, setCreatingContract] = useState(false);
+  const [extendingVisits, setExtendingVisits] = useState(false);
+  const [extendVisitsMessage, setExtendVisitsMessage] = useState<string | null>(null);
 
   const selected = contracts.find((contract) => contract.id === selectedId) ?? null;
+
+  async function handleExtendVisits() {
+    setExtendingVisits(true);
+    setExtendVisitsMessage(null);
+    try {
+      const summary = await extendContractLineVisits();
+      setExtendVisitsMessage(
+        `Extended ${summary.lines_extended} line${summary.lines_extended === 1 ? "" : "s"}, ` +
+          `created ${summary.visits_created} visit${summary.visits_created === 1 ? "" : "s"}.`
+      );
+      await onChanged();
+    } catch (err) {
+      setExtendVisitsMessage(
+        err instanceof Error ? err.message : "Failed to extend recurring visits"
+      );
+    } finally {
+      setExtendingVisits(false);
+    }
+  }
 
   if (selected) {
     return (
@@ -57,14 +79,27 @@ export function ContractsView({
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Contracts</h2>
-        <button
-          type="button"
-          onClick={() => setCreatingContract((prev) => !prev)}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-        >
-          {creatingContract ? "Cancel" : "Create Contract"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExtendVisits}
+            disabled={extendingVisits}
+            className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {extendingVisits ? "Extending…" : "Extend recurring visits"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreatingContract((prev) => !prev)}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            {creatingContract ? "Cancel" : "Create Contract"}
+          </button>
+        </div>
       </div>
+      {extendVisitsMessage && (
+        <p className="text-sm text-slate-600 mb-3">{extendVisitsMessage}</p>
+      )}
 
       {creatingContract && (
         <CreateContractForm

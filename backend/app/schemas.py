@@ -301,6 +301,18 @@ class AssignmentCreate(BaseModel):
     planned_start: datetime
 
 
+class FreeSlotOut(BaseModel):
+    employee_id: int
+    employee_name: str
+    start: datetime
+    end: datetime
+
+
+class AdHocVisitCreate(BaseModel):
+    employee_id: int
+    start: datetime
+
+
 class AssignmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -349,3 +361,8 @@ class OptimizationApplyResult(BaseModel):
 class DrivingTimeComputeSummary(BaseModel):
     computed: int
     skipped: int
+
+
+class ContractLineExtendSummary(BaseModel):
+    lines_extended: int
+    visits_created: int
