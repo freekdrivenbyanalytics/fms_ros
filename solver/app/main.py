@@ -37,6 +37,7 @@ def _warm_up() -> None:
                 duration_minutes=15,
                 required_skill_ids=[],
                 region_id=0,
+                location_id=0,
                 latitude=0.0,
                 longitude=0.0,
             )

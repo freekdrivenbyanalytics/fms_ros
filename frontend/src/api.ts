@@ -10,6 +10,7 @@ import type {
   Customer,
   CustomerLocation,
   CustomerLocationCoordinatesInput,
+  DrivingTimeComputeSummary,
   Employee,
   EmployeeCreateInput,
   EmployeeScheduleDayOverride,
@@ -242,6 +243,12 @@ export function updateCustomerLocationCoordinates(
 export function assignRegionsByGeofence(): Promise<CustomerLocation[]> {
   return fetch(`${API_URL}/customer-locations/assign-regions`, { method: "POST" }).then((res) =>
     handleResponse<CustomerLocation[]>(res)
+  );
+}
+
+export function computeRegionDrivingTimes(regionId: number): Promise<DrivingTimeComputeSummary> {
+  return fetch(`${API_URL}/regions/${regionId}/driving-times`, { method: "POST" }).then((res) =>
+    handleResponse<DrivingTimeComputeSummary>(res)
   );
 }
 

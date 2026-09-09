@@ -1,5 +1,6 @@
 from app.constraints import define_constraints
 from app.domain import (
+    DrivingTimeFact,
     Employee,
     EmployeeDaySchedule,
     ExistingAssignmentFact,
@@ -41,6 +42,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
             requested_date=a.requested_date,
             start_minutes=a.start_minutes,
             end_minutes=a.end_minutes,
+            location_id=a.location_id,
             latitude=a.latitude,
             longitude=a.longitude,
         )
@@ -54,16 +56,29 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
             duration_minutes=v.duration_minutes,
             required_skill_ids=frozenset(v.required_skill_ids),
             region_id=v.region_id,
+            location_id=v.location_id,
             latitude=v.latitude,
             longitude=v.longitude,
         )
         for v in request.visits
     ]
 
+    driving_times = [
+        DrivingTimeFact(
+            origin_kind=d.origin_kind,
+            origin_id=d.origin_id,
+            destination_kind=d.destination_kind,
+            destination_id=d.destination_id,
+            duration_minutes=d.duration_minutes,
+        )
+        for d in request.driving_times
+    ]
+
     return Schedule(
         employees=list(employees_by_id.values()),
         employee_day_schedules=employee_day_schedules,
         existing_assignments=existing_assignments,
+        driving_times=driving_times,
         start_times=default_start_time_range(),
         visits=visits,
     )

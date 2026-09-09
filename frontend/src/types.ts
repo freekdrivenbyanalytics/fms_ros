@@ -263,3 +263,8 @@ export interface OptimizationApplyResult {
   created: Assignment[];
   skipped_visit_ids: number[];
 }
+
+export interface DrivingTimeComputeSummary {
+  computed: number;
+  skipped: number;
+}

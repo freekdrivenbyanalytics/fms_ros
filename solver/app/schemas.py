@@ -26,6 +26,7 @@ class VisitIn(BaseModel):
     duration_minutes: int
     required_skill_ids: list[int]
     region_id: int
+    location_id: int
     latitude: float
     longitude: float
 
@@ -36,8 +37,17 @@ class ExistingAssignmentIn(BaseModel):
     requested_date: date
     start_minutes: int
     end_minutes: int
+    location_id: int
     latitude: float
     longitude: float
+
+
+class DrivingTimeIn(BaseModel):
+    origin_kind: str
+    origin_id: int
+    destination_kind: str
+    destination_id: int
+    duration_minutes: int
 
 
 class OptimizeRequest(BaseModel):
@@ -45,6 +55,7 @@ class OptimizeRequest(BaseModel):
     employee_day_schedules: list[EmployeeDayScheduleIn] = []
     visits: list[VisitIn]
     existing_assignments: list[ExistingAssignmentIn] = []
+    driving_times: list[DrivingTimeIn] = []
     time_limit_seconds: int | None = None
 
 

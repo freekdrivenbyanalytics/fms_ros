@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     tripletex_session_ttl_seconds: int = 3600
     solver_base_url: str = "http://localhost:8100"
     solver_time_limit_seconds: int = 30
+    tomtom_api_key: str = ""
 
 
 settings = Settings()

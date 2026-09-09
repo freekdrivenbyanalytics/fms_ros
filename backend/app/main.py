@@ -16,6 +16,7 @@ from app.employee_schedule import (
     templates_overlap,
 )
 from app.geofencing import assign_regions_by_geofence
+from app.tomtom_routing import compute_region_driving_times
 from app.visit_generation import generate_occurrence_dates
 from app.models import (
     Assignment,
@@ -45,6 +46,7 @@ from app.schemas import (
     CustomerLocationCoordinatesUpdate,
     CustomerLocationOut,
     CustomerOut,
+    DrivingTimeComputeSummary,
     EmployeeCreate,
     EmployeeOut,
     EmployeeScheduleDayOverrideBulkCreate,
@@ -516,6 +518,15 @@ def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[Cust
         .order_by(CustomerLocation.id)
         .all()
     )
+
+
+@app.post("/regions/{region_id}/driving-times", response_model=DrivingTimeComputeSummary)
+def compute_driving_times(region_id: int, db: Session = Depends(get_db)) -> dict:
+    region = db.get(Region, region_id)
+    if region is None:
+        raise HTTPException(status_code=404, detail="Region not found")
+
+    return compute_region_driving_times(db, region)
 
 
 @app.get("/skills", response_model=list[SkillOut])

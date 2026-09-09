@@ -1,5 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { assignRegionsByGeofence, createRegion, deleteRegion, updateRegion } from "../api";
+import {
+  assignRegionsByGeofence,
+  computeRegionDrivingTimes,
+  createRegion,
+  deleteRegion,
+  updateRegion,
+} from "../api";
 import type { CustomerLocation, Employee, GeoPoint, Region } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { GeoShapeEditor } from "../shared/GeoShapeEditor";
@@ -191,6 +197,26 @@ function RegionDetail({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [computingDrivingTimes, setComputingDrivingTimes] = useState(false);
+  const [drivingTimesMessage, setDrivingTimesMessage] = useState<string | null>(null);
+
+  async function handleComputeDrivingTimes() {
+    setComputingDrivingTimes(true);
+    setDrivingTimesMessage(null);
+    try {
+      const summary = await computeRegionDrivingTimes(region.id);
+      setDrivingTimesMessage(
+        `Computed ${summary.computed} route${summary.computed === 1 ? "" : "s"}` +
+          (summary.skipped > 0 ? `, ${summary.skipped} skipped.` : ".")
+      );
+    } catch (err) {
+      setDrivingTimesMessage(
+        err instanceof Error ? err.message : "Failed to compute driving times"
+      );
+    } finally {
+      setComputingDrivingTimes(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -235,6 +261,14 @@ function RegionDetail({
         <div className="flex gap-2">
           <button
             type="button"
+            onClick={handleComputeDrivingTimes}
+            disabled={computingDrivingTimes}
+            className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {computingDrivingTimes ? "Computing…" : "Compute driving times"}
+          </button>
+          <button
+            type="button"
             onClick={handleSave}
             disabled={saving || !dirty}
             className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
@@ -252,6 +286,7 @@ function RegionDetail({
         </div>
       </div>
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {drivingTimesMessage && <p className="text-sm text-slate-600 mb-3">{drivingTimesMessage}</p>}
 
       <DetailField label="Geo-shape">
         <GeoShapeEditor

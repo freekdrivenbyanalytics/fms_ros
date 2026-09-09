@@ -56,8 +56,23 @@ class ExistingAssignmentFact:
     requested_date: date
     start_minutes: int
     end_minutes: int
+    location_id: int
     latitude: float
     longitude: float
+
+
+@dataclass(frozen=True)
+class DrivingTimeFact:
+    """A static, region-scoped driving time (minutes) from one location
+    endpoint to another. origin/destination are (kind, id) pairs since they
+    may reference either a customer location or an employee's home
+    location - two separate id spaces."""
+
+    origin_kind: str
+    origin_id: int
+    destination_kind: str
+    destination_id: int
+    duration_minutes: int
 
 
 @planning_entity
@@ -68,6 +83,7 @@ class VisitAssignment:
     duration_minutes: int
     required_skill_ids: frozenset
     region_id: int
+    location_id: int
     latitude: float
     longitude: float
     employee: Annotated[
@@ -96,6 +112,7 @@ class Schedule:
     ]
     employee_day_schedules: Annotated[list[EmployeeDaySchedule], ProblemFactCollectionProperty]
     existing_assignments: Annotated[list[ExistingAssignmentFact], ProblemFactCollectionProperty]
+    driving_times: Annotated[list[DrivingTimeFact], ProblemFactCollectionProperty]
     start_times: Annotated[list[int], ValueRangeProvider(id="start_time_range")]
     visits: Annotated[list[VisitAssignment], PlanningEntityCollectionProperty]
     score: Annotated[HardMediumSoftScore | None, PlanningScore] = field(default=None)

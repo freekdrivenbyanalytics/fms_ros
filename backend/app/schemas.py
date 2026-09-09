@@ -344,3 +344,8 @@ class OptimizationApplyRequest(BaseModel):
 class OptimizationApplyResult(BaseModel):
     created: list[AssignmentOut]
     skipped_visit_ids: list[int]
+
+
+class DrivingTimeComputeSummary(BaseModel):
+    computed: int
+    skipped: int

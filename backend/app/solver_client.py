@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.employee_schedule import resolve_employee_schedule
-from app.models import Assignment, ContractLine, CustomerLocation, Employee, ServiceVisit
+from app.models import (
+    Assignment,
+    ContractLine,
+    CustomerLocation,
+    DrivingTime,
+    Employee,
+    ServiceVisit,
+)
 
 
 def _minutes_since_midnight(t: time) -> int:
@@ -70,6 +77,7 @@ def _visit_payload(visit: ServiceVisit) -> dict:
         "duration_minutes": visit.contract_line.duration_minutes,
         "required_skill_ids": [s.id for s in visit.contract_line.required_skills],
         "region_id": location.region_id,
+        "location_id": location.id,
         "latitude": location.latitude,
         "longitude": location.longitude,
     }
@@ -85,6 +93,7 @@ def _existing_assignment_payload(assignment: Assignment) -> dict:
         "requested_date": assignment.service_visit.requested_date.isoformat(),
         "start_minutes": start_minutes,
         "end_minutes": start_minutes + duration,
+        "location_id": location.id,
         "latitude": location.latitude,
         "longitude": location.longitude,
     }
@@ -100,6 +109,22 @@ def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
         and location.longitude is not None
         and location.region_id is not None
     )
+
+
+def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
+    if not region_ids:
+        return []
+    rows = db.query(DrivingTime).filter(DrivingTime.region_id.in_(region_ids)).all()
+    return [
+        {
+            "origin_kind": row.origin_kind.value,
+            "origin_id": row.origin_id,
+            "destination_kind": row.destination_kind.value,
+            "destination_id": row.destination_id,
+            "duration_minutes": row.duration_minutes,
+        }
+        for row in rows
+    ]
 
 
 def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
@@ -141,11 +166,15 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
 
     candidate_dates = {effective_schedule_date(v) for v in ready_visits}
 
+    region_ids = {v.contract_line.customer_location.region_id for v in ready_visits}
+    region_ids.update(r.id for e in employees for r in e.regions)
+
     payload = {
         "employees": [_employee_payload(e) for e in employees],
         "employee_day_schedules": _employee_day_schedule_payloads(db, employees, candidate_dates),
         "visits": [_visit_payload(v) for v in ready_visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
+        "driving_times": _driving_time_payloads(db, region_ids),
         "time_limit_seconds": settings.solver_time_limit_seconds,
     }
     return payload, excluded_visit_ids

@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Table,
     Time,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -64,6 +65,50 @@ class Region(Base):
     customer_locations: Mapped[list["CustomerLocation"]] = relationship(
         back_populates="region"
     )
+
+
+class LocationKind(str, enum.Enum):
+    CUSTOMER_LOCATION = "customer_location"
+    EMPLOYEE = "employee"
+
+
+_location_kind_enum = Enum(
+    LocationKind,
+    name="location_kind",
+    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+)
+
+
+class DrivingTime(Base):
+    """A single, static driving time (minutes) from one region location
+    endpoint to another, sourced from TomTom. origin/destination are
+    (kind, id) pairs since they may reference either a CustomerLocation or
+    an Employee's home location - two separate id spaces. See
+    app.tomtom_routing."""
+
+    __tablename__ = "driving_times"
+    __table_args__ = (
+        UniqueConstraint(
+            "region_id",
+            "origin_kind",
+            "origin_id",
+            "destination_kind",
+            "destination_id",
+            name="uq_driving_times_region_pair",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(
+        ForeignKey("regions.id", ondelete="CASCADE"), nullable=False
+    )
+    origin_kind: Mapped[LocationKind] = mapped_column(_location_kind_enum, nullable=False)
+    origin_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_kind: Mapped[LocationKind] = mapped_column(_location_kind_enum, nullable=False)
+    destination_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    region: Mapped["Region"] = relationship()
 
 
 class Skill(Base):
