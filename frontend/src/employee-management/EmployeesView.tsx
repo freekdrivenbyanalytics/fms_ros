@@ -16,8 +16,8 @@ import type {
   Employee,
   EmployeeScheduleDayOverride,
   EmployeeScheduleTemplate,
+  Product,
   Region,
-  Skill,
 } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
@@ -25,11 +25,11 @@ import { ListTable } from "../shared/ListTable";
 interface Props {
   employees: Employee[];
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
   onChanged: () => void | Promise<void>;
 }
 
-export function EmployeesView({ employees, regions, skills, onChanged }: Props) {
+export function EmployeesView({ employees, regions, products, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -40,7 +40,7 @@ export function EmployeesView({ employees, regions, skills, onChanged }: Props) 
       <EmployeeDetail
         employee={selected}
         regions={regions}
-        skills={skills}
+        products={products}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -64,7 +64,7 @@ export function EmployeesView({ employees, regions, skills, onChanged }: Props) 
       {creating && (
         <EmployeeForm
           regions={regions}
-          skills={skills}
+          products={products}
           onSaved={async (employee) => {
             setCreating(false);
             await onChanged();
@@ -85,8 +85,10 @@ export function EmployeesView({ employees, regions, skills, onChanged }: Props) 
             render: (employee) => employee.regions.map((region) => region.name).join(", ") || "—",
           },
           {
-            header: "Skills",
-            render: (employee) => employee.skills.map((skill) => skill.name).join(", ") || "—",
+            header: "Products",
+            render: (employee) =>
+              employee.products.map((product) => `${product.number} ${product.name}`).join(", ") ||
+              "—",
           },
         ]}
       />
@@ -96,13 +98,13 @@ export function EmployeesView({ employees, regions, skills, onChanged }: Props) 
 
 interface EmployeeFormProps {
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
   existingEmployee?: Employee;
   onSaved: (employee: Employee) => void | Promise<void>;
   onCancel?: () => void;
 }
 
-function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: EmployeeFormProps) {
+function EmployeeForm({ regions, products, existingEmployee, onSaved, onCancel }: EmployeeFormProps) {
   const [name, setName] = useState(existingEmployee?.name ?? "");
   const [latitude, setLatitude] = useState(
     existingEmployee ? String(existingEmployee.latitude) : ""
@@ -113,8 +115,8 @@ function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: 
   const [regionIds, setRegionIds] = useState<number[]>(
     existingEmployee ? existingEmployee.regions.map((region) => region.id) : []
   );
-  const [skillIds, setSkillIds] = useState<number[]>(
-    existingEmployee ? existingEmployee.skills.map((skill) => skill.id) : []
+  const [productIds, setProductIds] = useState<number[]>(
+    existingEmployee ? existingEmployee.products.map((product) => product.id) : []
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +136,7 @@ function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: 
         latitude: Number(latitude),
         longitude: Number(longitude),
         region_ids: regionIds,
-        skill_ids: skillIds,
+        product_ids: productIds,
       };
       const employee = existingEmployee
         ? await updateEmployee(existingEmployee.id, payload)
@@ -196,16 +198,16 @@ function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: 
         </div>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Skills</div>
+        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Products</div>
         <div className="flex flex-wrap gap-2">
-          {skills.map((skill) => (
-            <label key={skill.id} className="flex items-center gap-1 text-sm">
+          {products.map((product) => (
+            <label key={product.id} className="flex items-center gap-1 text-sm">
               <input
                 type="checkbox"
-                checked={skillIds.includes(skill.id)}
-                onChange={() => toggle(setSkillIds, skill.id)}
+                checked={productIds.includes(product.id)}
+                onChange={() => toggle(setProductIds, product.id)}
               />
-              {skill.name}
+              {product.number} {product.name}
             </label>
           ))}
         </div>
@@ -236,7 +238,7 @@ function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: 
 interface EmployeeDetailProps {
   employee: Employee;
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -245,7 +247,7 @@ interface EmployeeDetailProps {
 function EmployeeDetail({
   employee,
   regions,
-  skills,
+  products,
   onChanged,
   onDeleted,
   onBack,
@@ -295,7 +297,7 @@ function EmployeeDetail({
       {editing ? (
         <EmployeeForm
           regions={regions}
-          skills={skills}
+          products={products}
           existingEmployee={employee}
           onSaved={async () => {
             setEditing(false);
@@ -311,8 +313,9 @@ function EmployeeDetail({
           <DetailField label="Regions">
             {employee.regions.map((region) => region.name).join(", ") || "—"}
           </DetailField>
-          <DetailField label="Skills">
-            {employee.skills.map((skill) => skill.name).join(", ") || "—"}
+          <DetailField label="Products">
+            {employee.products.map((product) => `${product.number} ${product.name}`).join(", ") ||
+              "—"}
           </DetailField>
         </>
       )}

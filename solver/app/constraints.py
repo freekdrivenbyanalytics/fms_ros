@@ -53,8 +53,10 @@ def _is_unassigned(visit: VisitAssignment) -> bool:
     return not _is_scheduled(visit)
 
 
-def _missing_skills(visit: VisitAssignment) -> bool:
-    return _is_scheduled(visit) and not visit.required_skill_ids.issubset(visit.employee.skill_ids)
+def _missing_products(visit: VisitAssignment) -> bool:
+    return _is_scheduled(visit) and not visit.required_product_ids.issubset(
+        visit.employee.product_ids
+    )
 
 
 def _wrong_region(visit: VisitAssignment) -> bool:
@@ -143,9 +145,9 @@ def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint
         .as_constraint("Unscheduled visit"),
         # Hard constraints.
         constraint_factory.for_each(VisitAssignment)
-        .filter(_missing_skills)
+        .filter(_missing_products)
         .penalize(HardMediumSoftScore.ONE_HARD)
-        .as_constraint("Missing required skill"),
+        .as_constraint("Missing required product"),
         constraint_factory.for_each(VisitAssignment)
         .filter(_wrong_region)
         .penalize(HardMediumSoftScore.ONE_HARD)

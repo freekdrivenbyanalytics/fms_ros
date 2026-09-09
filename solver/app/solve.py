@@ -17,7 +17,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
     employees_by_id = {
         e.id: Employee(
             id=e.id,
-            skill_ids=frozenset(e.skill_ids),
+            product_ids=frozenset(e.product_ids),
             region_ids=frozenset(e.region_ids),
             latitude=e.latitude,
             longitude=e.longitude,
@@ -54,7 +54,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
             id=v.id,
             requested_date=v.requested_date,
             duration_minutes=v.duration_minutes,
-            required_skill_ids=frozenset(v.required_skill_ids),
+            required_product_ids=frozenset(v.required_product_ids),
             region_id=v.region_id,
             location_id=v.location_id,
             latitude=v.latitude,

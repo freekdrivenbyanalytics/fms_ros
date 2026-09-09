@@ -37,7 +37,7 @@ def _is_locked(assignment: Assignment) -> bool:
 def _employee_payload(employee: Employee) -> dict:
     return {
         "id": employee.id,
-        "skill_ids": [s.id for s in employee.skills],
+        "product_ids": [p.id for p in employee.products],
         "region_ids": [r.id for r in employee.regions],
         "latitude": employee.latitude,
         "longitude": employee.longitude,
@@ -75,7 +75,7 @@ def _visit_payload(visit: ServiceVisit) -> dict:
         "id": visit.id,
         "requested_date": effective_schedule_date(visit).isoformat(),
         "duration_minutes": visit.contract_line.duration_minutes,
-        "required_skill_ids": [s.id for s in visit.contract_line.required_skills],
+        "required_product_ids": [p.id for p in visit.contract_line.required_products],
         "region_id": location.region_id,
         "location_id": location.id,
         "latitude": location.latitude,
@@ -145,14 +145,14 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     employees = (
         db.query(Employee)
         .filter(Employee.delete_flag.is_(False))
-        .options(joinedload(Employee.regions), joinedload(Employee.skills))
+        .options(joinedload(Employee.regions), joinedload(Employee.products))
         .order_by(Employee.id)
         .all()
     )
     all_visits = (
         db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_skills),
+            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_products),
             joinedload(ServiceVisit.contract_line)
             .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),

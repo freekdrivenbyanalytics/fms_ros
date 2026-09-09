@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Proposes an optimized employee/visit schedule for every currently unassigned service visit, respecting each employee's skills, region, working hours, and existing commitments, and minimizing travel between an employee's visits — for a planner to review and apply as real assignments.
+Proposes an optimized employee/visit schedule for every currently unassigned service visit, respecting each employee's products, region, working hours, and existing commitments, and minimizing travel between an employee's visits — for a planner to review and apply as real assignments.
 
 ## Requirements
 
@@ -14,11 +14,11 @@ The system SHALL let a user request a proposed schedule covering every service v
 - **THEN** the system returns a proposal that, for each service visit whose effective schedule date is today or tomorrow and that has no pinned assignment, either names the employee and planned start/end time it proposes for that visit, or leaves it unscheduled if no feasible assignment exists, and no assignment is created or changed as a result
 
 ### Requirement: Proposed schedule respects hard constraints
-The system SHALL only propose scheduling a service visit to an employee when the employee possesses every skill the visit's contract requires, the employee is scoped to the visit's region, the employee has a resolved working-hours window for the visit's proposed date and the visit's proposed time window falls entirely within it, and the employee has no time overlap between that proposed visit and any other visit already assigned to them or proposed to them in the same schedule.
+The system SHALL only propose scheduling a service visit to an employee when the employee possesses every product the visit's contract requires, the employee is scoped to the visit's region, the employee has a resolved working-hours window for the visit's proposed date and the visit's proposed time window falls entirely within it, and the employee has no time overlap between that proposed visit and any other visit already assigned to them or proposed to them in the same schedule.
 
 #### Scenario: Proposal respects required skills
 - **WHEN** a proposed schedule assigns a service visit to an employee
-- **THEN** that employee possesses every skill the visit's contract requires
+- **THEN** that employee possesses every product the visit's contract requires
 
 #### Scenario: Proposal respects region
 - **WHEN** a proposed schedule assigns a service visit to an employee
@@ -34,7 +34,7 @@ The system SHALL only propose scheduling a service visit to an employee when the
 
 #### Scenario: Proposal excludes an employee with no resolved schedule for the visit's date
 - **WHEN** a proposed schedule is generated and an employee has no resolved working-hours window for a candidate visit's proposed date
-- **THEN** that employee is not proposed for that visit on that date, even if the employee has the required skills, region, and no conflicting visits
+- **THEN** that employee is not proposed for that visit on that date, even if the employee has the required products, region, and no conflicting visits
 
 ### Requirement: Proposed schedule keeps each visit's effective schedule date
 The system SHALL propose a planned start time for a service visit only on that visit's effective schedule date — its own requested date if that date has not yet passed, or today if it has — and SHALL NOT propose any other date.
@@ -105,20 +105,20 @@ The system SHALL NOT propose scheduling a service visit whose customer location 
 
 #### Scenario: A visit at an ungeocoded location is never scheduled
 - **WHEN** a proposed schedule is generated and a candidate service visit's customer location has no resolved latitude/longitude
-- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required skills, region, and availability exists
+- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required products, region, and availability exists
 
 ### Requirement: Proposed schedule excludes visits without an assigned region
 The system SHALL NOT propose scheduling a service visit whose customer location has no assigned region, regardless of whether an otherwise-feasible assignment exists for it.
 
 #### Scenario: A visit at a regionless location is never scheduled
 - **WHEN** a proposed schedule is generated and a candidate service visit's customer location has no assigned region
-- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required skills, coordinates, and availability exists
+- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required products, coordinates, and availability exists
 
 ### Requirement: Proposed schedule excludes visits when no employee has a schedule that day
-The system SHALL leave a service visit unscheduled, rather than proposing it, when every employee who otherwise qualifies for it (skills, region) has no resolved working-hours window for the visit's proposed date.
+The system SHALL leave a service visit unscheduled, rather than proposing it, when every employee who otherwise qualifies for it (products, region) has no resolved working-hours window for the visit's proposed date.
 
 #### Scenario: Visit is unscheduled when no qualifying employee has a schedule that day
-- **WHEN** a proposed schedule is generated and every employee with the required skills and region has no resolved working-hours window for a visit's proposed date
+- **WHEN** a proposed schedule is generated and every employee with the required products and region has no resolved working-hours window for a visit's proposed date
 - **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled
 
 ### Requirement: Proposed schedule excludes visits outside the scheduling window
@@ -126,7 +126,7 @@ The system SHALL NOT propose scheduling a service visit whose effective schedule
 
 #### Scenario: A visit requested further in the future is not scheduled
 - **WHEN** a proposed schedule is generated and a candidate service visit's effective schedule date is neither today nor tomorrow
-- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required skills, region, and availability exists
+- **THEN** the proposal does not assign that visit to any employee, and it is reported as unscheduled even if an employee with the required products, region, and availability exists
 
 #### Scenario: A visit rolls into the window as time passes
 - **WHEN** a service visit's effective schedule date, previously beyond tomorrow, becomes today or tomorrow

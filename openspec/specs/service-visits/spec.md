@@ -7,11 +7,11 @@ Represents customer service visits requested for scheduling, tracked through an 
 ## Requirements
 
 ### Requirement: Service visit data model
-The system SHALL persist each service visit with a unique identifier, the contract line it was generated from, requested date, and a status; duration and skill requirements are read through the contract line.
+The system SHALL persist each service visit with a unique identifier, the contract line it was generated from, requested date, and a status; duration and product requirements are read through the contract line.
 
 #### Scenario: Service visit is persisted with required fields
 - **WHEN** a service visit is created with id, contract_line_id, and requested_date
-- **THEN** the system persists the service visit and all fields are retrievable unchanged, with customer name, address, region, duration, and required skills available through the contract line
+- **THEN** the system persists the service visit and all fields are retrievable unchanged, with customer name, address, region, duration, and required products available through the contract line
 
 ### Requirement: New service visits start unassigned
 A newly created service visit SHALL have status `unassigned` until an assignment is created for it.
@@ -21,11 +21,11 @@ A newly created service visit SHALL have status `unassigned` until an assignment
 - **THEN** its status is `unassigned`
 
 ### Requirement: List service visits by assignment status
-The system SHALL provide an API to retrieve service visits with their status, their contract line's customer location (customer name, address, region), duration, and required skills, so unassigned visits and assigned visits can be distinguished, located, and matched to a qualified employee. The API SHALL accept optional start-date and end-date filters that restrict the returned visits to those whose requested_date falls within the given range (inclusive); omitting either bound leaves that side of the range open.
+The system SHALL provide an API to retrieve service visits with their status, their contract line's customer location (customer name, address, region), duration, and required products, so unassigned visits and assigned visits can be distinguished, located, and matched to a qualified employee. The API SHALL accept optional start-date and end-date filters that restrict the returned visits to those whose requested_date falls within the given range (inclusive); omitting either bound leaves that side of the range open.
 
 #### Scenario: Retrieve visits with status
 - **WHEN** a client requests the list of service visits
-- **THEN** the system returns every visit together with its status of either `unassigned` or `assigned`, and the customer name, address, region, duration, and required skills of the contract line it was generated from
+- **THEN** the system returns every visit together with its status of either `unassigned` or `assigned`, and the customer name, address, region, duration, and required products of the contract line it was generated from
 
 #### Scenario: Retrieve visits within a date range
 - **WHEN** a client requests the list of service visits with a start-date and/or end-date filter

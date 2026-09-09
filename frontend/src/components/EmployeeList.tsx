@@ -7,22 +7,22 @@ import { ListFilterBar } from "./ListFilterBar";
 export function EmployeeList({ employees }: { employees: Employee[] }) {
   const [search, setSearch] = useState("");
   const [regionIds, setRegionIds] = useState<number[]>([]);
-  const [skillIds, setSkillIds] = useState<number[]>([]);
+  const [productIds, setProductIds] = useState<number[]>([]);
 
   const extract = (employee: Employee) => ({
     name: employee.name,
     regions: employee.regions,
-    skills: employee.skills,
+    products: employee.products,
   });
 
-  const { regions: regionOptions, skills: skillOptions } = useMemo(
+  const { regions: regionOptions, products: productOptions } = useMemo(
     () => collectFilterOptions(employees, extract),
     [employees]
   );
 
   const filteredEmployees = useMemo(
-    () => filterItems(employees, extract, search, regionIds, skillIds),
-    [employees, search, regionIds, skillIds]
+    () => filterItems(employees, extract, search, regionIds, productIds),
+    [employees, search, regionIds, productIds]
   );
 
   return (
@@ -35,9 +35,9 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
         regionOptions={regionOptions}
         selectedRegionIds={regionIds}
         onRegionIdsChange={setRegionIds}
-        skillOptions={skillOptions}
-        selectedSkillIds={skillIds}
-        onSkillIdsChange={setSkillIds}
+        productOptions={productOptions}
+        selectedProductIds={productIds}
+        onProductIdsChange={setProductIds}
       />
       {employees.length === 0 ? (
         <p className="text-sm text-slate-500">No employees.</p>
@@ -63,12 +63,12 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
                           {region.name}
                         </span>
                       ))}
-                      {employee.skills.map((skill) => (
+                      {employee.products.map((product) => (
                         <span
-                          key={skill.id}
+                          key={product.id}
                           className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                         >
-                          {skill.name}
+                          {product.number} {product.name}
                         </span>
                       ))}
                     </div>

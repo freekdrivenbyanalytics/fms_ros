@@ -18,7 +18,7 @@ The system SHALL provide Employee Management as a top-level area reachable via a
 - **THEN** any employee visible in the Planning application is also visible in Employee Management, and vice versa
 
 ### Requirement: Employee list and detail views
-The system SHALL provide, within Employee Management, a list view of all non-deleted employees and a detail view for each employee showing its own fields, the regions it is scoped to, the skills it holds, its schedule templates, and its day overrides.
+The system SHALL provide, within Employee Management, a list view of all non-deleted employees and a detail view for each employee showing its own fields, the regions it is scoped to, the products it holds, its schedule templates, and its day overrides.
 
 #### Scenario: User browses the employee list
 - **WHEN** a user opens the employee list view in Employee Management
@@ -26,10 +26,10 @@ The system SHALL provide, within Employee Management, a list view of all non-del
 
 #### Scenario: User opens an employee's detail view
 - **WHEN** a user opens an employee's detail view in Employee Management
-- **THEN** the system shows that employee's own fields, its regions, its skills, its schedule templates, and its day overrides
+- **THEN** the system shows that employee's own fields, its regions, its products, its schedule templates, and its day overrides
 
 ### Requirement: Create, update, and soft-delete an employee from Employee Management
-The system SHALL let a user create an employee (name, home location, regions, skills), update any of those fields, and soft-delete the employee, from Employee Management.
+The system SHALL let a user create an employee (name, home location, regions, products), update any of those fields, and soft-delete the employee, from Employee Management.
 
 #### Scenario: Creating an employee in Employee Management
 - **WHEN** a user creates an employee from Employee Management

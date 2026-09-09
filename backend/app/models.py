@@ -34,18 +34,18 @@ employee_regions = Table(
     Column("region_id", ForeignKey("regions.id"), primary_key=True),
 )
 
-employee_skills = Table(
-    "employee_skills",
+employee_products = Table(
+    "employee_products",
     Base.metadata,
     Column("employee_id", ForeignKey("employees.id"), primary_key=True),
-    Column("skill_id", ForeignKey("skills.id"), primary_key=True),
+    Column("product_id", ForeignKey("products.id"), primary_key=True),
 )
 
-contract_line_skills = Table(
-    "contract_line_skills",
+contract_line_products = Table(
+    "contract_line_products",
     Base.metadata,
     Column("contract_line_id", ForeignKey("contract_lines.id"), primary_key=True),
-    Column("skill_id", ForeignKey("skills.id"), primary_key=True),
+    Column("product_id", ForeignKey("products.id"), primary_key=True),
 )
 
 
@@ -111,20 +111,47 @@ class DrivingTime(Base):
     region: Mapped["Region"] = relationship()
 
 
-class Skill(Base):
-    __tablename__ = "skills"
+class ProductChangeType(str, enum.Enum):
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+    RESTORED = "restored"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+class Product(Base):
+    __tablename__ = "products"
+
+    # Tripletex-sourced fields. id is Tripletex's own product id, not app-generated.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    number: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     delete_flag: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
 
     employees: Mapped[list["Employee"]] = relationship(
-        secondary=employee_skills, back_populates="skills"
+        secondary=employee_products, back_populates="products"
     )
     contract_lines: Mapped[list["ContractLine"]] = relationship(
-        secondary=contract_line_skills, back_populates="required_skills"
+        secondary=contract_line_products, back_populates="required_products"
+    )
+
+
+class ProductSyncLog(Base):
+    __tablename__ = "product_sync_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    change_type: Mapped[ProductChangeType] = mapped_column(
+        Enum(
+            ProductChangeType,
+            name="product_change_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
     )
 
 
@@ -313,8 +340,8 @@ class ContractLine(Base):
     customer_location: Mapped["CustomerLocation"] = relationship(
         back_populates="contract_lines"
     )
-    required_skills: Mapped[list["Skill"]] = relationship(
-        secondary=contract_line_skills, back_populates="contract_lines"
+    required_products: Mapped[list["Product"]] = relationship(
+        secondary=contract_line_products, back_populates="contract_lines"
     )
     service_visits: Mapped[list["ServiceVisit"]] = relationship(
         back_populates="contract_line"
@@ -335,8 +362,8 @@ class Employee(Base):
     regions: Mapped[list["Region"]] = relationship(
         secondary=employee_regions, back_populates="employees"
     )
-    skills: Mapped[list["Skill"]] = relationship(
-        secondary=employee_skills, back_populates="employees"
+    products: Mapped[list["Product"]] = relationship(
+        secondary=employee_products, back_populates="employees"
     )
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="employee")
     schedule_templates: Mapped[list["EmployeeScheduleTemplate"]] = relationship(

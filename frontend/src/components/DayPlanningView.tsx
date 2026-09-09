@@ -89,12 +89,12 @@ export function DayPlanningView({ employees, assignments }: Props) {
                   <div className="py-2 pr-3 text-sm">
                     <div className="font-medium text-slate-800">{employee.name}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {employee.skills.map((skill) => (
+                      {employee.products.map((product) => (
                         <span
-                          key={skill.id}
+                          key={product.id}
                           className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                         >
-                          {skill.name}
+                          {product.number} {product.name}
                         </span>
                       ))}
                     </div>
@@ -124,12 +124,12 @@ export function DayPlanningView({ employees, assignments }: Props) {
                             <div>{location.address}</div>
                             <div>{location.region?.name ?? "No region"}</div>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {visit.contract_line.required_skills.map((skill) => (
+                              {visit.contract_line.required_products.map((product) => (
                                 <span
-                                  key={skill.id}
+                                  key={product.id}
                                   className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                                 >
-                                  {skill.name}
+                                  {product.number} {product.name}
                                 </span>
                               ))}
                             </div>

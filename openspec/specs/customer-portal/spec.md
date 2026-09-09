@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Gives a business user a simple, read-only way to browse the master data already held by the shared backend — employees, customers, customer locations, contracts, skills, and regions — and how those entities relate to each other, in a frontend area kept clearly separate from the Planning application.
+Gives a business user a simple, read-only way to browse the master data already held by the shared backend — employees, customers, customer locations, contracts, products, and regions — and how those entities relate to each other, in a frontend area kept clearly separate from the Planning application.
 
 ## Requirements
 
@@ -75,7 +75,7 @@ The system SHALL let a user open an item from any of the three list views to see
 
 #### Scenario: Contract detail
 - **WHEN** a user opens a Contract's detail view
-- **THEN** the system shows that contract's own fields, the Customer it belongs to, and its Contract Lines, each showing its Customer Location, dates, interval, duration, and required Skills
+- **THEN** the system shows that contract's own fields, the Customer it belongs to, and its Contract Lines, each showing its Customer Location, dates, interval, duration, and required Products
 
 ### Requirement: Refresh customers from Tripletex
 The system SHALL provide a control on the Customer Portal's Customers view that triggers an on-demand Tripletex customer sync, and SHALL refresh the Customers, Customer Locations, and Contracts views' data after the sync completes.

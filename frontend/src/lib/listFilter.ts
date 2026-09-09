@@ -1,15 +1,15 @@
-import type { Region, Skill } from "../types";
+import type { Product, Region } from "../types";
 
 export interface FilterableFields {
   name: string;
   address?: string;
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
 }
 
 export interface FilterOptions {
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
 }
 
 export function collectFilterOptions<T>(
@@ -17,17 +17,17 @@ export function collectFilterOptions<T>(
   extract: (item: T) => FilterableFields
 ): FilterOptions {
   const regionMap = new Map<number, Region>();
-  const skillMap = new Map<number, Skill>();
+  const productMap = new Map<number, Product>();
 
   for (const item of items) {
-    const { regions, skills } = extract(item);
+    const { regions, products } = extract(item);
     for (const region of regions) regionMap.set(region.id, region);
-    for (const skill of skills) skillMap.set(skill.id, skill);
+    for (const product of products) productMap.set(product.id, product);
   }
 
   return {
     regions: Array.from(regionMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
-    skills: Array.from(skillMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    products: Array.from(productMap.values()).sort((a, b) => a.number.localeCompare(b.number)),
   };
 }
 
@@ -36,12 +36,12 @@ export function filterItems<T>(
   extract: (item: T) => FilterableFields,
   search: string,
   selectedRegionIds: number[],
-  selectedSkillIds: number[]
+  selectedProductIds: number[]
 ): T[] {
   const query = search.trim().toLowerCase();
 
   return items.filter((item) => {
-    const { name, address, regions, skills } = extract(item);
+    const { name, address, regions, products } = extract(item);
 
     if (query) {
       const haystack = `${name} ${address ?? ""}`.toLowerCase();
@@ -52,7 +52,10 @@ export function filterItems<T>(
       return false;
     }
 
-    if (selectedSkillIds.length > 0 && !skills.some((s) => selectedSkillIds.includes(s.id))) {
+    if (
+      selectedProductIds.length > 0 &&
+      !products.some((p) => selectedProductIds.includes(p.id))
+    ) {
       return false;
     }
 

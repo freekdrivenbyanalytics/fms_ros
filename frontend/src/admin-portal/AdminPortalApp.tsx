@@ -4,39 +4,39 @@ import {
   listCustomerLocations,
   listCustomers,
   listEmployees,
+  listProducts,
   listRegions,
   listServiceVisits,
-  listSkills,
 } from "../api";
 import type {
   Contract,
   Customer,
   CustomerLocation,
   Employee,
+  Product,
   Region,
   ServiceVisit,
-  Skill,
 } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
+import { ProductsView } from "./ProductsView";
 import { RegionsView } from "./RegionsView";
-import { SkillsView } from "./SkillsView";
 
-type Entity = "regions" | "skills" | "contracts" | "customer-locations";
+type Entity = "regions" | "products" | "contracts" | "customer-locations";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   regions: "Regions",
-  skills: "Skills",
+  products: "Products",
   contracts: "Contracts",
   "customer-locations": "Customer Locations",
 };
 
-const ENTITY_ORDER: Entity[] = ["regions", "skills", "contracts", "customer-locations"];
+const ENTITY_ORDER: Entity[] = ["regions", "products", "contracts", "customer-locations"];
 
 export function AdminPortalApp() {
   const [entity, setEntity] = useState<Entity>("regions");
   const [regions, setRegions] = useState<Region[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
@@ -48,7 +48,7 @@ export function AdminPortalApp() {
   async function reload() {
     const [
       regionsData,
-      skillsData,
+      productsData,
       employeesData,
       customersData,
       customerLocationsData,
@@ -56,7 +56,7 @@ export function AdminPortalApp() {
       serviceVisitsData,
     ] = await Promise.all([
       listRegions(),
-      listSkills(),
+      listProducts(),
       listEmployees(),
       listCustomers(),
       listCustomerLocations(),
@@ -64,7 +64,7 @@ export function AdminPortalApp() {
       listServiceVisits(),
     ]);
     setRegions(regionsData);
-    setSkills(skillsData);
+    setProducts(productsData);
     setEmployees(employeesData);
     setCustomers(customersData);
     setCustomerLocations(customerLocationsData);
@@ -116,8 +116,8 @@ export function AdminPortalApp() {
             onChanged={reload}
           />
         )}
-        {entity === "skills" && (
-          <SkillsView skills={skills} employees={employees} contracts={contracts} onChanged={reload} />
+        {entity === "products" && (
+          <ProductsView products={products} employees={employees} contracts={contracts} onChanged={reload} />
         )}
         {entity === "contracts" && (
           <ContractsView
@@ -125,7 +125,7 @@ export function AdminPortalApp() {
             customers={customers}
             customerLocations={customerLocations}
             serviceVisits={serviceVisits}
-            skills={skills}
+            products={products}
             onChanged={reload}
           />
         )}

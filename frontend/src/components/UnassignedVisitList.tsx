@@ -16,23 +16,23 @@ function extract(visit: ServiceVisit) {
     name: visit.contract_line.customer_location.customer.name,
     address: visit.contract_line.customer_location.address,
     regions: visit.contract_line.customer_location.region ? [visit.contract_line.customer_location.region] : [],
-    skills: visit.contract_line.required_skills,
+    products: visit.contract_line.required_products,
   };
 }
 
 export function UnassignedVisitList({ visits, employees, onAssigned }: ListProps) {
   const [search, setSearch] = useState("");
   const [regionIds, setRegionIds] = useState<number[]>([]);
-  const [skillIds, setSkillIds] = useState<number[]>([]);
+  const [productIds, setProductIds] = useState<number[]>([]);
 
-  const { regions: regionOptions, skills: skillOptions } = useMemo(
+  const { regions: regionOptions, products: productOptions } = useMemo(
     () => collectFilterOptions(visits, extract),
     [visits]
   );
 
   const filteredVisits = useMemo(
-    () => filterItems(visits, extract, search, regionIds, skillIds),
-    [visits, search, regionIds, skillIds]
+    () => filterItems(visits, extract, search, regionIds, productIds),
+    [visits, search, regionIds, productIds]
   );
 
   return (
@@ -45,9 +45,9 @@ export function UnassignedVisitList({ visits, employees, onAssigned }: ListProps
         regionOptions={regionOptions}
         selectedRegionIds={regionIds}
         onRegionIdsChange={setRegionIds}
-        skillOptions={skillOptions}
-        selectedSkillIds={skillIds}
-        onSkillIdsChange={setSkillIds}
+        productOptions={productOptions}
+        selectedProductIds={productIds}
+        onProductIdsChange={setProductIds}
       />
       {visits.length === 0 ? (
         <p className="text-sm text-slate-500">No unassigned visits.</p>
@@ -116,12 +116,12 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
                 <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                   {visit.contract_line.customer_location.region?.name ?? "No region"}
                 </span>
-                {visit.contract_line.required_skills.map((skill) => (
+                {visit.contract_line.required_products.map((product) => (
                   <span
-                    key={skill.id}
+                    key={product.id}
                     className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                   >
-                    {skill.name}
+                    {product.number} {product.name}
                   </span>
                 ))}
               </div>

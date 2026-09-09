@@ -42,15 +42,15 @@ export function ContractsView({ contracts, serviceVisits, onChanged }: Props) {
                       {line.end_date ? ` to ${line.end_date}` : ""}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {line.required_skills.length === 0 ? (
-                        <span className="text-slate-400">no skills required</span>
+                      {line.required_products.length === 0 ? (
+                        <span className="text-slate-400">no products required</span>
                       ) : (
-                        line.required_skills.map((skill) => (
+                        line.required_products.map((product) => (
                           <span
-                            key={skill.id}
+                            key={product.id}
                             className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                           >
-                            {skill.name}
+                            {product.number} {product.name}
                           </span>
                         ))
                       )}

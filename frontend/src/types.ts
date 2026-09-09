@@ -21,16 +21,9 @@ export interface RegionUpdateInput {
   geo_shape: GeoPoint[] | null;
 }
 
-export interface Skill {
+export interface Product {
   id: number;
-  name: string;
-}
-
-export interface SkillCreateInput {
-  name: string;
-}
-
-export interface SkillUpdateInput {
+  number: string;
   name: string;
 }
 
@@ -105,7 +98,7 @@ export interface ContractLine {
   interval_days: number;
   duration_minutes: number;
   customer_location: CustomerLocation;
-  required_skills: Skill[];
+  required_products: Product[];
 }
 
 export interface Contract {
@@ -128,7 +121,7 @@ export interface ContractLineCreateInput {
   end_date: string | null;
   interval_days: number;
   duration_minutes: number;
-  required_skill_ids: number[];
+  required_product_ids: number[];
 }
 
 export interface ContractLineUpdateInput {
@@ -137,7 +130,7 @@ export interface ContractLineUpdateInput {
   end_date: string | null;
   interval_days: number;
   duration_minutes: number;
-  required_skill_ids: number[];
+  required_product_ids: number[];
 }
 
 export type LunchType = "none" | "fixed" | "flexible";
@@ -201,7 +194,7 @@ export interface Employee {
   latitude: number;
   longitude: number;
   regions: Region[];
-  skills: Skill[];
+  products: Product[];
   schedule_templates: EmployeeScheduleTemplate[];
   schedule_overrides: EmployeeScheduleDayOverride[];
 }
@@ -211,7 +204,7 @@ export interface EmployeeCreateInput {
   latitude: number;
   longitude: number;
   region_ids: number[];
-  skill_ids: number[];
+  product_ids: number[];
 }
 
 export interface EmployeeUpdateInput {
@@ -219,7 +212,7 @@ export interface EmployeeUpdateInput {
   latitude: number;
   longitude: number;
   region_ids: number[];
-  skill_ids: number[];
+  product_ids: number[];
 }
 
 export interface ServiceVisit {

@@ -15,7 +15,7 @@ The system SHALL provide the Admin Portal as a top-level area reachable via a la
 
 #### Scenario: Admin Portal and Planning share the same data
 - **WHEN** the same backend/database that serves the Planning application also serves the Admin Portal
-- **THEN** any region, skill, contract, or customer location visible in the Planning application is also visible in the Admin Portal, and vice versa
+- **THEN** any region, product, contract, or customer location visible in the Planning application is also visible in the Admin Portal, and vice versa
 
 ### Requirement: Region list and detail views
 The system SHALL provide, within the Admin Portal, a list view of all non-deleted regions and a detail view for each region showing its own fields (name, geo-shape), the employees scoped to it, and the customer locations located in it.
@@ -88,45 +88,26 @@ The system SHALL let a user, from the Admin Portal's Regions view, trigger drivi
 - **WHEN** driving-time computation for a region fails
 - **THEN** the system shows an error message rather than silently discarding the failure
 
-### Requirement: Skill list and detail views
-The system SHALL provide, within the Admin Portal, a list view of all non-deleted skills and a detail view for each skill showing its own fields, the employees who hold it, and the contract lines that require it.
+### Requirement: Product list and detail views
+The system SHALL provide, within the Admin Portal, a list view of all non-deleted products and a detail view for each product showing its own fields, the employees who hold it, and the contract lines that require it. The system SHALL NOT provide any control to create, edit, or delete a product, or to change which employees or contract lines are associated with it — products are read-only locally, and those associations remain editable only from Employee Management (employees) or the Admin Portal's own Contracts view (contract lines).
 
-#### Scenario: User browses the skill list
-- **WHEN** a user opens the skill list view in the Admin Portal
-- **THEN** the system shows every non-deleted skill currently in the database
+#### Scenario: User browses the product list
+- **WHEN** a user opens the product list view in the Admin Portal
+- **THEN** the system shows every non-deleted product currently in the database
 
-#### Scenario: User opens a skill's detail view
-- **WHEN** a user opens a skill's detail view in the Admin Portal
-- **THEN** the system shows that skill's own fields, the employees who hold it, and the contract lines that require it
+#### Scenario: User opens a product's detail view
+- **WHEN** a user opens a product's detail view in the Admin Portal
+- **THEN** the system shows that product's own fields, the employees who hold it, and the contract lines that require it, without any control to add or remove one
 
-### Requirement: Create, update, and soft-delete a skill from the Admin Portal
-The system SHALL let a user create a skill with a name, update its name, and soft-delete it, from the Admin Portal.
+### Requirement: Refresh products from Tripletex
+The system SHALL provide a control on the Admin Portal's Products view that triggers an on-demand Tripletex product sync, and SHALL refresh the Products view's data after the sync completes.
 
-#### Scenario: Creating a skill in the Admin Portal
-- **WHEN** a user creates a skill from the Admin Portal
-- **THEN** the system persists the new skill and it appears in the skill list
-
-#### Scenario: Updating a skill's name in the Admin Portal
-- **WHEN** a user updates a skill's name from the Admin Portal
-- **THEN** the system persists the change
-
-#### Scenario: Soft-deleting a skill in the Admin Portal
-- **WHEN** a user soft-deletes a skill from the Admin Portal
-- **THEN** the system marks it deleted and it no longer appears in the skill list
-
-### Requirement: Skill cross-references are read-only in the Admin Portal
-The system SHALL NOT provide any control in the Admin Portal to change which employees or contract lines are associated with a skill; those associations remain editable only from Employee Management (employees) or the Admin Portal's own Contracts view (contract lines).
-
-#### Scenario: No employee-assignment control on the skill detail view
-- **WHEN** a user views a skill's detail view in the Admin Portal
-- **THEN** the system shows the employees who hold that skill without any control to add or remove one
-
-#### Scenario: No contract-line-assignment control on the skill detail view
-- **WHEN** a user views a skill's detail view in the Admin Portal
-- **THEN** the system shows the contract lines that require that skill without any control to add or remove one
+#### Scenario: Planner refreshes products
+- **WHEN** a user activates the Refresh control on the Products view
+- **THEN** the system triggers a Tripletex product sync, and once it completes, the Products view reflects the resulting data
 
 ### Requirement: Contract list and detail views
-The system SHALL provide, within the Admin Portal, a list view of all non-deleted contracts and a detail view for each contract showing its own fields, the customer it belongs to, and its contract lines, each showing its customer location, dates, interval, duration, and required skills.
+The system SHALL provide, within the Admin Portal, a list view of all non-deleted contracts and a detail view for each contract showing its own fields, the customer it belongs to, and its contract lines, each showing its customer location, dates, interval, duration, and required products.
 
 #### Scenario: User browses the contract list
 - **WHEN** a user opens the contract list view in the Admin Portal
@@ -152,14 +133,14 @@ The system SHALL let a user create a contract for a customer, update which custo
 - **THEN** the system marks it deleted, it no longer appears in the Contracts list, and its contract lines are also marked deleted with their generated service visits permanently removed
 
 ### Requirement: Create, update, and soft-delete a contract line from the Admin Portal
-The system SHALL let a user create a contract line under a contract — for one of that contract's customer's locations — update its customer location, dates, interval, duration, and required skills, and soft-delete it, from the Admin Portal's Contract detail view.
+The system SHALL let a user create a contract line under a contract — for one of that contract's customer's locations — update its customer location, dates, interval, duration, and required products, and soft-delete it, from the Admin Portal's Contract detail view.
 
 #### Scenario: Creating a contract line in the Admin Portal
 - **WHEN** a user creates a contract line under a contract from the Admin Portal, selecting one of that contract's customer's locations
 - **THEN** the system persists the new contract line and it appears under that contract
 
 #### Scenario: Updating a contract line in the Admin Portal
-- **WHEN** a user updates a contract line's customer location, dates, interval, duration, or required skills from the Admin Portal
+- **WHEN** a user updates a contract line's customer location, dates, interval, duration, or required products from the Admin Portal
 - **THEN** the system persists the change
 
 #### Scenario: Soft-deleting a contract line in the Admin Portal

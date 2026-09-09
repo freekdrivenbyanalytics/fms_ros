@@ -31,7 +31,7 @@ def default_start_time_range() -> list[int]:
 @dataclass(frozen=True)
 class Employee:
     id: Annotated[int, PlanningId]
-    skill_ids: frozenset
+    product_ids: frozenset
     region_ids: frozenset
     latitude: float
     longitude: float
@@ -81,7 +81,7 @@ class VisitAssignment:
     id: Annotated[int, PlanningId]
     requested_date: date
     duration_minutes: int
-    required_skill_ids: frozenset
+    required_product_ids: frozenset
     region_id: int
     location_id: int
     latitude: float

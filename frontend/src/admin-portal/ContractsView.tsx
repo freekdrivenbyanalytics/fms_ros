@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import {
   createContract,
   createContractLine,
@@ -12,8 +12,8 @@ import type {
   ContractLine,
   Customer,
   CustomerLocation,
+  Product,
   ServiceVisit,
-  Skill,
 } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
@@ -23,7 +23,7 @@ interface Props {
   customers: Customer[];
   customerLocations: CustomerLocation[];
   serviceVisits: ServiceVisit[];
-  skills: Skill[];
+  products: Product[];
   onChanged: () => void | Promise<void>;
 }
 
@@ -32,7 +32,7 @@ export function ContractsView({
   customers,
   customerLocations,
   serviceVisits,
-  skills,
+  products,
   onChanged,
 }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -67,7 +67,7 @@ export function ContractsView({
         contract={selected}
         customerLocations={customerLocations}
         serviceVisits={serviceVisits}
-        skills={skills}
+        products={products}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -192,7 +192,7 @@ interface ContractDetailProps {
   contract: Contract;
   customerLocations: CustomerLocation[];
   serviceVisits: ServiceVisit[];
-  skills: Skill[];
+  products: Product[];
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -202,7 +202,7 @@ function ContractDetail({
   contract,
   customerLocations,
   serviceVisits,
-  skills,
+  products,
   onChanged,
   onDeleted,
   onBack,
@@ -257,7 +257,7 @@ function ContractDetail({
                 line={line}
                 locations={ownLocations}
                 visits={serviceVisits.filter((visit) => visit.contract_line.id === line.id)}
-                skills={skills}
+                products={products}
                 onChanged={onChanged}
               />
             ))}
@@ -277,7 +277,7 @@ function ContractDetail({
           <ContractLineForm
             contractId={contract.id}
             locations={ownLocations}
-            skills={skills}
+            products={products}
             onSaved={async () => {
               setAddingLine(false);
               await onChanged();
@@ -293,11 +293,11 @@ interface ContractLineRowProps {
   line: ContractLine;
   locations: CustomerLocation[];
   visits: ServiceVisit[];
-  skills: Skill[];
+  products: Product[];
   onChanged: () => void | Promise<void>;
 }
 
-function ContractLineRow({ line, locations, visits, skills, onChanged }: ContractLineRowProps) {
+function ContractLineRow({ line, locations, visits, products, onChanged }: ContractLineRowProps) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -321,7 +321,7 @@ function ContractLineRow({ line, locations, visits, skills, onChanged }: Contrac
           contractId={line.contract_id}
           existingLine={line}
           locations={locations}
-          skills={skills}
+          products={products}
           onSaved={async () => {
             setEditing(false);
             await onChanged();
@@ -344,15 +344,15 @@ function ContractLineRow({ line, locations, visits, skills, onChanged }: Contrac
             {line.end_date ? ` to ${line.end_date}` : ""}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
-            {line.required_skills.length === 0 ? (
-              <span className="text-slate-400">no skills required</span>
+            {line.required_products.length === 0 ? (
+              <span className="text-slate-400">no products required</span>
             ) : (
-              line.required_skills.map((skill) => (
+              line.required_products.map((product) => (
                 <span
-                  key={skill.id}
+                  key={product.id}
                   className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                 >
-                  {skill.name}
+                  {product.number} {product.name}
                 </span>
               ))
             )}
@@ -408,7 +408,7 @@ interface ContractLineFormProps {
   contractId: number;
   existingLine?: ContractLine;
   locations: CustomerLocation[];
-  skills: Skill[];
+  products: Product[];
   onSaved: () => void | Promise<void>;
   onCancel?: () => void;
 }
@@ -417,7 +417,7 @@ function ContractLineForm({
   contractId,
   existingLine,
   locations,
-  skills,
+  products,
   onSaved,
   onCancel,
 }: ContractLineFormProps) {
@@ -432,16 +432,14 @@ function ContractLineForm({
   const [durationMinutes, setDurationMinutes] = useState(
     existingLine ? String(existingLine.duration_minutes) : ""
   );
-  const [skillIds, setSkillIds] = useState<number[]>(
-    existingLine ? existingLine.required_skills.map((skill) => skill.id) : []
+  const [productIds, setProductIds] = useState<number[]>(
+    existingLine ? existingLine.required_products.map((product) => product.id) : []
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function toggleSkill(skillId: number) {
-    setSkillIds((prev) =>
-      prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
-    );
+  function handleProductSelectionChange(event: ChangeEvent<HTMLSelectElement>) {
+    setProductIds(Array.from(event.target.selectedOptions, (option) => Number(option.value)));
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -456,7 +454,7 @@ function ContractLineForm({
         end_date: endDate || null,
         interval_days: Number(intervalDays),
         duration_minutes: Number(durationMinutes),
-        required_skill_ids: skillIds,
+        required_product_ids: productIds,
       };
       if (existingLine) {
         await updateContractLine(existingLine.id, payload);
@@ -527,17 +525,22 @@ function ContractLineForm({
           required
         />
       </div>
-      <div className="flex flex-wrap gap-2">
-        {skills.map((skill) => (
-          <label key={skill.id} className="flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={skillIds.includes(skill.id)}
-              onChange={() => toggleSkill(skill.id)}
-            />
-            {skill.name}
-          </label>
-        ))}
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+          Required products
+        </label>
+        <select
+          multiple
+          value={productIds.map(String)}
+          onChange={handleProductSelectionChange}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1 w-full min-h-24"
+        >
+          {products.map((product) => (
+            <option key={product.id} value={product.id}>
+              {product.number} {product.name}
+            </option>
+          ))}
+        </select>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex gap-2">

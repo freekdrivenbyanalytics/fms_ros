@@ -51,8 +51,8 @@ export function CustomerLocationsView({
               {locationLines.map((line) => (
                 <li key={line.id}>
                   Every {line.interval_days} days, {line.duration_minutes} min —{" "}
-                  {line.required_skills.map((skill) => skill.name).join(", ") ||
-                    "no skills required"}
+                  {line.required_products.map((product) => `${product.number} ${product.name}`).join(", ") ||
+                    "no products required"}
                 </li>
               ))}
             </ul>

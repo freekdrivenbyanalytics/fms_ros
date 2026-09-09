@@ -10,12 +10,16 @@ from app.models import (
     Employee,
     EmployeeScheduleDayOverride,
     EmployeeScheduleTemplate,
+    Product,
     Region,
     ServiceVisit,
-    Skill,
 )
 from app.geofencing import assign_regions_by_geofence
-from app.tripletex import sync_customer_locations, sync_customers
+from app.tripletex import sync_customer_locations, sync_customers, sync_products
+
+# The only products seeded assignments are drawn from; kept deliberately
+# small and specific rather than the full TJN catalog.
+SEED_PRODUCT_NUMBERS = ["TJN10001", "TJN10018", "TJN10010"]
 
 
 def _get_or_create(db, model, name: str, **extra):
@@ -27,11 +31,19 @@ def _get_or_create(db, model, name: str, **extra):
     return instance
 
 
+def _random_products(products: list[Product]) -> list[Product]:
+    """A random, non-empty (when possible) subset of the seed products."""
+    if not products:
+        return []
+    return random.sample(products, random.randint(1, len(products)))
+
+
 def seed() -> None:
     db = SessionLocal()
     try:
         sync_customers(db)
         sync_customer_locations(db)
+        sync_products(db)
         assign_regions_by_geofence(db)
 
         north_holland = _get_or_create(db, Region, "North Holland")
@@ -40,11 +52,9 @@ def seed() -> None:
         groningen = _get_or_create(db, Region, "Groningen")
         regions = [north_holland, utrecht, south_holland, groningen]
 
-        plumbing = _get_or_create(db, Skill, "Plumbing")
-        electrical = _get_or_create(db, Skill, "Electrical")
-        hvac = _get_or_create(db, Skill, "HVAC")
-        general_maintenance = _get_or_create(db, Skill, "General Maintenance")
-        skills = [plumbing, electrical, hvac, general_maintenance]
+        products = (
+            db.query(Product).filter(Product.number.in_(SEED_PRODUCT_NUMBERS)).all()
+        )
 
         employees = []
         if not db.query(Employee).count():
@@ -56,7 +66,6 @@ def seed() -> None:
                     "latitude": 52.3676,
                     "longitude": 4.9041,
                     "regions": [north_holland, utrecht],
-                    "skills": [electrical, general_maintenance],
                 },
                 {
                     "name": "Bram de Vries",
@@ -65,7 +74,6 @@ def seed() -> None:
                     "latitude": 52.0907,
                     "longitude": 5.1214,
                     "regions": [utrecht],
-                    "skills": [plumbing],
                 },
                 {
                     "name": "Chen Wei",
@@ -74,7 +82,6 @@ def seed() -> None:
                     "latitude": 51.9244,
                     "longitude": 4.4777,
                     "regions": [south_holland, groningen],
-                    "skills": [hvac, general_maintenance],
                 },
             ]
             for fixture in employee_fixtures:
@@ -83,7 +90,7 @@ def seed() -> None:
                     latitude=fixture["latitude"],
                     longitude=fixture["longitude"],
                     regions=fixture["regions"],
-                    skills=fixture["skills"],
+                    products=_random_products(products),
                 )
                 db.add(employee)
                 db.flush()
@@ -151,25 +158,21 @@ def seed() -> None:
                 "start_date": date(2026, 8, 20),
                 "interval_days": 30,
                 "duration_minutes": 60,
-                "required_skills": [general_maintenance],
             },
             {
                 "start_date": date(2026, 8, 20),
                 "interval_days": 14,
                 "duration_minutes": 90,
-                "required_skills": [plumbing],
             },
             {
                 "start_date": date(2026, 8, 21),
                 "interval_days": 7,
                 "duration_minutes": 45,
-                "required_skills": [electrical],
             },
             {
                 "start_date": date(2026, 8, 22),
                 "interval_days": 21,
                 "duration_minutes": 30,
-                "required_skills": [hvac, general_maintenance],
             },
         ]
 
@@ -191,7 +194,7 @@ def seed() -> None:
                 start_date=fixture["start_date"],
                 interval_days=fixture["interval_days"],
                 duration_minutes=fixture["duration_minutes"],
-                required_skills=fixture["required_skills"],
+                required_products=_random_products(products),
             )
             db.add(line)
             lines.append(line)
@@ -212,7 +215,7 @@ def seed() -> None:
         db.commit()
         print(
             f"Synced customers/locations from Tripletex; seeded {len(regions)} regions, "
-            f"{len(skills)} skills, {len(locations)} customer locations, "
+            f"{len(products)} products, {len(locations)} customer locations, "
             f"{len(contracts_by_customer_id)} contracts, {len(lines)} contract lines, "
             f"{len(employees)} employees, and {len(visits)} service visits."
         )

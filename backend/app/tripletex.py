@@ -15,7 +15,13 @@ from app.models import (
     CustomerLocationChangeType,
     CustomerLocationSyncLog,
     CustomerSyncLog,
+    Product,
+    ProductChangeType,
+    ProductSyncLog,
 )
+
+# Only products in this number range are synced; see sync_products.
+PRODUCT_NUMBER_PREFIX = "TJN"
 
 API_KEY_PATH = Path(__file__).resolve().parent.parent / ".local" / "api_key"
 
@@ -177,6 +183,35 @@ class TripletexClient:
                 offset += page_size
 
         return addresses
+
+    def get_products(self) -> list[dict]:
+        page_size = 100
+        offset = 0
+        products: list[dict] = []
+
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            while True:
+                response = client.get(
+                    f"{self._base_url}/product",
+                    auth=self._auth(),
+                    params={"from": offset, "count": page_size},
+                )
+                if response.status_code >= 400:
+                    raise TripletexAuthError(
+                        f"Tripletex product fetch failed: {response.status_code} {response.text}"
+                    )
+                body = response.json()
+                page = body["values"]
+                products.extend(page)
+                if len(page) < page_size or len(products) >= body["fullResultSize"]:
+                    break
+                offset += page_size
+
+        # Tripletex's /product `number` query param expects a comma-separated
+        # list of numeric ids, not a substring filter (confirmed against the
+        # live API — it 422s on a non-numeric value), so the TJN prefix is
+        # applied client-side instead.
+        return [p for p in products if (p.get("number") or "").startswith(PRODUCT_NUMBER_PREFIX)]
 
 
 def _apply_fields(customer: Customer, data: dict) -> bool:
@@ -365,6 +400,72 @@ def sync_customer_locations(db: Session) -> None:
                 CustomerLocationSyncLog(
                     customer_location_id=location_id,
                     change_type=CustomerLocationChangeType.DELETED,
+                )
+            )
+
+    db.commit()
+
+
+_PRODUCT_SCALAR_FIELD_MAP = {
+    "number": "number",
+    "name": "name",
+}
+
+
+def _apply_product_fields(product: Product, data: dict) -> bool:
+    changed = False
+    for tripletex_key, attr in _PRODUCT_SCALAR_FIELD_MAP.items():
+        new_value = data.get(tripletex_key)
+        if getattr(product, attr) != new_value:
+            setattr(product, attr, new_value)
+            changed = True
+    return changed
+
+
+def sync_products(db: Session) -> None:
+    """Sync products from Tripletex, scoped to those whose number starts
+    with PRODUCT_NUMBER_PREFIX."""
+    client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
+    tripletex_products = client.get_products()
+    tripletex_ids = {data["id"] for data in tripletex_products}
+
+    existing = {product.id: product for product in db.query(Product).all()}
+
+    for data in tripletex_products:
+        product_id = data["id"]
+        product = existing.get(product_id)
+
+        if product is None:
+            product = Product(id=product_id)
+            _apply_product_fields(product, data)
+            product.delete_flag = False
+            db.add(product)
+            db.add(
+                ProductSyncLog(
+                    product_id=product_id, change_type=ProductChangeType.CREATED
+                )
+            )
+        elif product.delete_flag:
+            _apply_product_fields(product, data)
+            product.delete_flag = False
+            db.add(
+                ProductSyncLog(
+                    product_id=product_id, change_type=ProductChangeType.RESTORED
+                )
+            )
+        elif _apply_product_fields(product, data):
+            db.add(
+                ProductSyncLog(
+                    product_id=product_id, change_type=ProductChangeType.UPDATED
+                )
+            )
+
+    for product_id, product in existing.items():
+        if product_id not in tripletex_ids and not product.delete_flag:
+            product.delete_flag = True
+            db.add(
+                ProductSyncLog(
+                    product_id=product_id, change_type=ProductChangeType.DELETED
                 )
             )
 

@@ -32,18 +32,18 @@ def _time_from_minutes(minutes: int) -> time:
 
 def _qualifying_employees(db: Session, contract_line: ContractLine) -> list[Employee]:
     region_id = contract_line.customer_location.region_id
-    required_skill_ids = {skill.id for skill in contract_line.required_skills}
+    required_product_ids = {product.id for product in contract_line.required_products}
     employees = (
         db.query(Employee)
         .filter(Employee.delete_flag.is_(False))
-        .options(joinedload(Employee.regions), joinedload(Employee.skills))
+        .options(joinedload(Employee.regions), joinedload(Employee.products))
         .all()
     )
     return [
         employee
         for employee in employees
         if region_id in {region.id for region in employee.regions}
-        and required_skill_ids.issubset({skill.id for skill in employee.skills})
+        and required_product_ids.issubset({product.id for product in employee.products})
     ]
 
 
@@ -91,7 +91,7 @@ def _find_gaps(
 def find_free_slots(db: Session, contract_line: ContractLine) -> list[FreeSlot]:
     """Every candidate free slot for a contract line over the next
     FREE_SLOT_HORIZON_DAYS days: an employee with the line's required
-    skills, scoped to its region, with a resolved working-hours window and
+    products, scoped to its region, with a resolved working-hours window and
     no conflicting existing assignment for that window."""
     employees = _qualifying_employees(db, contract_line)
     duration_minutes = contract_line.duration_minutes

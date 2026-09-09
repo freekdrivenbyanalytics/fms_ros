@@ -44,18 +44,11 @@ class RegionUpdate(BaseModel):
         return _validate_geo_shape(value)
 
 
-class SkillOut(BaseModel):
+class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    name: str
-
-
-class SkillCreate(BaseModel):
-    name: str
-
-
-class SkillUpdate(BaseModel):
+    number: str
     name: str
 
 
@@ -144,7 +137,7 @@ class ContractLineOut(BaseModel):
     interval_days: int
     duration_minutes: int
     customer_location: CustomerLocationOut
-    required_skills: list[SkillOut]
+    required_products: list[ProductOut]
 
 
 class ContractOut(BaseModel):
@@ -169,7 +162,7 @@ class ContractLineCreate(BaseModel):
     end_date: date | None = None
     interval_days: int
     duration_minutes: int
-    required_skill_ids: list[int]
+    required_product_ids: list[int]
 
 
 class ContractLineUpdate(BaseModel):
@@ -178,7 +171,7 @@ class ContractLineUpdate(BaseModel):
     end_date: date | None = None
     interval_days: int
     duration_minutes: int
-    required_skill_ids: list[int]
+    required_product_ids: list[int]
 
 
 class EmployeeScheduleTemplateOut(BaseModel):
@@ -265,7 +258,7 @@ class EmployeeOut(BaseModel):
     latitude: float
     longitude: float
     regions: list[RegionOut]
-    skills: list[SkillOut]
+    products: list[ProductOut]
     schedule_templates: list[EmployeeScheduleTemplateOut]
     schedule_overrides: list[EmployeeScheduleDayOverrideOut]
 
@@ -275,7 +268,7 @@ class EmployeeCreate(BaseModel):
     latitude: float
     longitude: float
     region_ids: list[int]
-    skill_ids: list[int] = []
+    product_ids: list[int] = []
 
 
 class EmployeeUpdate(BaseModel):
@@ -283,7 +276,7 @@ class EmployeeUpdate(BaseModel):
     latitude: float
     longitude: float
     region_ids: list[int]
-    skill_ids: list[int] = []
+    product_ids: list[int] = []
 
 
 class ServiceVisitOut(BaseModel):
