@@ -213,6 +213,38 @@ class TripletexClient:
         # applied client-side instead.
         return [p for p in products if (p.get("number") or "").startswith(PRODUCT_NUMBER_PREFIX)]
 
+    def create_customer(self, data: dict) -> dict:
+        """Create a customer. Tripletex has no standalone create endpoint for
+        a delivery address (/deliveryAddress only supports GET/PUT) — a
+        customer's delivery address is created as a side effect of this call
+        by including a `deliveryAddress` object in `data`; the response's
+        `deliveryAddress.id` is that address's Tripletex id."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.post(
+                f"{self._base_url}/customer",
+                auth=self._auth(),
+                json=data,
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex customer create failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]
+
+    def delete_customer(self, customer_id: int) -> None:
+        """Delete a customer. Tripletex has no standalone delete endpoint for
+        a delivery address (/deliveryAddress/{id} only supports GET/PUT) —
+        deleting the owning customer cascades away its delivery address."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.delete(
+                f"{self._base_url}/customer/{customer_id}",
+                auth=self._auth(),
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex customer delete failed: {response.status_code} {response.text}"
+            )
+
 
 def _apply_fields(customer: Customer, data: dict) -> bool:
     changed = False

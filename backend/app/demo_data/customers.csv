@@ -1,0 +1,151 @@
+customer_key,name,street,postal_code,city
+cust-001,Oestrestranda Drift AS,Nordstrandveien 55,1170,Oslo
+cust-002,Bergsameie,Maridalsveien 58,0461,Oslo
+cust-003,Vestretoppen AS,Bjerregaards gate 18,0172,Oslo
+cust-004,Vestrehaugen AS,Mortensrudveien 54,1283,Oslo
+cust-005,Enghaugen Drift AS,Vogts gate 76,0459,Oslo
+cust-006,Vestresameie,Enebakkveien 83,0680,Oslo
+cust-007,Solbergpark,Grensen 63,0159,Oslo
+cust-008,Grønnehaugen AS,Torvveien 9,2000,Lillestrom
+cust-009,Gamlepark,Uelands gate 59,0459,Oslo
+cust-010,Nyeskogen AS,Hoffsveien 4,0275,Oslo
+cust-011,Hoeyehage,Skoeyenveien 74,0375,Oslo
+cust-012,Oestrepark,Frognerveien 32,0266,Oslo
+cust-013,Blaagaard,Kirkeveien 23,1384,Asker
+cust-014,Solbergskogen Eiendom AS,Rotnesveien 32,1482,Nittedal
+cust-015,Lundsameie,Skovveien 15,0257,Oslo
+cust-016,Oestreveien Eiendomsforvaltning AS,Soerkedalsveien 88,0378,Oslo
+cust-017,Dalhage,Ljabruveien 7,1165,Oslo
+cust-018,Solbergborettslag,Gjerdrumsveien 59,2032,Maura
+cust-019,Heimboligsameie,Stasjonsveien 3,1369,Stabekk
+cust-020,Nyeboligsameie,Trondheimsveien 80,0570,Oslo
+cust-021,Enghaugen Eiendom AS,Storgata 50,0184,Oslo
+cust-022,Soendreborettslag,Grensen 2,0159,Oslo
+cust-023,Nordreborettslag,Jonas Lies gate 12,1470,Loerenskog
+cust-024,Engpark,Ljabruveien 86,1165,Oslo
+cust-025,Gamlesameie,Drammensveien 37,0271,Oslo
+cust-026,Bergtoppen AS,Lambertseterveien 37,1150,Oslo
+cust-027,Nordreveien Eiendom AS,Hoffsveien 45,0275,Oslo
+cust-028,Grønneveien AS,Vestbyveien 48,1540,Vestby
+cust-029,Bergveien Drift AS,Skoeyenveien 79,0375,Oslo
+cust-030,Bekkterrasse,Markveien 17,0554,Oslo
+cust-031,Oestregaard,Maridalsveien 2,0461,Oslo
+cust-032,Fjellveien Eiendomsforvaltning AS,Bekkelagsveien 10,1177,Oslo
+cust-033,Gamletoppen AS,Torvveien 42,2000,Lillestrom
+cust-034,Dalterrasse,Kjelsaasveien 55,0491,Oslo
+cust-035,Berghaugen Eiendom AS,Hoevikveien 11,1363,Hoevik
+cust-036,Bakkeborettslag,Bjerregaards gate 13,0172,Oslo
+cust-037,Oestreterrasse,Pilestredet 73,0167,Oslo
+cust-038,Nyehaugen AS,Slependveien 20,1341,Slependen
+cust-039,Blaaskogen Drift AS,Skoeyenveien 17,0375,Oslo
+cust-040,Lundgaard,Drammensveien 73,0271,Oslo
+cust-041,Skogpark,Sannergata 46,0557,Oslo
+cust-042,Lundpark,Loeddesoelveien 45,2008,Fjerdingby
+cust-043,Solberghaugen Eiendomsforvaltning AS,Slemdalsveien 79,0370,Oslo
+cust-044,Hoeyepark,Karl Johans gate 18,0154,Oslo
+cust-045,Heimgaard,Bekkelagsveien 47,1177,Oslo
+cust-046,Storetoppen AS,Karl Johans gate 61,0154,Oslo
+cust-047,Grønnegaard,Drengsrudbekken 4,1383,Asker
+cust-048,Soendreskogen Drift AS,Slependveien 47,1341,Slependen
+cust-049,Heimhaugen Eiendomsforvaltning AS,Solheimveien 34,1473,Loerenskog
+cust-050,Storetoppen Eiendomsforvaltning AS,Kirkeveien 16,1384,Asker
+cust-051,Fjellterrasse,Akersgata 17,0158,Oslo
+cust-052,Bergborettslag,Malmskrivervegen 39,1337,Sandvika
+cust-053,Dalskogen Eiendomsforvaltning AS,Markveien 71,0554,Oslo
+cust-054,Heimterrasse,Kjelsaasveien 80,0491,Oslo
+cust-055,Stadgaard,Rotnesveien 39,1482,Nittedal
+cust-056,Gamleskogen Eiendomsforvaltning AS,Lambertseterveien 21,1150,Oslo
+cust-057,Skogstranda Eiendomsforvaltning AS,Sinsenveien 37,0572,Oslo
+cust-058,Gamleveien AS,Sinsenveien 21,0572,Oslo
+cust-059,Vikhaugen Eiendomsforvaltning AS,Holmenkollveien 75,0787,Oslo
+cust-060,Solbergveien AS,Sorgenfrigata 30,0367,Oslo
+cust-061,Hoeyeboligsameie,Kjelsaasveien 31,0491,Oslo
+cust-062,Oestrehaugen AS,Romsaasveien 42,0977,Oslo
+cust-063,Blaasameie,Trondheimsveien 59,0570,Oslo
+cust-064,Skogsameie,Munkedamsveien 62,0250,Oslo
+cust-065,Storeskogen Eiendom AS,Skoeyenveien 85,0375,Oslo
+cust-066,Gamlestranda Drift AS,Bogstadveien 88,0355,Oslo
+cust-067,Dalhaugen Eiendomsforvaltning AS,Sinsenveien 41,0572,Oslo
+cust-068,Hoeyehaugen Eiendomsforvaltning AS,Bjoernegaardsvingen 43,1338,Sandvika
+cust-069,Vestreboligsameie,Toeyengata 54,0653,Oslo
+cust-070,Gamleterrasse,Skoeyenveien 79,0375,Oslo
+cust-071,Dalskogen Drift AS,Oslogate 70,0192,Oslo
+cust-072,Heimstranda AS,Slependveien 4,1341,Slependen
+cust-073,Stadsameie,Groenland 39,0188,Oslo
+cust-074,Bakkeboligsameie,Kirkebyveien 10,1484,Hakadal
+cust-075,Aastoppen Eiendomsforvaltning AS,Holmenkollveien 62,0787,Oslo
+cust-076,Bergtoppen Drift AS,Groenland 61,0188,Oslo
+cust-077,Lillegaard,Karl Johans gate 80,0154,Oslo
+cust-078,Bergstranda AS,Rausjoveien 32,2080,Eidsvoll
+cust-079,Lundstranda Drift AS,Uelands gate 87,0459,Oslo
+cust-080,Aasboligsameie,Stovnerveien 6,0985,Oslo
+cust-081,Nyeterrasse,Gjerdrumsveien 44,2032,Maura
+cust-082,Dalskogen AS,Roaveien 7,0755,Oslo
+cust-083,Aasborettslag,Gjerdrumsveien 42,2032,Maura
+cust-084,Fjellstranda AS,Stasjonsveien 22,1369,Stabekk
+cust-085,Gamleborettslag,Alnabruveien 90,0614,Oslo
+cust-086,Oestreborettslag,Grefsenveien 52,0487,Oslo
+cust-087,Hoeyehaugen AS,Boelerlia 47,0691,Oslo
+cust-088,Berghaugen Eiendomsforvaltning AS,Nordstrandveien 76,1170,Oslo
+cust-089,Heimstranda Drift AS,Kirkebyveien 54,1484,Hakadal
+cust-090,Fjellsameie,Kongsveien 35,1177,Oslo
+cust-091,Solberghage,Nordstrandveien 56,1170,Oslo
+cust-092,Oestrestranda Eiendomsforvaltning AS,Toeyengata 61,0653,Oslo
+cust-093,Gamleboligsameie,Furusetveien 65,1051,Oslo
+cust-094,Soendregaard,Uelands gate 23,0459,Oslo
+cust-095,Storepark,Torggata 44,0181,Oslo
+cust-096,Enghage,Munkedamsveien 35,0250,Oslo
+cust-097,Vestregaard,Trondheimsveien 60,0570,Oslo
+cust-098,Grønnehage,Kirkeveien 76,0366,Oslo
+cust-099,Bergskogen Eiendomsforvaltning AS,Akersgata 1,0158,Oslo
+cust-100,Hoeyeborettslag,Bjerregaards gate 75,0172,Oslo
+cust-101,Vikgaard,Hoffsveien 36,0275,Oslo
+cust-102,Bekkboligsameie,Waldemar Thranes gate 7,0171,Oslo
+cust-103,Blaaborettslag,Lambertseterveien 77,1150,Oslo
+cust-104,Lillesameie,Mortensrudveien 80,1283,Oslo
+cust-105,Nyesameie,Grensen 89,0159,Oslo
+cust-106,Nyehage,Drammensveien 1,0271,Oslo
+cust-107,Engskogen Eiendomsforvaltning AS,Colbjoernsens gate 35,0356,Oslo
+cust-108,Skogtoppen AS,Slependveien 49,1341,Slependen
+cust-109,Bakkehage,Bjoernegaardsvingen 60,1338,Sandvika
+cust-110,Engterrasse,Romsaasveien 31,0977,Oslo
+cust-111,Grønneskogen Drift AS,Frognerveien 14,0266,Oslo
+cust-112,Stadboligsameie,Kirkeveien 29,1384,Asker
+cust-113,Solberggaard,Gjerdrumsveien 39,2032,Maura
+cust-114,Viktoppen Drift AS,Hoffsveien 1,0275,Oslo
+cust-115,Heimpark,Colbjoernsens gate 73,0356,Oslo
+cust-116,Lillepark,Aaneby-vegen 19,2160,Vormsund
+cust-117,Lilleskogen Eiendomsforvaltning AS,Groenland 41,0188,Oslo
+cust-118,Gamlehaugen AS,Vestbyveien 7,1540,Vestby
+cust-119,Lilleboligsameie,Torggata 83,0181,Oslo
+cust-120,Berghage,Thorvald Meyers gate 63,0555,Oslo
+cust-121,Soendreterrasse,Skovveien 25,0257,Oslo
+cust-122,Engboligsameie,Malmskrivervegen 13,1337,Sandvika
+cust-123,Vikskogen Eiendomsforvaltning AS,Boelerlia 52,0691,Oslo
+cust-124,Stadveien Eiendom AS,Skovveien 16,0257,Oslo
+cust-125,Aasveien Eiendomsforvaltning AS,Hoevikveien 25,1363,Hoevik
+cust-126,Nordreterrasse,Kirkeveien 41,1384,Asker
+cust-127,Bergterrasse,Slemdalsveien 84,0370,Oslo
+cust-128,Soendreveien AS,Grefsenveien 77,0487,Oslo
+cust-129,Skogborettslag,Frognerveien 43,0266,Oslo
+cust-130,Bakkepark,Markveien 68,0554,Oslo
+cust-131,Aasstranda Eiendom AS,Gjerdrumsveien 29,2032,Maura
+cust-132,Nyepark,Ljabruveien 16,1165,Oslo
+cust-133,Solbergterrasse,Enebakkveien 11,1912,Enebakk
+cust-134,Engtoppen Drift AS,Nordstrandveien 61,1170,Oslo
+cust-135,Bakkegaard,Maridalsveien 37,0461,Oslo
+cust-136,Soendrehage,Markveien 43,0554,Oslo
+cust-137,Soendrestranda Eiendomsforvaltning AS,Soerkedalsveien 22,0378,Oslo
+cust-138,Hoeyestranda Eiendom AS,Torggata 49,0181,Oslo
+cust-139,Bakkeskogen Eiendomsforvaltning AS,Bekkelagsveien 61,1177,Oslo
+cust-140,Vikskogen Drift AS,Kjelsaasveien 43,0491,Oslo
+cust-141,Vestreveien Drift AS,Bekkelagsveien 68,1177,Oslo
+cust-142,Vestrepark,Uelands gate 31,0459,Oslo
+cust-143,Grønnestranda Eiendomsforvaltning AS,Rausjoveien 15,2080,Eidsvoll
+cust-144,Dalsameie,Roaveien 44,0755,Oslo
+cust-145,Fjellboligsameie,Bekkelagsveien 19,1177,Oslo
+cust-146,Nyeborettslag,Sorgenfrigata 77,0367,Oslo
+cust-147,Storesameie,Loeddesoelveien 56,2008,Fjerdingby
+cust-148,Gamlegaard,Kirkeveien 66,0366,Oslo
+cust-149,Lundterrasse,Drammensveien 30,0271,Oslo
+cust-150,Lundboligsameie,Pilestredet 29,0167,Oslo
