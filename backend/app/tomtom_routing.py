@@ -25,13 +25,23 @@ _MATRIX_OPTIONS = {
     "travelMode": "car",
 }
 
-# TomTom's Standard plan caps a single matrix at 2,500 cells (origins x
-# destinations) and appears to cancel synchronous requests around a ~30s
-# internal compute budget. Since our matrix is always square (origins ==
-# destinations == the region's location set), cap the synchronous path well
-# under that limit and fall back to the async submit/poll/download flow
-# above it.
-_SYNC_CELL_LIMIT = 900
+# TomTom's Standard plan caps the async endpoint at 2,500 cells (origins x
+# destinations) total per request - confirmed against the live API, which
+# rejects an oversized job with a BAD_ARGUMENT "matrix size and parameters
+# combination violates the API limitations" error rather than processing it.
+# A region with more than 50 endpoints can't be covered by one request at
+# all, so its full N x N matrix is tiled into BLOCK_SIZE x BLOCK_SIZE request
+# chunks (see _request_matrix) that are each requested and merged locally.
+_MAX_CELLS_PER_REQUEST = 2500
+_BLOCK_SIZE = int(_MAX_CELLS_PER_REQUEST**0.5)
+
+# The synchronous endpoint has its own, much lower cap - 200 cells on a
+# Standard plan even with the unlimited-bounding-box option combo below
+# (confirmed against the live API: a 500-cell rectangular sync request was
+# rejected with the same BAD_ARGUMENT error). Chunks at or under this size
+# use the synchronous endpoint; larger ones use the async submit/poll/
+# download flow, up to _MAX_CELLS_PER_REQUEST.
+_SYNC_CELL_LIMIT = 200
 _POLL_INTERVAL_SECONDS = 2.0
 _POLL_TIMEOUT_SECONDS = 120.0
 
@@ -125,13 +135,49 @@ def _request_matrix_async(body: dict) -> list[dict]:
     return result_response.json()["data"]
 
 
+def _to_points(endpoints: list[LocationEndpoint]) -> list[dict]:
+    return [{"point": {"latitude": e.latitude, "longitude": e.longitude}} for e in endpoints]
+
+
+def _request_matrix_block(
+    origins: list[LocationEndpoint],
+    destinations: list[LocationEndpoint],
+    origin_offset: int,
+    destination_offset: int,
+) -> list[dict]:
+    """Request one origins x destinations block and remap its cells'
+    originIndex/destinationIndex (which TomTom returns relative to this
+    block's own point lists) back to indices into the full endpoint list."""
+    body = {
+        "origins": _to_points(origins),
+        "destinations": _to_points(destinations),
+        "options": _MATRIX_OPTIONS,
+    }
+    cell_count = len(origins) * len(destinations)
+    cells = _request_matrix_sync(body) if cell_count <= _SYNC_CELL_LIMIT else _request_matrix_async(body)
+    for cell in cells:
+        cell["originIndex"] += origin_offset
+        cell["destinationIndex"] += destination_offset
+    return cells
+
+
 def _request_matrix(endpoints: list[LocationEndpoint]) -> list[dict]:
-    points = [{"point": {"latitude": e.latitude, "longitude": e.longitude}} for e in endpoints]
-    body = {"origins": points, "destinations": points, "options": _MATRIX_OPTIONS}
-    cell_count = len(points) * len(points)
-    if cell_count <= _SYNC_CELL_LIMIT:
-        return _request_matrix_sync(body)
-    return _request_matrix_async(body)
+    """The full origins x destinations matrix for endpoints (both lists are
+    the same region-wide set), tiled into <= _MAX_CELLS_PER_REQUEST chunks
+    since that's TomTom's per-request cap regardless of sync vs async."""
+    n = len(endpoints)
+    if n * n <= _MAX_CELLS_PER_REQUEST:
+        return _request_matrix_block(endpoints, endpoints, 0, 0)
+
+    cells: list[dict] = []
+    for origin_offset in range(0, n, _BLOCK_SIZE):
+        origin_block = endpoints[origin_offset : origin_offset + _BLOCK_SIZE]
+        for destination_offset in range(0, n, _BLOCK_SIZE):
+            destination_block = endpoints[destination_offset : destination_offset + _BLOCK_SIZE]
+            cells.extend(
+                _request_matrix_block(origin_block, destination_block, origin_offset, destination_offset)
+            )
+    return cells
 
 
 def compute_region_driving_times(db: Session, region: Region) -> dict:
