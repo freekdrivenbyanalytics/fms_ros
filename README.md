@@ -67,6 +67,10 @@ automatically before Timefold is imported.
 The backend calls this service at `solver_base_url` (`http://localhost:8100` by default, see
 `backend/app/config.py`), so it must be running for `POST /optimize/propose` to succeed.
 
+See `solver/README.md` for how the optimizer actually decides what to schedule (why it isn't
+greedy, why "closest customer first" isn't the rule, and how travel time is weighed against
+scheduling more visits).
+
 ## Convenience: start everything at once
 
 ```powershell
@@ -79,6 +83,7 @@ window (Windows/PowerShell only; assumes each `.venv`/`node_modules` is already 
 ## Project layout
 
 - `backend/` — FastAPI app, SQLAlchemy models, Alembic migrations
-- `solver/` — standalone FastAPI + Timefold Solver microservice for route optimization
+- `solver/` — standalone FastAPI + Timefold Solver microservice for route optimization (see
+  `solver/README.md` for how it decides what to schedule)
 - `frontend/` — Vite + React + TypeScript app
 - `docker-compose.yml` — local PostgreSQL service

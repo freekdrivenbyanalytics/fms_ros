@@ -14,7 +14,7 @@ The system SHALL let a user request a proposed schedule covering every service v
 - **THEN** the system returns a proposal that, for each service visit whose effective schedule date is today or tomorrow and that has no pinned assignment, either names the employee and planned start/end time it proposes for that visit, or leaves it unscheduled if no feasible assignment exists, and no assignment is created or changed as a result
 
 ### Requirement: Proposed schedule respects hard constraints
-The system SHALL only propose scheduling a service visit to an employee when the employee possesses every product the visit's contract requires, the employee is scoped to the visit's region, the employee has a resolved working-hours window for the visit's proposed date and the visit's proposed time window falls entirely within it, and the employee has no time overlap between that proposed visit and any other visit already assigned to them or proposed to them in the same schedule.
+The system SHALL only propose scheduling a service visit to an employee when the employee possesses every product the visit's contract requires, the employee is scoped to the visit's region, the employee has a resolved working-hours window for the visit's proposed date and the visit's proposed time window falls entirely within it, the employee has no time overlap between that proposed visit and any other visit already assigned to them or proposed to them in the same schedule, and the gap between that visit's end (or start) and every other same-day visit of that employee's (proposed or existing) is at least the driving time between their two locations, looked up from the region driving-time matrix or, when no matching entry exists, a distance-based estimate for that pair.
 
 #### Scenario: Proposal respects required skills
 - **WHEN** a proposed schedule assigns a service visit to an employee
@@ -36,6 +36,14 @@ The system SHALL only propose scheduling a service visit to an employee when the
 - **WHEN** a proposed schedule is generated and an employee has no resolved working-hours window for a candidate visit's proposed date
 - **THEN** that employee is not proposed for that visit on that date, even if the employee has the required products, region, and no conflicting visits
 
+#### Scenario: Proposal leaves enough time to drive between two same-day visits
+- **WHEN** a proposed schedule assigns two same-day visits to the same employee, one ending before the other starts
+- **THEN** the gap between the earlier visit's end time and the later visit's start time is at least the driving time between their two locations
+
+#### Scenario: Proposal rejects a back-to-back placement that leaves no driving time
+- **WHEN** a candidate placement would start a visit before the employee could have driven there from the location of their immediately preceding same-day visit
+- **THEN** the system does not propose that placement
+
 ### Requirement: Proposed schedule keeps each visit's effective schedule date
 The system SHALL propose a planned start time for a service visit only on that visit's effective schedule date — its own requested date if that date has not yet passed, or today if it has — and SHALL NOT propose any other date.
 
@@ -48,7 +56,7 @@ The system SHALL propose a planned start time for a service visit only on that v
 - **THEN** the proposed planned start time falls on today's date rather than the original requested date
 
 ### Requirement: Proposed schedule minimizes travel time
-Among schedules that satisfy the hard constraints, the system SHALL prefer a schedule that reduces total driving time: between visits proposed to the same employee on the same day, and from that employee's home location to their visits that day. Driving time between two locations SHALL be looked up from that pair's region driving-time matrix. A location pair with no matching driving-time entry — because it has not yet been computed, or because it crosses a region boundary for an employee scoped to multiple regions — SHALL fall back to a distance-based estimate for that pair only, so travel time is never treated as free or omitted for a pair that has no computed entry.
+Among schedules that satisfy the hard constraints, the system SHALL prefer a schedule that reduces total driving time: between visits proposed to the same employee on the same day, and from that employee's home location to their visits that day. Driving time between two locations SHALL be looked up from that pair's region driving-time matrix. A location pair with no matching driving-time entry — because it has not yet been computed, or because it crosses a region boundary for an employee scoped to multiple regions — SHALL fall back to a distance-based estimate for that pair only, so travel time is never treated as free or omitted for a pair that has no computed entry. This preference applies on top of the hard driving-time-gap constraint: it minimizes total travel time among schedules that already leave enough of a gap to drive between every pair of same-day visits.
 
 #### Scenario: Lower-travel-time schedule is preferred
 - **WHEN** more than one feasible schedule exists for the same set of unassigned visits
@@ -69,6 +77,17 @@ Among schedules that satisfy the hard constraints, the system SHALL prefer a sch
 #### Scenario: A cross-region leg for a multi-region employee falls back to a distance-based estimate
 - **WHEN** a proposed schedule assigns an employee scoped to more than one region a pair of same-day visits in two different regions
 - **THEN** the system uses a distance-based estimate for the leg between them, since a region's driving-time matrix only covers pairs within that region
+
+### Requirement: Proposed schedule leaves enough driving time before an employee's first visit
+The system SHALL only propose an employee's first visit of a day starting at or after their working-hours start plus the driving time from their home location to that visit's location, looked up from the region driving-time matrix or, when no matching entry exists, a distance-based estimate.
+
+#### Scenario: First visit of the day accounts for the home-to-visit drive
+- **WHEN** a proposed schedule assigns an employee's first visit of a day
+- **THEN** that visit's proposed start time is no earlier than the employee's working-hours start time plus the driving time from the employee's home location to the visit's location
+
+#### Scenario: A visit that would require leaving before the drive completes is not proposed
+- **WHEN** a candidate placement would start an employee's first visit of the day before their home-to-visit drive could complete from their working-hours start
+- **THEN** the system does not propose that placement
 
 ### Requirement: Only pinned assignments are fixed during a schedule run
 The system SHALL treat only pinned assignments as fixed when generating a proposed schedule: a pinned assignment's employee and time window SHALL NOT be changed, and it counts toward that employee's existing commitments for the hard constraints. Every other visit — unassigned, or assigned but not pinned — SHALL be treated as a candidate the schedule run may assign or reassign.

@@ -18,7 +18,7 @@ from app.employee_schedule import (
     templates_overlap,
 )
 from app.geofencing import assign_regions_by_geofence
-from app.tomtom_routing import compute_region_driving_times
+from app.tomtom_routing import LocationEndpoint, compute_employee_day_route, compute_region_driving_times
 from app.visit_generation import (
     OPEN_ENDED_HORIZON_DAYS,
     extend_occurrence_dates,
@@ -34,6 +34,7 @@ from app.models import (
     Employee,
     EmployeeScheduleDayOverride,
     EmployeeScheduleTemplate,
+    LocationKind,
     Product,
     Region,
     ServiceVisit,
@@ -54,6 +55,9 @@ from app.schemas import (
     CustomerLocationCoordinatesUpdate,
     CustomerLocationOut,
     CustomerOut,
+    DayPlanningEmployeeRouteOut,
+    DayPlanningRoutesOut,
+    DayPlanningStopOut,
     DrivingTimeComputeSummary,
     EmployeeCreate,
     EmployeeOut,
@@ -66,6 +70,7 @@ from app.schemas import (
     EmployeeScheduleTemplateUpdate,
     EmployeeUpdate,
     FreeSlotOut,
+    GeoPoint,
     OptimizationApplyRequest,
     OptimizationApplyResult,
     OptimizationProposal,
@@ -980,6 +985,86 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
         .order_by(Assignment.service_visit_id)
         .all()
     )
+
+
+@app.get("/day-planning/routes", response_model=DayPlanningRoutesOut)
+def get_day_planning_routes(date: date, db: Session = Depends(get_db)) -> DayPlanningRoutesOut:
+    day_start = datetime.combine(date, time())
+    day_end = day_start + timedelta(days=1)
+
+    assignments = (
+        db.query(Assignment)
+        .join(Assignment.employee)
+        .filter(
+            Assignment.planned_start >= day_start,
+            Assignment.planned_start < day_end,
+            Employee.delete_flag.is_(False),
+        )
+        .options(
+            joinedload(Assignment.employee),
+            joinedload(Assignment.service_visit)
+            .joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.customer),
+        )
+        .order_by(Assignment.employee_id, Assignment.planned_start)
+        .all()
+    )
+
+    assignments_by_employee: dict[int, list[Assignment]] = {}
+    for assignment in assignments:
+        location = assignment.service_visit.contract_line.customer_location
+        if location.latitude is None or location.longitude is None:
+            continue
+        assignments_by_employee.setdefault(assignment.employee_id, []).append(assignment)
+
+    employee_routes: list[DayPlanningEmployeeRouteOut] = []
+    for employee_assignments in assignments_by_employee.values():
+        employee = employee_assignments[0].employee
+        stops = [LocationEndpoint(LocationKind.EMPLOYEE, employee.id, employee.latitude, employee.longitude)]
+        for assignment in employee_assignments:
+            location = assignment.service_visit.contract_line.customer_location
+            stops.append(
+                LocationEndpoint(
+                    LocationKind.CUSTOMER_LOCATION, location.id, location.latitude, location.longitude
+                )
+            )
+
+        route_points = compute_employee_day_route(stops)
+        if route_points is None:
+            continue
+
+        stop_outs = [
+            DayPlanningStopOut(
+                kind=LocationKind.EMPLOYEE,
+                latitude=employee.latitude,
+                longitude=employee.longitude,
+            )
+        ]
+        for assignment in employee_assignments:
+            location = assignment.service_visit.contract_line.customer_location
+            stop_outs.append(
+                DayPlanningStopOut(
+                    kind=LocationKind.CUSTOMER_LOCATION,
+                    latitude=location.latitude,
+                    longitude=location.longitude,
+                    service_visit_id=assignment.service_visit_id,
+                    customer_name=location.customer.name,
+                    planned_start=assignment.planned_start,
+                    planned_end=assignment.planned_end,
+                )
+            )
+
+        employee_routes.append(
+            DayPlanningEmployeeRouteOut(
+                employee_id=employee.id,
+                employee_name=employee.name,
+                stops=stop_outs,
+                route=[GeoPoint(lat=p.latitude, lng=p.longitude) for p in route_points],
+            )
+        )
+
+    return DayPlanningRoutesOut(employees=employee_routes)
 
 
 def _assign_visit(

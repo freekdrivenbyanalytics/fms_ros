@@ -223,3 +223,50 @@ def compute_region_driving_times(db: Session, region: Region) -> dict:
     db.add_all(new_rows)
     db.commit()
     return {"computed": computed, "skipped": skipped}
+
+
+ROUTE_BASE_URL = "https://api.tomtom.com/routing/1/calculateRoute"
+
+
+@dataclass(frozen=True)
+class RoutePoint:
+    latitude: float
+    longitude: float
+
+
+def compute_employee_day_route(stops: list[LocationEndpoint]) -> list[RoutePoint] | None:
+    """Calls TomTom's Calculate Route API with `stops` chained as ordered
+    waypoints (e.g. an employee's home followed by that day's visits in
+    planned order), returning the full road-following polyline - every leg's
+    points concatenated in order - or None if TomTom could not find a route
+    covering all of them.
+
+    Unlike the driving-time matrix, this is never persisted: it's recomputed
+    on every day-planning-map view (see design.md's "No result caching").
+    """
+    if len(stops) < 2:
+        return []
+
+    locations = ":".join(f"{stop.latitude},{stop.longitude}" for stop in stops)
+    try:
+        response = httpx.get(
+            f"{ROUTE_BASE_URL}/{locations}/json",
+            params={"key": settings.tomtom_api_key, "routeType": "fastest"},
+            timeout=httpx.Timeout(35.0),
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return None
+
+    routes = response.json().get("routes")
+    if not routes:
+        return None
+    legs = routes[0].get("legs")
+    if not legs:
+        return None
+
+    return [
+        RoutePoint(latitude=point["latitude"], longitude=point["longitude"])
+        for leg in legs
+        for point in leg["points"]
+    ]

@@ -12,6 +12,7 @@ import type {
   Customer,
   CustomerLocation,
   CustomerLocationCoordinatesInput,
+  DayPlanningRoutes,
   DrivingTimeComputeSummary,
   Employee,
   EmployeeCreateInput,
@@ -370,4 +371,10 @@ export function applyOptimization(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scheduled }),
   }).then((res) => handleResponse<OptimizationApplyResult>(res));
+}
+
+export function getDayPlanningRoutes(date: string): Promise<DayPlanningRoutes> {
+  return fetch(`${API_URL}/day-planning/routes?date=${date}`).then((res) =>
+    handleResponse<DayPlanningRoutes>(res)
+  );
 }

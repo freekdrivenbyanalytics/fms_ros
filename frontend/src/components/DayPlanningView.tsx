@@ -1,5 +1,7 @@
-import { useState } from "react";
-import type { Assignment, Employee } from "../types";
+import { useEffect, useState } from "react";
+import { getDayPlanningRoutes } from "../api";
+import type { Assignment, DayPlanningRoutes, Employee } from "../types";
+import { DayRouteMap } from "./DayRouteMap";
 import { InfoBox } from "./InfoBox";
 
 interface Props {
@@ -13,6 +15,26 @@ const HOUR_MARKS = [6, 8, 10, 12, 14, 16, 18, 20];
 
 export function DayPlanningView({ employees, assignments }: Props) {
   const [date, setDate] = useState(() => todayKey());
+  const [routes, setRoutes] = useState<DayPlanningRoutes | null>(null);
+  const [routesError, setRoutesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRoutesError(null);
+    getDayPlanningRoutes(date)
+      .then((result) => {
+        if (!cancelled) setRoutes(result);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRoutes(null);
+          setRoutesError(err instanceof Error ? err.message : "Failed to load routes");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date]);
 
   function goToPrevDay() {
     setDate((prev) => shiftDateKey(prev, -1));
@@ -147,6 +169,12 @@ export function DayPlanningView({ employees, assignments }: Props) {
           </div>
         </div>
       )}
+
+      <div className="mt-6">
+        <h3 className="text-sm font-medium text-slate-700 mb-2">Routes</h3>
+        {routesError && <p className="text-sm text-red-600 mb-2">{routesError}</p>}
+        {routes && <DayRouteMap routes={routes} />}
+      </div>
     </section>
   );
 }

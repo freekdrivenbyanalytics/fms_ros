@@ -26,18 +26,32 @@ interface CustomerLocationMarker {
   address?: string;
 }
 
+interface OtherRegion {
+  name: string;
+  geo_shape: GeoPoint[];
+}
+
 interface Props {
   value: GeoPoint[] | null;
   onChange: (points: GeoPoint[]) => void;
   customerLocations?: CustomerLocationMarker[];
+  otherRegions?: OtherRegion[];
 }
 
-export function GeoShapeEditor({ value, onChange, customerLocations = [] }: Props) {
+const OTHER_REGIONS_PANE = "otherRegionsPane";
+
+export function GeoShapeEditor({
+  value,
+  onChange,
+  customerLocations = [],
+  otherRegions = [],
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const customerLocationMarkersRef = useRef<L.Marker[]>([]);
   const polygonRef = useRef<L.Polygon | L.Polyline | null>(null);
+  const otherRegionLayersRef = useRef<(L.Polygon | L.Polyline)[]>([]);
   const pointsRef = useRef<GeoPoint[]>(value ?? []);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -60,6 +74,11 @@ export function GeoShapeEditor({ value, onChange, customerLocations = [] }: Prop
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
+    // Below the default overlayPane (used by the editable shape) so other
+    // regions' reference shapes always render underneath it, regardless of
+    // add order.
+    const otherRegionsPane = map.createPane(OTHER_REGIONS_PANE);
+    otherRegionsPane.style.zIndex = "350";
     mapRef.current = map;
 
     function redraw() {
@@ -118,6 +137,29 @@ export function GeoShapeEditor({ value, onChange, customerLocations = [] }: Prop
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    otherRegionLayersRef.current.forEach((layer) => map.removeLayer(layer));
+    otherRegionLayersRef.current = otherRegions
+      .filter((region) => region.geo_shape.length >= 2)
+      .map((region) => {
+        const latlngs = region.geo_shape.map((p) => [p.lat, p.lng] as L.LatLngTuple);
+        const style: L.PolylineOptions = {
+          pane: OTHER_REGIONS_PANE,
+          interactive: false,
+          color: "#64748b",
+          weight: 2,
+          dashArray: "6,4",
+          fillOpacity: 0.3,
+        };
+        const layer =
+          latlngs.length >= 3 ? L.polygon(latlngs, style) : L.polyline(latlngs, style);
+        return layer.addTo(map);
+      });
+  }, [otherRegions]);
 
   function removeLastPoint() {
     if (pointsRef.current.length === 0) return;

@@ -2,7 +2,7 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.models import DayType, LunchType, VisitStatus
+from app.models import DayType, LocationKind, LunchType, VisitStatus
 
 
 class GeoPoint(BaseModel):
@@ -359,3 +359,24 @@ class DrivingTimeComputeSummary(BaseModel):
 class ContractLineExtendSummary(BaseModel):
     lines_extended: int
     visits_created: int
+
+
+class DayPlanningStopOut(BaseModel):
+    kind: LocationKind
+    latitude: float
+    longitude: float
+    service_visit_id: int | None = None
+    customer_name: str | None = None
+    planned_start: datetime | None = None
+    planned_end: datetime | None = None
+
+
+class DayPlanningEmployeeRouteOut(BaseModel):
+    employee_id: int
+    employee_name: str
+    stops: list[DayPlanningStopOut]
+    route: list[GeoPoint]
+
+
+class DayPlanningRoutesOut(BaseModel):
+    employees: list[DayPlanningEmployeeRouteOut]

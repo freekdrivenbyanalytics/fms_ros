@@ -278,3 +278,26 @@ export interface ContractLineExtendSummary {
   lines_extended: number;
   visits_created: number;
 }
+
+export type LocationKind = "customer_location" | "employee";
+
+export interface DayPlanningStop {
+  kind: LocationKind;
+  latitude: number;
+  longitude: number;
+  service_visit_id: number | null;
+  customer_name: string | null;
+  planned_start: string | null;
+  planned_end: string | null;
+}
+
+export interface DayPlanningEmployeeRoute {
+  employee_id: number;
+  employee_name: string;
+  stops: DayPlanningStop[];
+  route: GeoPoint[];
+}
+
+export interface DayPlanningRoutes {
+  employees: DayPlanningEmployeeRoute[];
+}

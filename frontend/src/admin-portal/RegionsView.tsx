@@ -53,6 +53,7 @@ export function RegionsView({ regions, employees, customerLocations, onChanged }
         regionEmployees={regionEmployees}
         regionLocations={regionLocations}
         allCustomerLocations={customerLocations}
+        allRegions={regions}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -177,6 +178,7 @@ interface RegionDetailProps {
   regionEmployees: Employee[];
   regionLocations: CustomerLocation[];
   allCustomerLocations: CustomerLocation[];
+  allRegions: Region[];
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -187,6 +189,7 @@ function RegionDetail({
   regionEmployees,
   regionLocations,
   allCustomerLocations,
+  allRegions,
   onChanged,
   onDeleted,
   onBack,
@@ -302,6 +305,9 @@ function RegionDetail({
               longitude: location.longitude as number,
               address: location.address,
             }))}
+          otherRegions={allRegions
+            .filter((r) => r.id !== region.id && r.geo_shape !== null)
+            .map((r) => ({ name: r.name, geo_shape: r.geo_shape as GeoPoint[] }))}
         />
       </DetailField>
 

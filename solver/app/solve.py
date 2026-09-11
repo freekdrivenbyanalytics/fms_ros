@@ -10,7 +10,13 @@ from app.domain import (
 )
 from app.schemas import DEFAULT_TIME_LIMIT_SECONDS, OptimizeRequest, OptimizeResponse, ScheduledVisitOut
 from timefold.solver import SolverFactory
-from timefold.solver.config import Duration, ScoreDirectorFactoryConfig, SolverConfig, TerminationConfig
+from timefold.solver.config import (
+    Duration,
+    EnvironmentMode,
+    ScoreDirectorFactoryConfig,
+    SolverConfig,
+    TerminationConfig,
+)
 
 
 def _build_schedule(request: OptimizeRequest) -> Schedule:
@@ -94,6 +100,16 @@ def solve_schedule(request: OptimizeRequest) -> OptimizeResponse:
     solver_config = SolverConfig(
         solution_class=Schedule,
         entity_class_list=[VisitAssignment],
+        # The Timefold Python package defaults to PHASE_ASSERT (full
+        # score-corruption checking - recalculates the whole score from
+        # scratch every phase) when this isn't set, which is a constraint
+        # -development debugging aid, not something to run in production:
+        # it makes every phase transition roughly as expensive as a full
+        # solve. NO_ASSERT drops that overhead (the Java engine also has a
+        # REPRODUCIBLE mode between the two, but this Python binding doesn't
+        # expose it); constraint-stream correctness is covered by the
+        # ConstraintVerifier unit tests in solver/tests instead.
+        environment_mode=EnvironmentMode.NO_ASSERT,
         score_director_factory_config=ScoreDirectorFactoryConfig(
             constraint_provider_function=define_constraints
         ),
