@@ -4,6 +4,7 @@ from datetime import date, datetime, time
 from sqlalchemy import (
     Boolean,
     Column,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -353,7 +354,14 @@ class Employee(Base):
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
+    first_name: Mapped[str] = mapped_column(String, nullable=False)
+    last_name: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String, Computed("first_name || ' ' || last_name", persisted=True)
+    )
+    email: Mapped[str | None] = mapped_column(String)
+    mobile_phone: Mapped[str | None] = mapped_column(String)
+    resco_user_id: Mapped[str | None] = mapped_column(String)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     delete_flag: Mapped[bool] = mapped_column(

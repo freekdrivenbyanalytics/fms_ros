@@ -60,7 +60,8 @@ def seed() -> None:
         if not db.query(Employee).count():
             employee_fixtures = [
                 {
-                    "name": "Alice Johnson",
+                    "first_name": "Alice",
+                    "last_name": "Johnson",
                     "work_start": time(8, 0),
                     "work_end": time(16, 0),
                     "latitude": 52.3676,
@@ -68,7 +69,8 @@ def seed() -> None:
                     "regions": [north_holland, utrecht],
                 },
                 {
-                    "name": "Bram de Vries",
+                    "first_name": "Bram",
+                    "last_name": "de Vries",
                     "work_start": time(9, 0),
                     "work_end": time(17, 0),
                     "latitude": 52.0907,
@@ -76,7 +78,8 @@ def seed() -> None:
                     "regions": [utrecht],
                 },
                 {
-                    "name": "Chen Wei",
+                    "first_name": "Chen",
+                    "last_name": "Wei",
                     "work_start": time(7, 30),
                     "work_end": time(15, 30),
                     "latitude": 51.9244,
@@ -86,7 +89,8 @@ def seed() -> None:
             ]
             for fixture in employee_fixtures:
                 employee = Employee(
-                    name=fixture["name"],
+                    first_name=fixture["first_name"],
+                    last_name=fixture["last_name"],
                     latitude=fixture["latitude"],
                     longitude=fixture["longitude"],
                     regions=fixture["regions"],

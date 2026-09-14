@@ -191,19 +191,32 @@ export interface EmployeeScheduleDayOverrideBulkInput {
   day_type: DayType;
 }
 
+export interface EmployeeRescoSyncResult {
+  status: "synced" | "skipped" | "failed";
+  detail: string | null;
+}
+
 export interface Employee {
   id: number;
+  first_name: string;
+  last_name: string;
   name: string;
+  email: string | null;
+  mobile_phone: string | null;
   latitude: number;
   longitude: number;
   regions: Region[];
   products: Product[];
   schedule_templates: EmployeeScheduleTemplate[];
   schedule_overrides: EmployeeScheduleDayOverride[];
+  resco_sync: EmployeeRescoSyncResult | null;
 }
 
 export interface EmployeeCreateInput {
-  name: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  mobile_phone: string | null;
   latitude: number;
   longitude: number;
   region_ids: number[];
@@ -211,11 +224,22 @@ export interface EmployeeCreateInput {
 }
 
 export interface EmployeeUpdateInput {
-  name: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  mobile_phone: string | null;
   latitude: number;
   longitude: number;
   region_ids: number[];
   product_ids: number[];
+}
+
+export interface RescoSyncSummary {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
 }
 
 export interface ServiceVisit {

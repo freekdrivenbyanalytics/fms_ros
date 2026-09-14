@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     solver_base_url: str = "http://localhost:8100"
     solver_time_limit_seconds: int = 30
     tomtom_api_key: str = ""
+    # Resco's OData v4 API (org "sfm"), confirmed against the live service.
+    # Authenticates via HTTP Basic auth (username/password), read from .env
+    # like TOMTOM_API_KEY.
+    resco_base_url: str = "https://sfm.rescocrm.com/odata/v4/sfm"
+    resco_username: str = ""
+    resco_password: str = ""
 
 
 settings = Settings()

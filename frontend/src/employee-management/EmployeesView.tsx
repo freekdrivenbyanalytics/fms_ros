@@ -7,6 +7,7 @@ import {
   deleteEmployee,
   deleteScheduleOverride,
   deleteScheduleTemplate,
+  syncEmployeesToResco,
   updateEmployee,
   updateScheduleOverride,
   updateScheduleTemplate,
@@ -18,6 +19,7 @@ import type {
   EmployeeScheduleTemplate,
   Product,
   Region,
+  RescoSyncSummary,
 } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
@@ -32,8 +34,25 @@ interface Props {
 export function EmployeesView({ employees, regions, products, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSummary, setSyncSummary] = useState<RescoSyncSummary | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const selected = employees.find((employee) => employee.id === selectedId) ?? null;
+
+  async function handleSyncToResco() {
+    setSyncing(true);
+    setSyncError(null);
+    setSyncSummary(null);
+    try {
+      const summary = await syncEmployeesToResco();
+      setSyncSummary(summary);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to sync to Resco");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (selected) {
     return (
@@ -52,14 +71,41 @@ export function EmployeesView({ employees, regions, products, onChanged }: Props
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Employees</h2>
-        <button
-          type="button"
-          onClick={() => setCreating((prev) => !prev)}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-        >
-          {creating ? "Cancel" : "Create Employee"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSyncToResco}
+            disabled={syncing}
+            className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync to Resco"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating((prev) => !prev)}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            {creating ? "Cancel" : "Create Employee"}
+          </button>
+        </div>
       </div>
+
+      {syncError && <p className="text-sm text-red-600 mb-3">{syncError}</p>}
+      {syncSummary && (
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <div>
+            Resco sync: {syncSummary.created} created, {syncSummary.updated} updated,{" "}
+            {syncSummary.skipped} skipped, {syncSummary.failed} failed
+          </div>
+          {syncSummary.errors.length > 0 && (
+            <ul className="mt-1 list-disc list-inside text-red-600">
+              {syncSummary.errors.map((message, index) => (
+                <li key={index}>{message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {creating && (
         <EmployeeForm
@@ -105,7 +151,10 @@ interface EmployeeFormProps {
 }
 
 function EmployeeForm({ regions, products, existingEmployee, onSaved, onCancel }: EmployeeFormProps) {
-  const [name, setName] = useState(existingEmployee?.name ?? "");
+  const [firstName, setFirstName] = useState(existingEmployee?.first_name ?? "");
+  const [lastName, setLastName] = useState(existingEmployee?.last_name ?? "");
+  const [email, setEmail] = useState(existingEmployee?.email ?? "");
+  const [mobilePhone, setMobilePhone] = useState(existingEmployee?.mobile_phone ?? "");
   const [latitude, setLatitude] = useState(
     existingEmployee ? String(existingEmployee.latitude) : ""
   );
@@ -127,12 +176,15 @@ function EmployeeForm({ regions, products, existingEmployee, onSaved, onCancel }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name || !latitude || !longitude || regionIds.length === 0) return;
+    if (!firstName || !lastName || !latitude || !longitude || regionIds.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
       const payload = {
-        name,
+        first_name: firstName,
+        last_name: lastName,
+        email: email || null,
+        mobile_phone: mobilePhone || null,
         latitude: Number(latitude),
         longitude: Number(longitude),
         region_ids: regionIds,
@@ -154,14 +206,40 @@ function EmployeeForm({ regions, products, existingEmployee, onSaved, onCancel }
       onSubmit={handleSubmit}
       className="mb-4 flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-3"
     >
-      <input
-        type="text"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        placeholder="Name"
-        className="text-sm border border-slate-300 rounded-md px-2 py-1"
-        required
-      />
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={firstName}
+          onChange={(event) => setFirstName(event.target.value)}
+          placeholder="First name"
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+          required
+        />
+        <input
+          type="text"
+          value={lastName}
+          onChange={(event) => setLastName(event.target.value)}
+          placeholder="Last name"
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+          required
+        />
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Email (optional)"
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        />
+        <input
+          type="tel"
+          value={mobilePhone}
+          onChange={(event) => setMobilePhone(event.target.value)}
+          placeholder="Mobile phone (optional)"
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        />
+      </div>
       <div className="flex gap-2">
         <input
           type="number"

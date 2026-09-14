@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -253,21 +254,34 @@ class EmployeeScheduleDayOverrideBulkCreate(BaseModel):
     day_type: DayType
 
 
+class EmployeeRescoSyncResult(BaseModel):
+    status: Literal["synced", "skipped", "failed"]
+    detail: str | None = None
+
+
 class EmployeeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    first_name: str
+    last_name: str
     name: str
+    email: str | None = None
+    mobile_phone: str | None = None
     latitude: float
     longitude: float
     regions: list[RegionOut]
     products: list[ProductOut]
     schedule_templates: list[EmployeeScheduleTemplateOut]
     schedule_overrides: list[EmployeeScheduleDayOverrideOut]
+    resco_sync: EmployeeRescoSyncResult | None = None
 
 
 class EmployeeCreate(BaseModel):
-    name: str
+    first_name: str
+    last_name: str
+    email: str | None = None
+    mobile_phone: str | None = None
     latitude: float
     longitude: float
     region_ids: list[int]
@@ -275,11 +289,22 @@ class EmployeeCreate(BaseModel):
 
 
 class EmployeeUpdate(BaseModel):
-    name: str
+    first_name: str
+    last_name: str
+    email: str | None = None
+    mobile_phone: str | None = None
     latitude: float
     longitude: float
     region_ids: list[int]
     product_ids: list[int] = []
+
+
+class RescoSyncSummary(BaseModel):
+    created: int
+    updated: int
+    skipped: int
+    failed: int
+    errors: list[str] = []
 
 
 class ServiceVisitOut(BaseModel):

@@ -1,0 +1,40 @@
+## Context
+
+`Employee` (`backend/app/models.py`) currently has only `name` (free text), `latitude`, `longitude`, and `delete_flag` — no split first/last name, no email, no phone. `backend/app/tripletex.py` is the one existing external-integration precedent in this codebase: a `TripletexClient` class handling auth (a refresh token read from a gitignored `.local/api_key` file, exchanged for a short-lived session token, cached until near expiry) and per-entity HTTP calls, plus module-level `sync_*` functions that fetch/push data and are called from `backend/app/main.py`. This change follows the same shape for Resco.
+
+**Resco API specifics are an open assumption, not a confirmed fact.** Only the Resco WebApp URL (`https://sfm.rescocrm.com/WebApp/index.html`) was provided — not API documentation, credentials, or the exact User entity's field names on this org's Resco setup. Per the proposal, this design proceeds with standard-convention placeholders (a REST-ish base URL derived from the WebApp host, an API-key-style credential file mirroring Tripletex's, and `firstname`/`lastname`/`email`/`mobilephone`-style field names) and isolates them behind `resco.py` so they're a small, contained correction once the real API details are confirmed — not an architecture change.
+
+## Goals / Non-Goals
+
+**Goals:**
+- Make first name, last name, email, and mobile phone real, editable fields on `Employee`, with `name` staying available (many call sites read `employee.name`) but no longer independently settable.
+- Sync employees to Resco as Users, upserting via a remembered Resco User ID, without letting Resco's availability or data requirements affect fms_ros's own employee CRUD.
+
+**Non-Goals:**
+- Pulling data back from Resco (this is push-only, fms_ros → Resco).
+- Any Resco entity other than Users (e.g., not syncing regions, products, or visits to Resco).
+- A general-purpose retry/queue system for failed syncs — a failed automatic sync is surfaced once (see Decisions) and left for the next manual sync or edit to retry.
+
+## Decisions
+
+**`name` becomes a Postgres `GENERATED ALWAYS AS ... STORED` column, not an application-computed one.** The user's own preference, and it gives the strongest guarantee of the three ("remove the option of overwriting that field"): a database-level generated column literally cannot be set by an `INSERT`/`UPDATE`, so no code path — present or future — can drift it out of sync with `first_name`/`last_name`, regardless of what constructs the SQL. The alternative (compute `name` in Python before every write) would work but relies on every write path remembering to do it. Every existing reader of `employee.name` (frontend list/detail views, `EmployeeOut`, `AssignmentOut`, `FreeSlotOut.employee_name`, etc.) keeps working unchanged, since the column still exists and is still populated — only `EmployeeCreate`/`EmployeeUpdate` stop accepting it as input.
+
+**Migration backfills `first_name`/`last_name` by splitting existing `name` values on the first space.** The only existing employees (demo data: "Alice Johnson", "Bram de Vries", "John Johnson") split cleanly into two parts this way. This is a known simplification — a name with no space, or more than two parts, splits imperfectly (e.g., a single-word name would land entirely in `first_name` with `last_name` empty) — acceptable for a one-time backfill of a handful of seeded rows; a real deployment migrating real employee data would need this rule reviewed against its actual names before running. The migration: (1) add `first_name`/`last_name` as nullable, backfill them from `name`, then alter both `NOT NULL`; (2) add `email`, `mobile_phone`, `resco_user_id` as nullable (see below); (3) drop the old `name` column and add it back as `GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED`.
+
+**`email` and `mobile_phone` are nullable on `Employee`, not `NOT NULL`.** Making them mandatory immediately would require fabricating placeholder values for existing employees with no real email/phone on file, which is worse than leaving them empty. Instead, they're optional at the data-model level, and the *sync* step (not the data model) enforces Resco's requirement — an employee missing either is skipped and reported, not blocked from existing in fms_ros. `first_name`/`last_name` are `NOT NULL` since a name was always required and the backfill covers every existing row.
+
+**Automatic sync runs inline, synchronously, best-effort, after the database commit.** `create_employee`/`update_employee` commit the employee first, then call the Resco sync for that one employee; a Resco exception is caught and does not affect the HTTP response's success, but the response includes that employee's sync outcome (e.g., `resco_sync_status: "synced" | "skipped" | "failed"` and an error message when failed) so the admin sees it immediately in the same UI action, without needing a separate audit log or background job/queue — the manual bulk-sync action (below) is the retry path for anything that failed automatically.
+
+**No separate sync-log table; `resco_user_id` lives directly on `Employee`.** Unlike Tripletex's customers/products (which have dedicated `*SyncLog` tables recording change history), a single nullable `resco_user_id` column is enough here: the only thing later syncs need to know is "does this employee already have a Resco User, and if so which one" — there's no change-history requirement in the proposal. This keeps the model minimal (per this codebase's stated preference against unrequested abstractions).
+
+**The Resco client mirrors `TripletexClient`'s shape (a class owning auth + HTTP calls), but authenticates with HTTP Basic auth (username/password) read from `backend/.env`, the same way `TOMTOM_API_KEY` is — not from a `.local/`-style file.** Resco's auth mechanism is confirmed as username/password, unlike Tripletex's refresh-token-for-session-token exchange, so there's no session state to cache and no secret file to read — `RESCO_USERNAME`/`RESCO_PASSWORD` are plain settings in `config.py`, sourced from `.env` like `tomtom_api_key`.
+
+**Resco's API is confirmed as its OData v4 service, and the User entity is `systemuser`.** Verified live against `https://sfm.rescocrm.com/odata/v4/sfm/`: the service root lists entity sets, and `systemuser` (title "User") is the correct one — not a hypothetical `/User` REST endpoint, which instead redirects to the WebApp's login page. Its relevant fields, confirmed via `$metadata` and a live create/update/delete round-trip, are `firstname`, `lastname`, `internalemailaddress` (not `email`), and `mobilephone`; the primary key `id` is a server-generated GUID string. Creates are `POST {base_url}/systemuser`; updates are `PATCH {base_url}/systemuser('{id}')` (OData's parenthesized-key addressing, since `id` is a string).
+
+## Risks / Trade-offs
+
+~~The exact Resco API base path and User field names are unconfirmed.~~ **Resolved:** the API base path, auth scheme, entity name, and field names have all been confirmed against the live service (base URL `https://sfm.rescocrm.com/odata/v4/sfm`, HTTP Basic auth, entity set `systemuser`, fields `firstname`/`lastname`/`internalemailaddress`/`mobilephone`) — verified with a live create, update, and delete round-trip during implementation (the test record was deleted afterward). No open risk remains here.
+
+**The name-splitting backfill is a heuristic, not a fully general solution.** → Mitigation: acceptable for this system's current (small, seeded) data; flagged in the migration's own comment and in tasks.md for review before running against any real, larger employee dataset.
+
+**An automatic sync failure is only surfaced once (in the triggering request's response), not persisted anywhere.** If an admin doesn't notice it, a stale/never-created Resco User could go unnoticed until the next manual bulk sync. → Accepted: the manual "Sync to Resco" action (which reports every employee's current status, not just ones that changed) is the safety net; a persisted failure log is more machinery than this change's scope calls for.

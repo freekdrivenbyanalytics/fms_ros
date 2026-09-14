@@ -31,6 +31,7 @@ import type {
   Region,
   RegionCreateInput,
   RegionUpdateInput,
+  RescoSyncSummary,
   ServiceVisit,
 } from "./types";
 
@@ -63,6 +64,12 @@ export function updateEmployee(id: number, input: EmployeeUpdateInput): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   }).then((res) => handleResponse<Employee>(res));
+}
+
+export function syncEmployeesToResco(): Promise<RescoSyncSummary> {
+  return fetch(`${API_URL}/employees/sync-resco`, { method: "POST" }).then((res) =>
+    handleResponse<RescoSyncSummary>(res)
+  );
 }
 
 export async function deleteEmployee(id: number): Promise<void> {

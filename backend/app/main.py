@@ -63,6 +63,7 @@ from app.schemas import (
     DrivingTimeComputeSummary,
     EmployeeCreate,
     EmployeeOut,
+    EmployeeRescoSyncResult,
     EmployeeScheduleDayOverrideBulkCreate,
     EmployeeScheduleDayOverrideCreate,
     EmployeeScheduleDayOverrideOut,
@@ -82,8 +83,10 @@ from app.schemas import (
     RegionCreate,
     RegionOut,
     RegionUpdate,
+    RescoSyncSummary,
     ServiceVisitOut,
 )
+from app.resco import sync_all_employees, sync_employee
 from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
 from app.tripletex import sync_customer_locations, sync_customers, sync_products
 
@@ -115,10 +118,16 @@ app.add_middleware(
 )
 
 
-def _employee_out(employee: Employee) -> EmployeeOut:
+def _employee_out(
+    employee: Employee, resco_sync: EmployeeRescoSyncResult | None = None
+) -> EmployeeOut:
     return EmployeeOut(
         id=employee.id,
+        first_name=employee.first_name,
+        last_name=employee.last_name,
         name=employee.name,
+        email=employee.email,
+        mobile_phone=employee.mobile_phone,
         latitude=employee.latitude,
         longitude=employee.longitude,
         regions=[RegionOut.model_validate(region) for region in employee.regions],
@@ -133,6 +142,7 @@ def _employee_out(employee: Employee) -> EmployeeOut:
             for override in employee.schedule_overrides
             if not override.delete_flag
         ],
+        resco_sync=resco_sync,
     )
 
 
@@ -173,7 +183,10 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
     regions, products = _lookup_regions_and_products(db, payload.region_ids, payload.product_ids)
 
     employee = Employee(
-        name=payload.name,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        email=payload.email,
+        mobile_phone=payload.mobile_phone,
         latitude=payload.latitude,
         longitude=payload.longitude,
         regions=regions,
@@ -182,7 +195,14 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
     db.add(employee)
     db.commit()
     db.refresh(employee)
-    return _employee_out(employee)
+
+    try:
+        resco_sync = sync_employee(db, employee)
+    except Exception:
+        logger.warning("Resco sync failed for employee %s", employee.id, exc_info=True)
+        resco_sync = EmployeeRescoSyncResult(status="failed", detail="Resco sync failed")
+
+    return _employee_out(employee, resco_sync=resco_sync)
 
 
 @app.patch("/employees/{employee_id}", response_model=EmployeeOut)
@@ -195,14 +215,29 @@ def update_employee(
 
     regions, products = _lookup_regions_and_products(db, payload.region_ids, payload.product_ids)
 
-    employee.name = payload.name
+    employee.first_name = payload.first_name
+    employee.last_name = payload.last_name
+    employee.email = payload.email
+    employee.mobile_phone = payload.mobile_phone
     employee.latitude = payload.latitude
     employee.longitude = payload.longitude
     employee.regions = regions
     employee.products = products
     db.commit()
     db.refresh(employee)
-    return _employee_out(employee)
+
+    try:
+        resco_sync = sync_employee(db, employee)
+    except Exception:
+        logger.warning("Resco sync failed for employee %s", employee.id, exc_info=True)
+        resco_sync = EmployeeRescoSyncResult(status="failed", detail="Resco sync failed")
+
+    return _employee_out(employee, resco_sync=resco_sync)
+
+
+@app.post("/employees/sync-resco", response_model=RescoSyncSummary)
+def sync_employees_to_resco(db: Session = Depends(get_db)) -> RescoSyncSummary:
+    return sync_all_employees(db)
 
 
 @app.delete("/employees/{employee_id}", status_code=204)
