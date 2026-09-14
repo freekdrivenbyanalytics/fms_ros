@@ -34,6 +34,23 @@ _ASSUMED_AVERAGE_SPEED_KMH = 40
 _CUSTOMER_LOCATION = "customer_location"
 _EMPLOYEE = "employee"
 
+# Weighting for the "Unscheduled visit" medium penalty: priority strictly
+# dominates urgency, and a single higher-priority (numerically lower)
+# unscheduled visit must always outweigh ANY NUMBER of lower-priority ones
+# left unscheduled instead - not just a handful. Because Timefold *sums*
+# constraint match weights rather than taking a max, a flat per-tier
+# multiplier (fixed or scaled to visit count) can never guarantee that: a
+# lower tier's own per-visit weight is already the same order of magnitude
+# as the gap, so summing just 2-3 of them overtakes one higher-tier visit
+# regardless of the constant chosen. The only guarantee that survives
+# summation is a *nested* one, where each tier's constant exceeds the
+# maximum possible sum of every visit at the tier(s) below it - see
+# _unscheduled_priority_weight.
+_URGENCY_CAP = 14
+# Strict upper bound on the urgency term (URGENCY_CAP - days_until_due,
+# which is in [1, URGENCY_CAP] for any in-window visit).
+_URGENCY_UPPER_BOUND = _URGENCY_CAP + 1
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -167,6 +184,42 @@ _employee_leg_kind_joiners_with_schedule = [
 ]
 
 
+def _unscheduled_priority_weight(visit: VisitAssignment) -> int:
+    """Nested-scale weight: priority 3's weight is just its urgency term;
+    priority 2's tier constant (T2) exceeds N visits' worth of priority 3's
+    maximum weight; priority 1's tier constant (T1) exceeds N visits' worth
+    of priority 2's maximum weight (which already dominates priority 3). N
+    is this run's total visit count - an absolute upper bound on how many
+    visits could ever be simultaneously unscheduled - so the dominance holds
+    regardless of how many lower-priority visits compete with a higher one."""
+    n = visit.total_visit_count
+    urgency = _URGENCY_CAP - visit.days_until_due
+
+    if visit.priority >= 3:
+        return urgency
+
+    tier_2_constant = n * _URGENCY_UPPER_BOUND + 1
+    if visit.priority == 2:
+        return tier_2_constant + urgency
+
+    tier_1_constant = n * (tier_2_constant + _URGENCY_UPPER_BOUND) + 1
+    return tier_1_constant + urgency
+
+
+def unscheduled_visit(constraint_factory: ConstraintFactory) -> Constraint:
+    """Medium: prefer scheduling every visit over leaving it unassigned,
+    weighted so a higher-priority (numerically lower) unscheduled visit
+    always outweighs any realistic number of lower-priority ones, and,
+    within the same priority, a sooner-due visit outweighs a later one -
+    see _unscheduled_priority_weight."""
+    return (
+        constraint_factory.for_each_including_unassigned(VisitAssignment)
+        .filter(_is_unassigned)
+        .penalize(HardMediumSoftScore.ONE_MEDIUM, _unscheduled_priority_weight)
+        .as_constraint("Unscheduled visit")
+    )
+
+
 def driving_time_gap_between_proposed_visits(constraint_factory: ConstraintFactory) -> Constraint:
     """Hard: leave enough time to actually drive between two same-day
     proposed visits, using a computed driving-time entry when one covers
@@ -292,11 +345,9 @@ def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint
     first_visit_of_day_joiners = _first_visit_of_day_joiners
 
     return [
-        # Medium: prefer scheduling every visit over leaving it unassigned.
-        constraint_factory.for_each_including_unassigned(VisitAssignment)
-        .filter(_is_unassigned)
-        .penalize(HardMediumSoftScore.ONE_MEDIUM)
-        .as_constraint("Unscheduled visit"),
+        # Medium: defined as a standalone function above so it's
+        # independently unit-testable via ConstraintVerifier.
+        unscheduled_visit(constraint_factory),
         # Hard constraints.
         constraint_factory.for_each(VisitAssignment)
         .filter(_missing_products)

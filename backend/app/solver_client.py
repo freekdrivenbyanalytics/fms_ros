@@ -14,6 +14,10 @@ from app.models import (
     ServiceVisit,
 )
 
+# Bounds solver problem size - see design.md ("days_ahead is capped at 14")
+# in the add-optimize-run-parameters change.
+MAX_DAYS_AHEAD = 14
+
 
 def _minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
@@ -80,6 +84,8 @@ def _visit_payload(visit: ServiceVisit) -> dict:
         "location_id": location.id,
         "latitude": location.latitude,
         "longitude": location.longitude,
+        "priority": visit.contract_line.priority,
+        "days_until_due": (effective_schedule_date(visit) - date.today()).days,
     }
 
 
@@ -111,11 +117,13 @@ def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
     )
 
 
-def _is_within_scheduling_window(visit: ServiceVisit) -> bool:
-    """A schedule run only ever proposes today's and tomorrow's visits,
-    to keep the solver's problem size to what's actually actionable."""
+def _is_within_scheduling_window(visit: ServiceVisit, days_ahead: int) -> bool:
+    """A schedule run only ever proposes visits within days_ahead days of
+    today (today itself counting as day 0), capped at MAX_DAYS_AHEAD to keep
+    the solver's problem size to what's actually actionable."""
     today = date.today()
-    return effective_schedule_date(visit) in (today, today + timedelta(days=1))
+    window = {today + timedelta(days=d) for d in range(min(days_ahead, MAX_DAYS_AHEAD))}
+    return effective_schedule_date(visit) in window
 
 
 def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
@@ -134,7 +142,9 @@ def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
     ]
 
 
-def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
+def build_optimize_payload(
+    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
+) -> tuple[dict, list[int]]:
     """Build the solver request payload.
 
     Returns (payload, excluded_visit_ids): payload is what's sent to the
@@ -171,12 +181,12 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
     ready_visits = [
         v
         for v in schedulable_visits
-        if _is_ready_to_schedule(v) and _is_within_scheduling_window(v)
+        if _is_ready_to_schedule(v) and _is_within_scheduling_window(v, days_ahead)
     ]
     excluded_visit_ids = [
         v.id
         for v in schedulable_visits
-        if not (_is_ready_to_schedule(v) and _is_within_scheduling_window(v))
+        if not (_is_ready_to_schedule(v) and _is_within_scheduling_window(v, days_ahead))
     ]
 
     candidate_dates = {effective_schedule_date(v) for v in ready_visits}
@@ -190,7 +200,7 @@ def build_optimize_payload(db: Session) -> tuple[dict, list[int]]:
         "visits": [_visit_payload(v) for v in ready_visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "driving_times": _driving_time_payloads(db, region_ids),
-        "time_limit_seconds": settings.solver_time_limit_seconds,
+        "time_limit_seconds": time_limit_seconds or settings.solver_time_limit_seconds,
     }
     return payload, excluded_visit_ids
 

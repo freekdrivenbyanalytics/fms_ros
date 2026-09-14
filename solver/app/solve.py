@@ -55,6 +55,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
         for a in request.existing_assignments
     ]
 
+    total_visit_count = len(request.visits)
     visits = [
         VisitAssignment(
             id=v.id,
@@ -65,6 +66,9 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
             location_id=v.location_id,
             latitude=v.latitude,
             longitude=v.longitude,
+            priority=v.priority,
+            days_until_due=v.days_until_due,
+            total_visit_count=total_visit_count,
         )
         for v in request.visits
     ]

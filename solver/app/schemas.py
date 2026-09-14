@@ -29,6 +29,8 @@ class VisitIn(BaseModel):
     location_id: int
     latitude: float
     longitude: float
+    priority: int
+    days_until_due: int
 
 
 class ExistingAssignmentIn(BaseModel):

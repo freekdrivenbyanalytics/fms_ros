@@ -6,6 +6,10 @@ interface OptimizeViewProps {
   onApplied: (created: Assignment[]) => void;
 }
 
+// Mirrors backend/app/config.py's Settings.solver_time_limit_seconds default,
+// shown here only so the placeholder can tell the user what "default" means.
+const DEFAULT_SOLVER_TIME_LIMIT_SECONDS = 30;
+
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: "short",
@@ -21,13 +25,18 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applyResult, setApplyResult] = useState<OptimizationApplyResult | null>(null);
+  const [daysAhead, setDaysAhead] = useState(2);
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState("");
 
   async function handleRun() {
     setRunning(true);
     setError(null);
     setApplyResult(null);
     try {
-      const result = await proposeOptimization();
+      const result = await proposeOptimization({
+        days_ahead: daysAhead,
+        time_limit_seconds: timeLimitSeconds ? Number(timeLimitSeconds) : undefined,
+      });
       setProposal(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run optimization");
@@ -60,6 +69,35 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-end gap-4 flex-wrap">
+        <div>
+          <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+            Days ahead
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={14}
+            value={daysAhead}
+            onChange={(event) => setDaysAhead(Number(event.target.value))}
+            className="w-24 text-sm border border-slate-300 rounded-md px-2 py-1.5"
+          />
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+            Solver time budget (s)
+          </label>
+          <input
+            type="number"
+            min={1}
+            placeholder={`default: ${DEFAULT_SOLVER_TIME_LIMIT_SECONDS}s`}
+            value={timeLimitSeconds}
+            onChange={(event) => setTimeLimitSeconds(event.target.value)}
+            className="w-28 text-sm border border-slate-300 rounded-md px-2 py-1.5"
+          />
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="button"

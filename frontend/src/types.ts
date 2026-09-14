@@ -97,6 +97,7 @@ export interface ContractLine {
   end_date: string | null;
   interval_days: number;
   duration_minutes: number;
+  priority: number;
   customer_location: CustomerLocation;
   required_products: Product[];
 }
@@ -121,6 +122,7 @@ export interface ContractLineCreateInput {
   end_date: string | null;
   interval_days: number;
   duration_minutes: number;
+  priority: number;
   required_product_ids: number[];
 }
 
@@ -130,6 +132,7 @@ export interface ContractLineUpdateInput {
   end_date: string | null;
   interval_days: number;
   duration_minutes: number;
+  priority: number;
   required_product_ids: number[];
 }
 
@@ -264,6 +267,11 @@ export interface OptimizationProposal {
   unscheduled_visit_ids: number[];
 }
 
+export interface OptimizeRunOptions {
+  days_ahead: number;
+  time_limit_seconds?: number;
+}
+
 export interface OptimizationApplyResult {
   created: Assignment[];
   skipped_visit_ids: number[];
@@ -300,4 +308,9 @@ export interface DayPlanningEmployeeRoute {
 
 export interface DayPlanningRoutes {
   employees: DayPlanningEmployeeRoute[];
+}
+
+export interface DemoScheduleRefreshSummary {
+  days_shifted: number;
+  visits_unassigned: number;
 }

@@ -41,6 +41,9 @@ def _visit(visit_id: int, start_minutes: int, duration_minutes: int, location_id
         location_id=location_id,
         latitude=52.0,
         longitude=5.0,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=start_minutes,
     )
@@ -93,6 +96,9 @@ def test_gap_smaller_than_fallback_estimate_is_penalized(verifier: ConstraintVer
         location_id=100,
         latitude=52.0,
         longitude=5.0,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
     )
@@ -107,6 +113,9 @@ def test_gap_smaller_than_fallback_estimate_is_penalized(verifier: ConstraintVer
         location_id=200,
         latitude=52.1,
         longitude=5.1,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=601,
     )
@@ -125,6 +134,9 @@ def test_gap_at_least_fallback_estimate_is_not_penalized(verifier: ConstraintVer
         location_id=100,
         latitude=52.0,
         longitude=5.0,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
     )
@@ -137,6 +149,9 @@ def test_gap_at_least_fallback_estimate_is_not_penalized(verifier: ConstraintVer
         location_id=200,
         latitude=52.0,
         longitude=5.0,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=600,
     )
@@ -209,6 +224,9 @@ def test_gap_to_existing_assignment_fallback_smaller_than_estimate_is_penalized(
         location_id=100,
         latitude=52.0,
         longitude=5.0,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
     )
@@ -274,6 +292,9 @@ def test_first_visit_fallback_before_home_drive_completes_is_penalized(
         location_id=100,
         latitude=52.1,
         longitude=5.1,
+        priority=2,
+        days_until_due=0,
+        total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=481,
     )

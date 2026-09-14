@@ -136,6 +136,7 @@ class ContractLineOut(BaseModel):
     end_date: date | None = None
     interval_days: int
     duration_minutes: int
+    priority: int
     customer_location: CustomerLocationOut
     required_products: list[ProductOut]
 
@@ -162,6 +163,7 @@ class ContractLineCreate(BaseModel):
     end_date: date | None = None
     interval_days: int
     duration_minutes: int
+    priority: int = 2
     required_product_ids: list[int]
 
 
@@ -171,6 +173,7 @@ class ContractLineUpdate(BaseModel):
     end_date: date | None = None
     interval_days: int
     duration_minutes: int
+    priority: int = 2
     required_product_ids: list[int]
 
 
@@ -337,6 +340,11 @@ class ProposedAssignmentOut(BaseModel):
     service_visit: ServiceVisitOut
 
 
+class OptimizeRunOptions(BaseModel):
+    days_ahead: int = 2
+    time_limit_seconds: int | None = None
+
+
 class OptimizationProposal(BaseModel):
     scheduled: list[ProposedAssignmentOut]
     unscheduled_visit_ids: list[int]
@@ -380,3 +388,8 @@ class DayPlanningEmployeeRouteOut(BaseModel):
 
 class DayPlanningRoutesOut(BaseModel):
     employees: list[DayPlanningEmployeeRouteOut]
+
+
+class DemoScheduleRefreshSummary(BaseModel):
+    days_shifted: int
+    visits_unassigned: int

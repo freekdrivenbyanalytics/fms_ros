@@ -332,6 +332,7 @@ class ContractLine(Base):
     end_date: Mapped[date | None] = mapped_column(Date)
     interval_days: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=2, server_default="2")
     delete_flag: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

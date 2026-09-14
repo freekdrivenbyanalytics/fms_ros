@@ -7,11 +7,11 @@ Represents customer service visits requested for scheduling, tracked through an 
 ## Requirements
 
 ### Requirement: Service visit data model
-The system SHALL persist each service visit with a unique identifier, the contract line it was generated from, requested date, and a status; duration and product requirements are read through the contract line.
+The system SHALL persist each service visit with a unique identifier, the contract line it was generated from, requested date, and a status; duration, product requirements, and priority are read through the contract line.
 
 #### Scenario: Service visit is persisted with required fields
 - **WHEN** a service visit is created with id, contract_line_id, and requested_date
-- **THEN** the system persists the service visit and all fields are retrievable unchanged, with customer name, address, region, duration, and required products available through the contract line
+- **THEN** the system persists the service visit and all fields are retrievable unchanged, with customer name, address, region, duration, required products, and priority available through the contract line
 
 ### Requirement: New service visits start unassigned
 A newly created service visit SHALL have status `unassigned` until an assignment is created for it.

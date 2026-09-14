@@ -18,6 +18,12 @@ import type {
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
+const PRIORITY_LABELS: Record<number, string> = {
+  1: "High priority",
+  2: "Medium priority",
+  3: "Low priority",
+};
+
 interface Props {
   contracts: Contract[];
   customers: Customer[];
@@ -342,6 +348,8 @@ function ContractLineRow({ line, locations, visits, products, onChanged }: Contr
           <div className="text-slate-600 mt-1">
             Every {line.interval_days} days, {line.duration_minutes} min — {line.start_date}
             {line.end_date ? ` to ${line.end_date}` : ""}
+            {" — "}
+            {PRIORITY_LABELS[line.priority] ?? `priority ${line.priority}`}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
             {line.required_products.length === 0 ? (
@@ -436,6 +444,7 @@ function ContractLineForm({
   const [productIds, setProductIds] = useState<number[]>(
     existingLine ? existingLine.required_products.map((product) => product.id) : []
   );
+  const [priority, setPriority] = useState(existingLine?.priority ?? 2);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -455,6 +464,7 @@ function ContractLineForm({
         end_date: noEndDate ? null : (endDate || null),
         interval_days: Number(intervalDays),
         duration_minutes: Number(durationMinutes),
+        priority,
         required_product_ids: productIds,
       };
       if (existingLine) {
@@ -534,6 +544,15 @@ function ContractLineForm({
           className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
           required
         />
+        <select
+          value={priority}
+          onChange={(event) => setPriority(Number(event.target.value))}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
+        >
+          <option value={1}>High priority</option>
+          <option value={2}>Medium priority</option>
+          <option value={3}>Low priority</option>
+        </select>
       </div>
       <div>
         <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">

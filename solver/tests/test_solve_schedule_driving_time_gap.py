@@ -33,6 +33,8 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
                 location_id=100,
                 latitude=52.0,
                 longitude=5.0,
+                priority=2,
+                days_until_due=0,
             ),
             VisitIn(
                 id=2,
@@ -43,6 +45,8 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
                 location_id=200,
                 latitude=52.2,
                 longitude=5.2,
+                priority=2,
+                days_until_due=0,
             ),
         ],
         driving_times=[

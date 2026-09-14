@@ -86,6 +86,12 @@ class VisitAssignment:
     location_id: int
     latitude: float
     longitude: float
+    priority: int
+    days_until_due: int
+    # Same value on every visit in a run (the run's total visit count) - lets
+    # the "Unscheduled visit" constraint size its priority-tier weighting to
+    # this run's actual scale. See constraints.py's _unscheduled_priority_weight.
+    total_visit_count: int
     employee: Annotated[
         Employee | None,
         PlanningVariable(value_range_provider_refs=["employee_range"], allows_unassigned=True),

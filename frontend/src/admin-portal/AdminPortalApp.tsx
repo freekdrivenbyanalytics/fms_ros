@@ -19,19 +19,27 @@ import type {
 } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
+import { DemoScheduleView } from "./DemoScheduleView";
 import { ProductsView } from "./ProductsView";
 import { RegionsView } from "./RegionsView";
 
-type Entity = "regions" | "products" | "contracts" | "customer-locations";
+type Entity = "regions" | "products" | "contracts" | "customer-locations" | "demo";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   regions: "Regions",
   products: "Products",
   contracts: "Contracts",
   "customer-locations": "Customer Locations",
+  demo: "Demo",
 };
 
-const ENTITY_ORDER: Entity[] = ["regions", "products", "contracts", "customer-locations"];
+const ENTITY_ORDER: Entity[] = [
+  "regions",
+  "products",
+  "contracts",
+  "customer-locations",
+  "demo",
+];
 
 export function AdminPortalApp() {
   const [entity, setEntity] = useState<Entity>("regions");
@@ -132,6 +140,7 @@ export function AdminPortalApp() {
         {entity === "customer-locations" && (
           <CustomerLocationsView customerLocations={customerLocations} onChanged={reload} />
         )}
+        {entity === "demo" && <DemoScheduleView onChanged={reload} />}
       </main>
     </div>
   );

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.ad_hoc_visits import find_free_slots
 from app.database import SessionLocal, get_db
+from app.demo_schedule_refresh import refresh_demo_schedule
 from app.employee_schedule import (
     covering_template,
     effective_max_hours_per_day,
@@ -58,6 +59,7 @@ from app.schemas import (
     DayPlanningEmployeeRouteOut,
     DayPlanningRoutesOut,
     DayPlanningStopOut,
+    DemoScheduleRefreshSummary,
     DrivingTimeComputeSummary,
     EmployeeCreate,
     EmployeeOut,
@@ -74,6 +76,7 @@ from app.schemas import (
     OptimizationApplyRequest,
     OptimizationApplyResult,
     OptimizationProposal,
+    OptimizeRunOptions,
     ProductOut,
     ProposedAssignmentOut,
     RegionCreate,
@@ -802,6 +805,7 @@ def create_contract_line(
         end_date=payload.end_date,
         interval_days=payload.interval_days,
         duration_minutes=payload.duration_minutes,
+        priority=payload.priority,
         required_products=required_products,
     )
     db.add(line)
@@ -922,6 +926,7 @@ def update_contract_line(
     line.end_date = payload.end_date
     line.interval_days = payload.interval_days
     line.duration_minutes = payload.duration_minutes
+    line.priority = payload.priority
     line.required_products = required_products
     db.flush()
     _regenerate_future_visits(db, line)
@@ -1067,6 +1072,11 @@ def get_day_planning_routes(date: date, db: Session = Depends(get_db)) -> DayPla
     return DayPlanningRoutesOut(employees=employee_routes)
 
 
+@app.post("/demo/refresh-schedule", response_model=DemoScheduleRefreshSummary)
+def post_refresh_demo_schedule(db: Session = Depends(get_db)) -> dict:
+    return refresh_demo_schedule(db)
+
+
 def _assign_visit(
     db: Session, visit: ServiceVisit, employee: Employee, planned_start: datetime
 ) -> Assignment:
@@ -1134,8 +1144,13 @@ def update_assignment_pin(
 
 
 @app.post("/optimize/propose", response_model=OptimizationProposal)
-def propose_optimization(db: Session = Depends(get_db)) -> OptimizationProposal:
-    payload, excluded_visit_ids = build_optimize_payload(db)
+def propose_optimization(
+    options: OptimizeRunOptions | None = None, db: Session = Depends(get_db)
+) -> OptimizationProposal:
+    options = options or OptimizeRunOptions()
+    payload, excluded_visit_ids = build_optimize_payload(
+        db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
+    )
     try:
         result = request_proposal(payload)
     except httpx.HTTPError as exc:

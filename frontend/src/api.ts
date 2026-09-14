@@ -13,6 +13,7 @@ import type {
   CustomerLocation,
   CustomerLocationCoordinatesInput,
   DayPlanningRoutes,
+  DemoScheduleRefreshSummary,
   DrivingTimeComputeSummary,
   Employee,
   EmployeeCreateInput,
@@ -25,6 +26,7 @@ import type {
   FreeSlot,
   OptimizationApplyResult,
   OptimizationProposal,
+  OptimizeRunOptions,
   Product,
   Region,
   RegionCreateInput,
@@ -357,10 +359,14 @@ export function setAssignmentPinned(
   }).then((res) => handleResponse<Assignment>(res));
 }
 
-export function proposeOptimization(): Promise<OptimizationProposal> {
-  return fetch(`${API_URL}/optimize/propose`, { method: "POST" }).then((res) =>
-    handleResponse<OptimizationProposal>(res)
-  );
+export function proposeOptimization(
+  options?: OptimizeRunOptions
+): Promise<OptimizationProposal> {
+  return fetch(`${API_URL}/optimize/propose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options ?? {}),
+  }).then((res) => handleResponse<OptimizationProposal>(res));
 }
 
 export function applyOptimization(
@@ -376,5 +382,11 @@ export function applyOptimization(
 export function getDayPlanningRoutes(date: string): Promise<DayPlanningRoutes> {
   return fetch(`${API_URL}/day-planning/routes?date=${date}`).then((res) =>
     handleResponse<DayPlanningRoutes>(res)
+  );
+}
+
+export function refreshDemoSchedule(): Promise<DemoScheduleRefreshSummary> {
+  return fetch(`${API_URL}/demo/refresh-schedule`, { method: "POST" }).then((res) =>
+    handleResponse<DemoScheduleRefreshSummary>(res)
   );
 }
