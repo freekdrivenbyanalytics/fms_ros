@@ -221,6 +221,8 @@ class Customer(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
 
+    resco_account_id: Mapped[str | None] = mapped_column(String)
+
     locations: Mapped[list["CustomerLocation"]] = relationship(
         back_populates="customer"
     )
@@ -280,6 +282,7 @@ class CustomerLocation(Base):
     delete_flag: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    resco_asset_id: Mapped[str | None] = mapped_column(String)
 
     customer: Mapped["Customer"] = relationship(back_populates="locations")
     region: Mapped["Region | None"] = relationship(back_populates="customer_locations")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -19,6 +20,9 @@ from app.models import (
     ProductChangeType,
     ProductSyncLog,
 )
+from app.resco import sync_customer_locations_to_resco, sync_customers_to_resco
+
+logger = logging.getLogger(__name__)
 
 # Only products in this number range are synced; see sync_products.
 PRODUCT_NUMBER_PREFIX = "TJN"
@@ -231,6 +235,22 @@ class TripletexClient:
             )
         return response.json()["value"]
 
+    def update_customer(self, customer_id: int, data: dict) -> dict:
+        """Update a customer. Used to seed contact/address fields that
+        aren't otherwise editable through this codebase (see the one-time
+        Resco contact-data seed script)."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.put(
+                f"{self._base_url}/customer/{customer_id}",
+                auth=self._auth(),
+                json=data,
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex customer update failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]
+
     def delete_customer(self, customer_id: int) -> None:
         """Delete a customer. Tripletex has no standalone delete endpoint for
         a delivery address (/deliveryAddress/{id} only supports GET/PUT) —
@@ -302,6 +322,11 @@ def sync_customers(db: Session) -> None:
             )
 
     db.commit()
+
+    try:
+        sync_customers_to_resco(db)
+    except Exception:
+        logger.warning("Resco customer sync failed after Tripletex sync", exc_info=True)
 
 
 _LOCATION_SCALAR_FIELD_MAP = {
@@ -436,6 +461,13 @@ def sync_customer_locations(db: Session) -> None:
             )
 
     db.commit()
+
+    try:
+        sync_customer_locations_to_resco(db)
+    except Exception:
+        logger.warning(
+            "Resco customer location sync failed after Tripletex sync", exc_info=True
+        )
 
 
 _PRODUCT_SCALAR_FIELD_MAP = {

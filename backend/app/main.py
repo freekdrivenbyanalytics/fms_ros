@@ -86,7 +86,12 @@ from app.schemas import (
     RescoSyncSummary,
     ServiceVisitOut,
 )
-from app.resco import sync_all_employees, sync_employee
+from app.resco import (
+    sync_all_employees,
+    sync_customer_locations_to_resco,
+    sync_customers_to_resco,
+    sync_employee,
+)
 from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
 from app.tripletex import sync_customer_locations, sync_customers, sync_products
 
@@ -632,6 +637,11 @@ def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
     )
 
 
+@app.post("/customers/sync-resco", response_model=RescoSyncSummary)
+def sync_customers_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSyncSummary:
+    return sync_customers_to_resco(db)
+
+
 @app.get("/customer-locations", response_model=list[CustomerLocationOut])
 def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocation]:
     return (
@@ -644,6 +654,11 @@ def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocat
         .order_by(CustomerLocation.id)
         .all()
     )
+
+
+@app.post("/customer-locations/sync-resco", response_model=RescoSyncSummary)
+def sync_customer_locations_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSyncSummary:
+    return sync_customer_locations_to_resco(db)
 
 
 @app.patch("/customer-locations/{location_id}/coordinates", response_model=CustomerLocationOut)

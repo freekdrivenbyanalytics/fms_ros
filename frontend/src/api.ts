@@ -215,9 +215,21 @@ export function listCustomers(): Promise<Customer[]> {
   return fetch(`${API_URL}/customers`).then((res) => handleResponse<Customer[]>(res));
 }
 
+export function syncCustomersToResco(): Promise<RescoSyncSummary> {
+  return fetch(`${API_URL}/customers/sync-resco`, { method: "POST" }).then((res) =>
+    handleResponse<RescoSyncSummary>(res)
+  );
+}
+
 export function listCustomerLocations(): Promise<CustomerLocation[]> {
   return fetch(`${API_URL}/customer-locations`).then((res) =>
     handleResponse<CustomerLocation[]>(res)
+  );
+}
+
+export function syncCustomerLocationsToResco(): Promise<RescoSyncSummary> {
+  return fetch(`${API_URL}/customer-locations/sync-resco`, { method: "POST" }).then((res) =>
+    handleResponse<RescoSyncSummary>(res)
   );
 }
 

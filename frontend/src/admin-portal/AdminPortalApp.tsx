@@ -19,16 +19,24 @@ import type {
 } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
+import { CustomersView } from "./CustomersView";
 import { DemoScheduleView } from "./DemoScheduleView";
 import { ProductsView } from "./ProductsView";
 import { RegionsView } from "./RegionsView";
 
-type Entity = "regions" | "products" | "contracts" | "customer-locations" | "demo";
+type Entity =
+  | "regions"
+  | "products"
+  | "contracts"
+  | "customers"
+  | "customer-locations"
+  | "demo";
 
 const ENTITY_LABELS: Record<Entity, string> = {
   regions: "Regions",
   products: "Products",
   contracts: "Contracts",
+  customers: "Customers",
   "customer-locations": "Customer Locations",
   demo: "Demo",
 };
@@ -37,6 +45,7 @@ const ENTITY_ORDER: Entity[] = [
   "regions",
   "products",
   "contracts",
+  "customers",
   "customer-locations",
   "demo",
 ];
@@ -136,6 +145,9 @@ export function AdminPortalApp() {
             products={products}
             onChanged={reload}
           />
+        )}
+        {entity === "customers" && (
+          <CustomersView customers={customers} onChanged={reload} />
         )}
         {entity === "customer-locations" && (
           <CustomerLocationsView customerLocations={customerLocations} onChanged={reload} />

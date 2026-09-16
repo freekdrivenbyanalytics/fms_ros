@@ -100,6 +100,7 @@ class CustomerOut(BaseModel):
     currency: dict | None = None
     ledger_account: dict | None = None
     bank_account_presentation: list | None = None
+    resco_account_id: str | None = None
 
 
 class CustomerLocationOut(BaseModel):
@@ -118,6 +119,7 @@ class CustomerLocationOut(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     coordinates_locked: bool = False
+    resco_asset_id: str | None = None
     customer: CustomerOut
     region: RegionOut | None = None
 
@@ -255,6 +257,16 @@ class EmployeeScheduleDayOverrideBulkCreate(BaseModel):
 
 
 class EmployeeRescoSyncResult(BaseModel):
+    status: Literal["synced", "skipped", "failed"]
+    detail: str | None = None
+
+
+class CustomerRescoSyncResult(BaseModel):
+    status: Literal["synced", "skipped", "failed"]
+    detail: str | None = None
+
+
+class CustomerLocationRescoSyncResult(BaseModel):
     status: Literal["synced", "skipped", "failed"]
     detail: str | None = None
 

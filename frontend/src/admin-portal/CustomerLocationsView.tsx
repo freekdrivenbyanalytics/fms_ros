@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { updateCustomerLocationCoordinates } from "../api";
-import type { CustomerLocation } from "../types";
+import { syncCustomerLocationsToResco, updateCustomerLocationCoordinates } from "../api";
+import type { CustomerLocation, RescoSyncSummary } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
@@ -11,8 +11,26 @@ interface Props {
 
 export function CustomerLocationsView({ customerLocations, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSummary, setSyncSummary] = useState<RescoSyncSummary | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const selected = customerLocations.find((location) => location.id === selectedId) ?? null;
+
+  async function handleSyncToResco() {
+    setSyncing(true);
+    setSyncError(null);
+    setSyncSummary(null);
+    try {
+      const summary = await syncCustomerLocationsToResco();
+      setSyncSummary(summary);
+      await onChanged();
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to sync to Resco");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (selected) {
     return (
@@ -26,7 +44,35 @@ export function CustomerLocationsView({ customerLocations, onChanged }: Props) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-slate-900 mb-4">Customer Locations</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-slate-900">Customer Locations</h2>
+        <button
+          type="button"
+          onClick={handleSyncToResco}
+          disabled={syncing}
+          className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {syncing ? "Syncing…" : "Sync to Resco"}
+        </button>
+      </div>
+
+      {syncError && <p className="text-sm text-red-600 mb-3">{syncError}</p>}
+      {syncSummary && (
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <div>
+            Resco sync: {syncSummary.created} created, {syncSummary.updated} updated,{" "}
+            {syncSummary.skipped} skipped, {syncSummary.failed} failed
+          </div>
+          {syncSummary.errors.length > 0 && (
+            <ul className="mt-1 list-disc list-inside text-red-600">
+              {syncSummary.errors.map((message, index) => (
+                <li key={index}>{message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <ListTable
         items={customerLocations}
         getKey={(location) => location.id}

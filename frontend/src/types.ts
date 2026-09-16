@@ -72,6 +72,7 @@ export interface Customer {
   currency: Record<string, unknown> | null;
   ledger_account: Record<string, unknown> | null;
   bank_account_presentation: unknown[] | null;
+  resco_account_id: string | null;
 }
 
 export interface CustomerLocation {
@@ -82,6 +83,7 @@ export interface CustomerLocation {
   coordinates_locked: boolean;
   customer: Customer;
   region: Region | null;
+  resco_asset_id: string | null;
 }
 
 export interface CustomerLocationCoordinatesInput {
