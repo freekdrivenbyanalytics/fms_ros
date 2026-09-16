@@ -139,7 +139,7 @@ def seed() -> None:
         # written for.
         locations = (
             db.query(CustomerLocation)
-            .filter(CustomerLocation.delete_flag.is_(False))
+            .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
             .order_by(CustomerLocation.id)
             .all()
         )

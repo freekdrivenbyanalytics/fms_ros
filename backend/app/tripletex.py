@@ -24,8 +24,9 @@ from app.resco import sync_customer_locations_to_resco, sync_customers_to_resco
 
 logger = logging.getLogger(__name__)
 
-# Only products in this number range are synced; see sync_products.
-PRODUCT_NUMBER_PREFIX = "TJN"
+# Only products whose number starts with one of these prefixes are synced;
+# see sync_products. "TJN" = tjeneste/service, "PRD" = produkt/product.
+PRODUCT_NUMBER_PREFIXES = ("TJN", "PRD")
 
 API_KEY_PATH = Path(__file__).resolve().parent.parent / ".local" / "api_key"
 
@@ -213,9 +214,13 @@ class TripletexClient:
 
         # Tripletex's /product `number` query param expects a comma-separated
         # list of numeric ids, not a substring filter (confirmed against the
-        # live API — it 422s on a non-numeric value), so the TJN prefix is
+        # live API — it 422s on a non-numeric value), so the prefix filter is
         # applied client-side instead.
-        return [p for p in products if (p.get("number") or "").startswith(PRODUCT_NUMBER_PREFIX)]
+        return [
+            p
+            for p in products
+            if (p.get("number") or "").startswith(PRODUCT_NUMBER_PREFIXES)
+        ]
 
     def create_customer(self, data: dict) -> dict:
         """Create a customer. Tripletex has no standalone create endpoint for
@@ -236,9 +241,9 @@ class TripletexClient:
         return response.json()["value"]
 
     def update_customer(self, customer_id: int, data: dict) -> dict:
-        """Update a customer. Used to seed contact/address fields that
-        aren't otherwise editable through this codebase (see the one-time
-        Resco contact-data seed script)."""
+        """Update a customer's own fields (name, email, phone, organization
+        number, etc.) — not the same as adding a customer location; see
+        `create_delivery_address`/`update_delivery_address` for that."""
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
             response = client.put(
                 f"{self._base_url}/customer/{customer_id}",
@@ -264,6 +269,67 @@ class TripletexClient:
             raise TripletexAuthError(
                 f"Tripletex customer delete failed: {response.status_code} {response.text}"
             )
+
+    def create_delivery_address(self, customer_id: int, data: dict) -> dict:
+        """Add a new delivery address (customer location) to an existing
+        customer. Confirmed live: a customer-level PUT with a nested
+        `deliveryAddress` object creates a genuinely new, independent
+        delivery address every call (it does not update any existing one) —
+        see openspec/changes/add-master-data-crud/design.md."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.put(
+                f"{self._base_url}/customer/{customer_id}",
+                auth=self._auth(),
+                json={"deliveryAddress": data},
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex delivery address create failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]["deliveryAddress"]
+
+    def update_delivery_address(self, location_id: int, data: dict) -> dict:
+        """Update an existing delivery address (customer location) in place."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.put(
+                f"{self._base_url}/deliveryAddress/{location_id}",
+                auth=self._auth(),
+                json=data,
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex delivery address update failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]
+
+    def create_product(self, data: dict) -> dict:
+        """Create a product. Confirmed live: `number`/`name` alone is
+        sufficient — Tripletex fills in every other field with defaults."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.post(
+                f"{self._base_url}/product",
+                auth=self._auth(),
+                json=data,
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex product create failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]
+
+    def update_product(self, product_id: int, data: dict) -> dict:
+        """Update a product's fields."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.put(
+                f"{self._base_url}/product/{product_id}",
+                auth=self._auth(),
+                json=data,
+            )
+        if response.status_code >= 400:
+            raise TripletexAuthError(
+                f"Tripletex product update failed: {response.status_code} {response.text}"
+            )
+        return response.json()["value"]
 
 
 def _apply_fields(customer: Customer, data: dict) -> bool:
@@ -476,6 +542,13 @@ _PRODUCT_SCALAR_FIELD_MAP = {
 }
 
 
+def _derive_product_type(number: str) -> str:
+    """product_type is never independently authoritative — it's always
+    derived from number's actual prefix, so it can't drift out of sync with
+    the one field Tripletex actually owns."""
+    return "PRD" if number.startswith("PRD") else "TJN"
+
+
 def _apply_product_fields(product: Product, data: dict) -> bool:
     changed = False
     for tripletex_key, attr in _PRODUCT_SCALAR_FIELD_MAP.items():
@@ -483,12 +556,18 @@ def _apply_product_fields(product: Product, data: dict) -> bool:
         if getattr(product, attr) != new_value:
             setattr(product, attr, new_value)
             changed = True
+
+    inferred_type = _derive_product_type(product.number)
+    if product.product_type != inferred_type:
+        product.product_type = inferred_type
+        changed = True
+
     return changed
 
 
 def sync_products(db: Session) -> None:
     """Sync products from Tripletex, scoped to those whose number starts
-    with PRODUCT_NUMBER_PREFIX."""
+    with one of PRODUCT_NUMBER_PREFIXES."""
     client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
     tripletex_products = client.get_products()
     tripletex_ids = {data["id"] for data in tripletex_products}

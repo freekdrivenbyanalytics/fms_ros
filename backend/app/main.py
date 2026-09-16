@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.ad_hoc_visits import find_free_slots
+from app.config import settings
 from app.database import SessionLocal, get_db
 from app.demo_schedule_refresh import refresh_demo_schedule
 from app.employee_schedule import (
@@ -18,6 +19,7 @@ from app.employee_schedule import (
     override_exists_for_date,
     templates_overlap,
 )
+from app.geocoding import geocode_address
 from app.geofencing import assign_regions_by_geofence
 from app.tomtom_routing import LocationEndpoint, compute_employee_day_route, compute_region_driving_times
 from app.visit_generation import (
@@ -53,9 +55,13 @@ from app.schemas import (
     ContractLineUpdate,
     ContractOut,
     ContractUpdate,
+    CustomerCreate,
     CustomerLocationCoordinatesUpdate,
+    CustomerLocationCreate,
     CustomerLocationOut,
+    CustomerLocationUpdate,
     CustomerOut,
+    CustomerUpdate,
     DayPlanningEmployeeRouteOut,
     DayPlanningRoutesOut,
     DayPlanningStopOut,
@@ -78,7 +84,9 @@ from app.schemas import (
     OptimizationApplyResult,
     OptimizationProposal,
     OptimizeRunOptions,
+    ProductCreate,
     ProductOut,
+    ProductUpdate,
     ProposedAssignmentOut,
     RegionCreate,
     RegionOut,
@@ -88,12 +96,21 @@ from app.schemas import (
 )
 from app.resco import (
     sync_all_employees,
+    sync_customer,
+    sync_customer_location,
     sync_customer_locations_to_resco,
     sync_customers_to_resco,
     sync_employee,
+    sync_product,
 )
 from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
-from app.tripletex import sync_customer_locations, sync_customers, sync_products
+from app.tripletex import (
+    TripletexAuthError,
+    TripletexClient,
+    sync_customer_locations,
+    sync_customers,
+    sync_products,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -170,6 +187,21 @@ def _lookup_regions_and_products(
     if len(products) != len(set(product_ids)):
         raise HTTPException(status_code=404, detail="One or more products not found")
     return regions, products
+
+
+def _tripletex_client() -> TripletexClient:
+    return TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
+
+
+def _prefixed_product_number(product_type: str, number: str) -> str:
+    return number if number.startswith(product_type) else f"{product_type}{number}"
+
+
+def _customer_location_display_address(
+    address_line_1: str, postal_code: str | None, city: str | None
+) -> str:
+    locality = " ".join(part for part in [postal_code, city] if part)
+    return ", ".join(part for part in [address_line_1, locality] if part)
 
 
 @app.get("/employees", response_model=list[EmployeeOut])
@@ -565,7 +597,7 @@ def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[Cust
     db.commit()
     return (
         db.query(CustomerLocation)
-        .filter(CustomerLocation.delete_flag.is_(False))
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
         .options(
             joinedload(CustomerLocation.customer),
             joinedload(CustomerLocation.region),
@@ -588,7 +620,7 @@ def compute_driving_times(region_id: int, db: Session = Depends(get_db)) -> dict
 def list_products(db: Session = Depends(get_db)) -> list[Product]:
     return (
         db.query(Product)
-        .filter(Product.delete_flag.is_(False))
+        .filter(Product.delete_flag.is_(False), Product.archived.is_(False))
         .order_by(Product.number)
         .all()
     )
@@ -604,17 +636,86 @@ def sync_products_endpoint(db: Session = Depends(get_db)) -> list[Product]:
         ) from exc
     return (
         db.query(Product)
-        .filter(Product.delete_flag.is_(False))
+        .filter(Product.delete_flag.is_(False), Product.archived.is_(False))
         .order_by(Product.number)
         .all()
     )
+
+
+@app.post("/products", response_model=ProductOut, status_code=201)
+def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Product:
+    full_number = _prefixed_product_number(payload.product_type, payload.number)
+
+    client = _tripletex_client()
+    try:
+        data = client.create_product({"number": full_number, "name": payload.name})
+    except TripletexAuthError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Tripletex product create failed: {exc}"
+        ) from exc
+
+    product = Product(
+        id=data["id"],
+        number=full_number,
+        name=payload.name,
+        product_type=payload.product_type,
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+
+    try:
+        sync_product(db, product)
+    except Exception:
+        logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
+
+    return product
+
+
+@app.patch("/products/{product_id}", response_model=ProductOut)
+def update_product(
+    product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)
+) -> Product:
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    full_number = _prefixed_product_number(payload.product_type, payload.number)
+    product.number = full_number
+    product.name = payload.name
+    product.product_type = payload.product_type
+    db.commit()
+    db.refresh(product)
+
+    client = _tripletex_client()
+    try:
+        client.update_product(product.id, {"number": full_number, "name": payload.name})
+    except Exception:
+        logger.warning("Tripletex push failed for product %s", product.id, exc_info=True)
+
+    try:
+        sync_product(db, product)
+    except Exception:
+        logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
+
+    return product
+
+
+@app.delete("/products/{product_id}", status_code=204)
+def delete_product(product_id: int, db: Session = Depends(get_db)) -> None:
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    product.archived = True
+    db.commit()
 
 
 @app.get("/customers", response_model=list[CustomerOut])
 def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
     return (
         db.query(Customer)
-        .filter(Customer.delete_flag.is_(False))
+        .filter(Customer.delete_flag.is_(False), Customer.archived.is_(False))
         .order_by(Customer.id)
         .all()
     )
@@ -631,7 +732,7 @@ def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
         ) from exc
     return (
         db.query(Customer)
-        .filter(Customer.delete_flag.is_(False))
+        .filter(Customer.delete_flag.is_(False), Customer.archived.is_(False))
         .order_by(Customer.id)
         .all()
     )
@@ -642,11 +743,81 @@ def sync_customers_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSync
     return sync_customers_to_resco(db)
 
 
+@app.post("/customers", response_model=CustomerOut, status_code=201)
+def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
+    client = _tripletex_client()
+    try:
+        data = client.create_customer({"name": payload.name})
+    except TripletexAuthError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Tripletex customer create failed: {exc}"
+        ) from exc
+
+    customer = Customer(id=data["id"], name=payload.name)
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+
+    try:
+        sync_customer(db, customer)
+    except Exception:
+        logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
+
+    return customer
+
+
+@app.patch("/customers/{customer_id}", response_model=CustomerOut)
+def update_customer(
+    customer_id: int, payload: CustomerUpdate, db: Session = Depends(get_db)
+) -> Customer:
+    customer = db.get(Customer, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    customer.name = payload.name
+    customer.email = payload.email
+    customer.phone_number = payload.phone_number
+    customer.organization_number = payload.organization_number
+    db.commit()
+    db.refresh(customer)
+
+    client = _tripletex_client()
+    try:
+        client.update_customer(
+            customer.id,
+            {
+                "name": payload.name,
+                "email": payload.email,
+                "phoneNumber": payload.phone_number,
+                "organizationNumber": payload.organization_number,
+            },
+        )
+    except Exception:
+        logger.warning("Tripletex push failed for customer %s", customer.id, exc_info=True)
+
+    try:
+        sync_customer(db, customer)
+    except Exception:
+        logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
+
+    return customer
+
+
+@app.delete("/customers/{customer_id}", status_code=204)
+def delete_customer(customer_id: int, db: Session = Depends(get_db)) -> None:
+    customer = db.get(Customer, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    customer.archived = True
+    db.commit()
+
+
 @app.get("/customer-locations", response_model=list[CustomerLocationOut])
 def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocation]:
     return (
         db.query(CustomerLocation)
-        .filter(CustomerLocation.delete_flag.is_(False))
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
         .options(
             joinedload(CustomerLocation.customer),
             joinedload(CustomerLocation.region),
@@ -677,6 +848,119 @@ def update_customer_location_coordinates(
     db.commit()
     db.refresh(location)
     return location
+
+
+@app.post("/customer-locations", response_model=CustomerLocationOut, status_code=201)
+def create_customer_location(
+    payload: CustomerLocationCreate, db: Session = Depends(get_db)
+) -> CustomerLocation:
+    customer = db.get(Customer, payload.customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    client = _tripletex_client()
+    try:
+        data = client.create_delivery_address(
+            customer.id,
+            {
+                "addressLine1": payload.address_line_1,
+                "addressLine2": payload.address_line_2,
+                "postalCode": payload.postal_code,
+                "city": payload.city,
+            },
+        )
+    except TripletexAuthError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Tripletex delivery address create failed: {exc}"
+        ) from exc
+
+    location = CustomerLocation(
+        id=data["id"],
+        customer_id=customer.id,
+        address_line_1=payload.address_line_1,
+        address_line_2=payload.address_line_2,
+        postal_code=payload.postal_code,
+        city=payload.city,
+        address=_customer_location_display_address(
+            payload.address_line_1, payload.postal_code, payload.city
+        ),
+    )
+    db.add(location)
+    db.commit()
+    db.refresh(location)
+
+    resolved = geocode_address(location.address)
+    if resolved is not None:
+        location.latitude, location.longitude = resolved
+        db.commit()
+        db.refresh(location)
+
+    try:
+        sync_customer_location(db, location)
+    except Exception:
+        logger.warning(
+            "Resco sync failed for customer location %s", location.id, exc_info=True
+        )
+
+    return location
+
+
+@app.patch("/customer-locations/{location_id}", response_model=CustomerLocationOut)
+def update_customer_location(
+    location_id: int, payload: CustomerLocationUpdate, db: Session = Depends(get_db)
+) -> CustomerLocation:
+    location = db.get(CustomerLocation, location_id)
+    if location is None:
+        raise HTTPException(status_code=404, detail="Customer location not found")
+
+    location.address_line_1 = payload.address_line_1
+    location.address_line_2 = payload.address_line_2
+    location.postal_code = payload.postal_code
+    location.city = payload.city
+    location.address = _customer_location_display_address(
+        payload.address_line_1, payload.postal_code, payload.city
+    )
+    if not location.coordinates_locked:
+        resolved = geocode_address(location.address)
+        if resolved is not None:
+            location.latitude, location.longitude = resolved
+    db.commit()
+    db.refresh(location)
+
+    client = _tripletex_client()
+    try:
+        client.update_delivery_address(
+            location.id,
+            {
+                "addressLine1": payload.address_line_1,
+                "addressLine2": payload.address_line_2,
+                "postalCode": payload.postal_code,
+                "city": payload.city,
+            },
+        )
+    except Exception:
+        logger.warning(
+            "Tripletex push failed for customer location %s", location.id, exc_info=True
+        )
+
+    try:
+        sync_customer_location(db, location)
+    except Exception:
+        logger.warning(
+            "Resco sync failed for customer location %s", location.id, exc_info=True
+        )
+
+    return location
+
+
+@app.delete("/customer-locations/{location_id}", status_code=204)
+def delete_customer_location(location_id: int, db: Session = Depends(get_db)) -> None:
+    location = db.get(CustomerLocation, location_id)
+    if location is None:
+        raise HTTPException(status_code=404, detail="Customer location not found")
+
+    location.archived = True
+    db.commit()
 
 
 def _contract_out(contract: Contract) -> ContractOut:

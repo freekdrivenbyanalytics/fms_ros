@@ -150,7 +150,11 @@ export function AdminPortalApp() {
           <CustomersView customers={customers} onChanged={reload} />
         )}
         {entity === "customer-locations" && (
-          <CustomerLocationsView customerLocations={customerLocations} onChanged={reload} />
+          <CustomerLocationsView
+            customerLocations={customerLocations}
+            customers={customers}
+            onChanged={reload}
+          />
         )}
         {entity === "demo" && <DemoScheduleView onChanged={reload} />}
       </main>

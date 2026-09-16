@@ -4,11 +4,12 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Customer, CustomerLocation, Employee
+from app.models import Customer, CustomerLocation, Employee, Product
 from app.schemas import (
     CustomerLocationRescoSyncResult,
     CustomerRescoSyncResult,
     EmployeeRescoSyncResult,
+    ProductRescoSyncResult,
     RescoSyncSummary,
 )
 
@@ -148,6 +149,36 @@ class RescoClient:
             )
         return response.json()
 
+    @staticmethod
+    def _product_payload(product: Product) -> dict:
+        return {"name": product.name, "productnumber": product.number}
+
+    def create_product(self, product: Product) -> dict:
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.post(
+                f"{self._base_url}/product",
+                auth=self._auth(),
+                json=self._product_payload(product),
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco product create failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+
+    def update_product(self, product: Product) -> dict:
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.patch(
+                f"{self._base_url}/product('{product.resco_product_id}')",
+                auth=self._auth(),
+                json=self._product_payload(product),
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco product update failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+
 
 def sync_employee(db: Session, employee: Employee) -> EmployeeRescoSyncResult:
     if not employee.email or not employee.mobile_phone:
@@ -216,7 +247,11 @@ def sync_customer(db: Session, customer: Customer) -> CustomerRescoSyncResult:
 
 
 def sync_customers_to_resco(db: Session) -> RescoSyncSummary:
-    customers = db.query(Customer).filter(Customer.delete_flag.is_(False)).all()
+    customers = (
+        db.query(Customer)
+        .filter(Customer.delete_flag.is_(False), Customer.archived.is_(False))
+        .all()
+    )
 
     created = 0
     updated = 0
@@ -265,7 +300,9 @@ def sync_customer_location(db: Session, location: CustomerLocation) -> CustomerL
 
 def sync_customer_locations_to_resco(db: Session) -> RescoSyncSummary:
     locations = (
-        db.query(CustomerLocation).filter(CustomerLocation.delete_flag.is_(False)).all()
+        db.query(CustomerLocation)
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
+        .all()
     )
 
     created = 0
@@ -292,3 +329,47 @@ def sync_customer_locations_to_resco(db: Session) -> RescoSyncSummary:
     return RescoSyncSummary(
         created=created, updated=updated, skipped=skipped, failed=failed, errors=errors
     )
+
+
+def sync_product(db: Session, product: Product) -> ProductRescoSyncResult:
+    client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
+    try:
+        if product.resco_product_id:
+            client.update_product(product)
+        else:
+            data = client.create_product(product)
+            product.resco_product_id = str(data["id"])
+            db.add(product)
+            db.commit()
+    except Exception as exc:
+        return ProductRescoSyncResult(status="failed", detail=str(exc))
+
+    return ProductRescoSyncResult(status="synced")
+
+
+def sync_products_to_resco(db: Session) -> RescoSyncSummary:
+    products = (
+        db.query(Product)
+        .filter(Product.delete_flag.is_(False), Product.archived.is_(False))
+        .all()
+    )
+
+    created = 0
+    updated = 0
+    failed = 0
+    errors: list[str] = []
+
+    for product in products:
+        was_new = product.resco_product_id is None
+        result = sync_product(db, product)
+        if result.status == "synced":
+            if was_new:
+                created += 1
+            else:
+                updated += 1
+        else:
+            failed += 1
+            if result.detail:
+                errors.append(f"{product.name}: {result.detail}")
+
+    return RescoSyncSummary(created=created, updated=updated, skipped=0, failed=failed, errors=errors)

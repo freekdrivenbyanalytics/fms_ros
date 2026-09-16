@@ -130,6 +130,17 @@ class Product(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
 
+    # Local-only fields, not sourced from or written back to Tripletex.
+    archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    resco_product_id: Mapped[str | None] = mapped_column(String)
+    # "TJN" (tjeneste/service) or "PRD" (produkt/product) — always derived from
+    # number's actual prefix, never trusted as independently authoritative.
+    product_type: Mapped[str] = mapped_column(
+        String, nullable=False, default="TJN", server_default="TJN"
+    )
+
     employees: Mapped[list["Employee"]] = relationship(
         secondary=employee_products, back_populates="products"
     )
@@ -220,6 +231,12 @@ class Customer(Base):
     delete_flag: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Locally-managed soft-delete, independent of Tripletex sync (see
+    # add-master-data-crud design.md for why this must be separate from
+    # delete_flag).
+    archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     resco_account_id: Mapped[str | None] = mapped_column(String)
 
@@ -280,6 +297,12 @@ class CustomerLocation(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Locally-managed soft-delete, independent of Tripletex sync (see
+    # add-master-data-crud design.md for why this must be separate from
+    # delete_flag).
+    archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
     resco_asset_id: Mapped[str | None] = mapped_column(String)

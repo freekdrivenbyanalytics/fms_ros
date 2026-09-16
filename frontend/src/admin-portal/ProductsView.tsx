@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { syncProducts } from "../api";
-import type { Contract, ContractLine, Employee, Product } from "../types";
+import { useState, type FormEvent } from "react";
+import { createProduct, deleteProduct, syncProducts, updateProduct } from "../api";
+import type { Contract, ContractLine, Employee, Product, ProductType } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
@@ -13,6 +13,7 @@ interface Props {
 
 export function ProductsView({ products, employees, contracts, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
@@ -47,6 +48,8 @@ export function ProductsView({ products, employees, contracts, onChanged }: Prop
         product={selected}
         productEmployees={productEmployees}
         productLines={productLines}
+        onChanged={onChanged}
+        onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
       />
     );
@@ -56,16 +59,35 @@ export function ProductsView({ products, employees, contracts, onChanged }: Prop
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Products</h2>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {refreshing ? "Refreshing…" : "Refresh from Tripletex"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh from Tripletex"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating((prev) => !prev)}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+          >
+            {creating ? "Cancel" : "Create Product"}
+          </button>
+        </div>
       </div>
       {refreshMessage && <p className="text-sm text-red-600 mb-3">{refreshMessage}</p>}
+
+      {creating && (
+        <CreateProductForm
+          onCreated={async (product) => {
+            setCreating(false);
+            await onChanged();
+            setSelectedId(product.id);
+          }}
+        />
+      )}
 
       <ListTable
         items={products}
@@ -74,6 +96,7 @@ export function ProductsView({ products, employees, contracts, onChanged }: Prop
         emptyMessage="No products."
         columns={[
           { header: "Number", render: (product) => product.number },
+          { header: "Type", render: (product) => product.product_type },
           { header: "Name", render: (product) => product.name },
           {
             header: "Employees",
@@ -98,20 +121,195 @@ export function ProductsView({ products, employees, contracts, onChanged }: Prop
   );
 }
 
+interface CreateProductFormProps {
+  onCreated: (product: Product) => void | Promise<void>;
+}
+
+function CreateProductForm({ onCreated }: CreateProductFormProps) {
+  const [productType, setProductType] = useState<ProductType>("TJN");
+  const [number, setNumber] = useState("");
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!number || !name) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const product = await createProduct({ product_type: productType, number, name });
+      await onCreated(product);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create product");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mb-4 flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-white p-3"
+    >
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">Type</label>
+        <select
+          value={productType}
+          onChange={(event) => setProductType(event.target.value as ProductType)}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        >
+          <option value="TJN">TJN — Tjeneste</option>
+          <option value="PRD">PRD — Produkt</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">Number</label>
+        <input
+          type="text"
+          value={number}
+          onChange={(event) => setNumber(event.target.value)}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+          required
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={submitting}
+        className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+      >
+        {submitting ? "Creating…" : "Create"}
+      </button>
+      {error && <p className="text-xs text-red-600 w-full">{error}</p>}
+    </form>
+  );
+}
+
 interface ProductDetailProps {
   product: Product;
   productEmployees: Employee[];
   productLines: ContractLine[];
+  onChanged: () => void | Promise<void>;
+  onDeleted: () => void;
   onBack: () => void;
 }
 
-function ProductDetail({ product, productEmployees, productLines, onBack }: ProductDetailProps) {
+function ProductDetail({
+  product,
+  productEmployees,
+  productLines,
+  onChanged,
+  onDeleted,
+  onBack,
+}: ProductDetailProps) {
+  const [productType, setProductType] = useState<ProductType>(product.product_type);
+  const [number, setNumber] = useState(product.number);
+  const [name, setName] = useState(product.name);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProduct(product.id, { product_type: productType, number, name });
+      setDirty(false);
+      await onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save product");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteProduct(product.id);
+      await onChanged();
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete product");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div>
       <BackButton label="Products" onClick={onBack} />
-      <h2 className="text-xl font-semibold text-slate-900 mb-4">
-        {product.number} {product.name}
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-slate-900">
+          {product.number} {product.name}
+        </h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            className="text-sm px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save Changes"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-sm px-3 py-1.5 rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Soft-delete Product"}
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+      <DetailField label="Type">
+        <select
+          value={productType}
+          onChange={(event) => {
+            setProductType(event.target.value as ProductType);
+            setDirty(true);
+          }}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        >
+          <option value="TJN">TJN — Tjeneste</option>
+          <option value="PRD">PRD — Produkt</option>
+        </select>
+      </DetailField>
+      <DetailField label="Number">
+        <input
+          type="text"
+          value={number}
+          onChange={(event) => {
+            setNumber(event.target.value);
+            setDirty(true);
+          }}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        />
+      </DetailField>
+      <DetailField label="Name">
+        <input
+          type="text"
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            setDirty(true);
+          }}
+          className="text-sm border border-slate-300 rounded-md px-2 py-1"
+        />
+      </DetailField>
 
       <DetailField label="Employees who hold this product">
         {productEmployees.length === 0

@@ -1,10 +1,4 @@
-# products Specification
-
-## Purpose
-
-Represents the subset of Tripletex's product catalog scoped to a recognized product type prefix ("TJN" for tjeneste/service, "PRD" for produkt/product), used to qualify which employees can perform which contract lines' service visits. Products may originate in Tripletex or be created locally in fms_ros — either way, Tripletex is the system of record and fms_ros stays in sync with it.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Product data model
 The system SHALL persist each product with a unique identifier (Tripletex's own product id), a product number, a product type (`TJN` for tjeneste/service or `PRD` for produkt/product — derived from the product number's prefix), a product name, a soft-delete flag, and a remembered Resco Product ID once the product has been synced to Resco.
@@ -32,8 +26,10 @@ The system SHALL let a user trigger an on-demand sync of products from Tripletex
 - **WHEN** a product sync runs and a locally present, soft-deleted product's Tripletex id is returned again among matching products
 - **THEN** the system clears that product's deleted flag
 
+## ADDED Requirements
+
 ### Requirement: Create, update, and soft-delete a product
-The system SHALL allow a user to create a product with a product type (`TJN` or `PRD`), a number, and a name: the system SHALL prefix the given number with the product type (unless the number already carries that prefix) before pushing it to Tripletex as a new product's number, and SHALL adopt Tripletex's returned id as the new product's own id. Only product numbers starting with a recognized product type prefix (`TJN` or `PRD`) are ever pulled from Tripletex by the regular product sync, so every product created through this endpoint stays within that scope and is never mistaken for deleted by a later sync. The system SHALL allow a user to update a product's type, number, or name, pushing the same prefixing logic and the resulting number/name to the corresponding Tripletex product; and to soft-delete a product. A soft-deleted product SHALL NOT be permanently removed, and SHALL NOT be deleted from Tripletex.
+The system SHALL allow a user to create a product with a product type (`TJN` or `PRD`), a number, and a name: the system SHALL prefix the given number with the product type (unless the number already carries that prefix) before pushing it to Tripletex as a new product's number, and SHALL adopt Tripletex's returned id as the new product's own id. Only product numbers starting with a recognized product type prefix (`TJN` or `PRD`) are ever pulled from Tripletex by the regular product sync — see the resco-integration/products sync behavior — so every product created through this endpoint stays within that scope and is never mistaken for deleted by a later sync. The system SHALL allow a user to update a product's type, number, or name, pushing the same prefixing logic and the resulting number/name to the corresponding Tripletex product; and to soft-delete a product. A soft-deleted product SHALL NOT be permanently removed, and SHALL NOT be deleted from Tripletex.
 
 #### Scenario: Creating a product
 - **WHEN** a user creates a product with a product type, a number, and a name
@@ -50,14 +46,3 @@ The system SHALL allow a user to create a product with a product type (`TJN` or 
 #### Scenario: A soft-deleted product stays excluded after a later Tripletex sync
 - **WHEN** a product is soft-deleted in fms_ros, and a later Tripletex product sync runs while that product is still present and unchanged in Tripletex
 - **THEN** the product remains excluded from the product list — the sync SHALL NOT treat its continued presence in Tripletex as a reason to undo the local soft-delete
-
-### Requirement: List products
-The system SHALL provide an API to retrieve the list of all products, excluding products marked deleted by default.
-
-#### Scenario: Retrieve all products
-- **WHEN** a client requests the list of products
-- **THEN** the system returns all non-deleted persisted products
-
-#### Scenario: Deleted product is excluded from the list
-- **WHEN** a caller requests the list of products
-- **THEN** products marked deleted are not included in the result

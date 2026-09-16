@@ -63,6 +63,7 @@ def build_region_location_set(db: Session, region: Region) -> list[LocationEndpo
         .filter(
             CustomerLocation.region_id == region.id,
             CustomerLocation.delete_flag.is_(False),
+            CustomerLocation.archived.is_(False),
             CustomerLocation.latitude.isnot(None),
             CustomerLocation.longitude.isnot(None),
         )

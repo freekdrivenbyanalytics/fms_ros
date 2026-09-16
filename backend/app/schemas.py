@@ -50,6 +50,20 @@ class ProductOut(BaseModel):
 
     id: int
     number: str
+    product_type: str
+    name: str
+    resco_product_id: str | None = None
+
+
+class ProductCreate(BaseModel):
+    product_type: Literal["TJN", "PRD"]
+    number: str
+    name: str
+
+
+class ProductUpdate(BaseModel):
+    product_type: Literal["TJN", "PRD"]
+    number: str
     name: str
 
 
@@ -128,6 +142,32 @@ class CustomerLocationCoordinatesUpdate(BaseModel):
     latitude: float
     longitude: float
     coordinates_locked: bool
+
+
+class CustomerCreate(BaseModel):
+    name: str
+
+
+class CustomerUpdate(BaseModel):
+    name: str
+    email: str | None = None
+    phone_number: str | None = None
+    organization_number: str | None = None
+
+
+class CustomerLocationCreate(BaseModel):
+    customer_id: int
+    address_line_1: str
+    address_line_2: str | None = None
+    postal_code: str | None = None
+    city: str | None = None
+
+
+class CustomerLocationUpdate(BaseModel):
+    address_line_1: str
+    address_line_2: str | None = None
+    postal_code: str | None = None
+    city: str | None = None
 
 
 class ContractLineOut(BaseModel):
@@ -267,6 +307,11 @@ class CustomerRescoSyncResult(BaseModel):
 
 
 class CustomerLocationRescoSyncResult(BaseModel):
+    status: Literal["synced", "skipped", "failed"]
+    detail: str | None = None
+
+
+class ProductRescoSyncResult(BaseModel):
     status: Literal["synced", "skipped", "failed"]
     detail: str | None = None
 

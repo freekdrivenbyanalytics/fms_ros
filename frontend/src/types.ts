@@ -21,8 +21,24 @@ export interface RegionUpdateInput {
   geo_shape: GeoPoint[] | null;
 }
 
+export type ProductType = "TJN" | "PRD";
+
 export interface Product {
   id: number;
+  number: string;
+  product_type: ProductType;
+  name: string;
+  resco_product_id: string | null;
+}
+
+export interface ProductCreateInput {
+  product_type: ProductType;
+  number: string;
+  name: string;
+}
+
+export interface ProductUpdateInput {
+  product_type: ProductType;
   number: string;
   name: string;
 }
@@ -75,8 +91,23 @@ export interface Customer {
   resco_account_id: string | null;
 }
 
+export interface CustomerCreateInput {
+  name: string;
+}
+
+export interface CustomerUpdateInput {
+  name: string;
+  email: string | null;
+  phone_number: string | null;
+  organization_number: string | null;
+}
+
 export interface CustomerLocation {
   id: number;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  postal_code: string | null;
+  city: string | null;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -90,6 +121,21 @@ export interface CustomerLocationCoordinatesInput {
   latitude: number;
   longitude: number;
   coordinates_locked: boolean;
+}
+
+export interface CustomerLocationCreateInput {
+  customer_id: number;
+  address_line_1: string;
+  address_line_2: string | null;
+  postal_code: string | null;
+  city: string | null;
+}
+
+export interface CustomerLocationUpdateInput {
+  address_line_1: string;
+  address_line_2: string | null;
+  postal_code: string | null;
+  city: string | null;
 }
 
 export interface ContractLine {

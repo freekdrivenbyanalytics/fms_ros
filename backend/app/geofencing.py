@@ -32,7 +32,11 @@ def assign_regions_by_geofence(db: Session) -> None:
         .order_by(Region.id)
         .all()
     )
-    locations = db.query(CustomerLocation).filter(CustomerLocation.delete_flag.is_(False)).all()
+    locations = (
+        db.query(CustomerLocation)
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
+        .all()
+    )
 
     for location in locations:
         matched_region_id = None
