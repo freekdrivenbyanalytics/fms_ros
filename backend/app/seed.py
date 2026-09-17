@@ -1,5 +1,5 @@
 import random
-from datetime import date, time, timedelta
+from datetime import date, time
 
 from app.database import SessionLocal
 from app.models import (
@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.geofencing import assign_regions_by_geofence
 from app.tripletex import sync_customer_locations, sync_customers, sync_products
+from app.visit_generation import step_occurrence
 
 # The only products seeded assignments are drawn from; kept deliberately
 # small and specific rather than the full TJN catalog.
@@ -160,22 +161,26 @@ def seed() -> None:
         contract_line_fixtures = [
             {
                 "start_date": date(2026, 8, 20),
-                "interval_days": 30,
+                "interval_unit": "month",
+                "interval_count": 1,
                 "duration_minutes": 60,
             },
             {
                 "start_date": date(2026, 8, 20),
-                "interval_days": 14,
+                "interval_unit": "week",
+                "interval_count": 2,
                 "duration_minutes": 90,
             },
             {
                 "start_date": date(2026, 8, 21),
-                "interval_days": 7,
+                "interval_unit": "week",
+                "interval_count": 1,
                 "duration_minutes": 45,
             },
             {
                 "start_date": date(2026, 8, 22),
-                "interval_days": 21,
+                "interval_unit": "week",
+                "interval_count": 3,
                 "duration_minutes": 30,
             },
         ]
@@ -196,7 +201,8 @@ def seed() -> None:
                 contract=contract,
                 customer_location=location,
                 start_date=fixture["start_date"],
-                interval_days=fixture["interval_days"],
+                interval_unit=fixture["interval_unit"],
+                interval_count=fixture["interval_count"],
                 duration_minutes=fixture["duration_minutes"],
                 required_products=_random_products(products),
             )
@@ -206,13 +212,14 @@ def seed() -> None:
 
         visits = []
         for line in lines:
+            requested_date = line.start_date
             for occurrence in range(2):
-                visits.append(
-                    ServiceVisit(
-                        contract_line=line,
-                        requested_date=line.start_date
-                        + timedelta(days=occurrence * line.interval_days),
+                if occurrence > 0:
+                    requested_date = step_occurrence(
+                        requested_date, line.interval_unit, line.interval_count
                     )
+                visits.append(
+                    ServiceVisit(contract_line=line, requested_date=requested_date)
                 )
         db.add_all(visits)
 

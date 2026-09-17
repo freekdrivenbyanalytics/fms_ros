@@ -7,15 +7,19 @@ Gives a planner a dedicated, standalone area to manage employee masterdata and e
 ## Requirements
 
 ### Requirement: Employee Management is a separate top-level area
-The system SHALL provide Employee Management as a top-level area reachable via a landing entry point distinct from both the Planning application's navigation and the Customer Portal, sharing no header or navigation elements with either.
+The system SHALL provide Employee Management as a top-level area reachable via a landing entry point distinct from both the Planning application's navigation and the Customer Portal, sharing no header or in-app navigation menu with either, except for a small, consistent set of cross-portal links (one per other portal) letting a user jump directly to the Planning application, the Customer Portal, or the Admin Portal.
 
 #### Scenario: User reaches Employee Management
 - **WHEN** a user navigates to the Employee Management entry point
-- **THEN** the system shows Employee Management without any Planning-application or Customer Portal navigation visible alongside it
+- **THEN** the system shows Employee Management without any Planning-application or Customer Portal in-app navigation menu visible alongside it, other than the cross-portal links
 
 #### Scenario: Employee Management and Planning share the same data
 - **WHEN** the same backend/database that serves the Planning application also serves Employee Management
 - **THEN** any employee visible in the Planning application is also visible in Employee Management, and vice versa
+
+#### Scenario: Employee Management links to every other portal
+- **WHEN** a user views Employee Management's sidebar
+- **THEN** it shows a link to the Planning application, a link to the Customer Portal, and a link to the Admin Portal
 
 ### Requirement: Employee list and detail views
 The system SHALL provide, within Employee Management, a list view of all non-deleted employees and a detail view for each employee showing its own fields, the regions it is scoped to, the skills it holds, its schedule templates, and its day overrides.

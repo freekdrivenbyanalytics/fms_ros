@@ -206,6 +206,28 @@ class CustomerLocationUpdate(BaseModel):
     city: str | None = None
 
 
+ALLOWED_CONTRACT_LINE_INTERVALS: set[tuple[str, int]] = {
+    ("week", 1),
+    ("week", 2),
+    ("week", 3),
+    ("week", 4),
+    ("month", 1),
+    ("month", 2),
+    ("month", 3),
+    ("quarter", 1),
+}
+
+
+def _validate_contract_line_interval(
+    interval_unit: str, interval_count: int
+) -> None:
+    if (interval_unit, interval_count) not in ALLOWED_CONTRACT_LINE_INTERVALS:
+        raise ValueError(
+            f"Unsupported interval: every {interval_count} {interval_unit}(s). "
+            f"Allowed combinations: {sorted(ALLOWED_CONTRACT_LINE_INTERVALS)}"
+        )
+
+
 class ContractLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -213,7 +235,8 @@ class ContractLineOut(BaseModel):
     contract_id: int
     start_date: date
     end_date: date | None = None
-    interval_days: int
+    interval_unit: Literal["week", "month", "quarter"]
+    interval_count: int
     duration_minutes: int
     priority: int
     customer_location: CustomerLocationOut
@@ -240,20 +263,32 @@ class ContractLineCreate(BaseModel):
     customer_location_id: int
     start_date: date
     end_date: date | None = None
-    interval_days: int
+    interval_unit: Literal["week", "month", "quarter"]
+    interval_count: int
     duration_minutes: int
     priority: int = 2
     required_product_ids: list[int]
+
+    @model_validator(mode="after")
+    def _check_interval(self) -> "ContractLineCreate":
+        _validate_contract_line_interval(self.interval_unit, self.interval_count)
+        return self
 
 
 class ContractLineUpdate(BaseModel):
     customer_location_id: int
     start_date: date
     end_date: date | None = None
-    interval_days: int
+    interval_unit: Literal["week", "month", "quarter"]
+    interval_count: int
     duration_minutes: int
     priority: int = 2
     required_product_ids: list[int]
+
+    @model_validator(mode="after")
+    def _check_interval(self) -> "ContractLineUpdate":
+        _validate_contract_line_interval(self.interval_unit, self.interval_count)
+        return self
 
 
 class EmployeeScheduleTemplateOut(BaseModel):

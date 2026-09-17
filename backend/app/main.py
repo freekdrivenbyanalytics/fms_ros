@@ -1207,12 +1207,16 @@ def _regenerate_future_visits(db: Session, line: ContractLine) -> None:
     anchor = max(started_dates) if started_dates else None
 
     if anchor is not None:
-        occurrence_dates = extend_occurrence_dates(anchor, line.interval_days, horizon)
+        occurrence_dates = extend_occurrence_dates(
+            line.start_date, line.interval_unit, line.interval_count, anchor, horizon
+        )
     elif horizon < today:
         occurrence_dates = []
     else:
-        occurrence_dates = generate_occurrence_dates(line.start_date, line.interval_days, horizon)
-        if line.start_date < today and line.interval_days > 0:
+        occurrence_dates = generate_occurrence_dates(
+            line.start_date, line.interval_unit, line.interval_count, horizon
+        )
+        if line.start_date < today:
             occurrence_dates = [today] + [d for d in occurrence_dates if d > today]
 
     for occurrence_date in occurrence_dates:
@@ -1258,7 +1262,8 @@ def create_contract_line(
         customer_location_id=customer_location.id,
         start_date=payload.start_date,
         end_date=payload.end_date,
-        interval_days=payload.interval_days,
+        interval_unit=payload.interval_unit,
+        interval_count=payload.interval_count,
         duration_minutes=payload.duration_minutes,
         priority=payload.priority,
         required_products=required_products,
@@ -1267,7 +1272,7 @@ def create_contract_line(
     db.flush()
 
     occurrence_dates = generate_occurrence_dates(
-        line.start_date, line.interval_days, line.end_date
+        line.start_date, line.interval_unit, line.interval_count, line.end_date
     )
     for occurrence_date in occurrence_dates:
         db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))
@@ -1300,7 +1305,7 @@ def extend_contract_line_visits(db: Session = Depends(get_db)) -> dict:
         ) or line.start_date
 
         occurrence_dates = extend_occurrence_dates(
-            furthest_existing, line.interval_days, new_horizon
+            line.start_date, line.interval_unit, line.interval_count, furthest_existing, new_horizon
         )
         if not occurrence_dates:
             continue
@@ -1379,7 +1384,8 @@ def update_contract_line(
     line.customer_location_id = customer_location.id
     line.start_date = payload.start_date
     line.end_date = payload.end_date
-    line.interval_days = payload.interval_days
+    line.interval_unit = payload.interval_unit
+    line.interval_count = payload.interval_count
     line.duration_minutes = payload.duration_minutes
     line.priority = payload.priority
     line.required_products = required_products

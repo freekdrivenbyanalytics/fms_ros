@@ -143,6 +143,31 @@ export function AdminPortalApp() {
             </button>
           ))}
         </nav>
+        <div className="mt-6 pt-4 border-t border-slate-200">
+          <div className="text-xs uppercase tracking-wide text-slate-400 mb-2 px-3">
+            Other portals
+          </div>
+          <nav className="flex flex-col gap-1">
+            <a
+              href="/index.html"
+              className="text-left rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Planning
+            </a>
+            <a
+              href="/customer-portal.html"
+              className="text-left rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Customer Portal
+            </a>
+            <a
+              href="/employee-management.html"
+              className="text-left rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Employee Management
+            </a>
+          </nav>
+        </div>
       </aside>
       <main className="flex-1 p-8">
         {entity === "regions" && (

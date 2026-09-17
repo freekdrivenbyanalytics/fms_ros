@@ -1,17 +1,4 @@
-# contracts Specification
-
-## Purpose
-
-Represents a customer's recurring service agreement (a contract) and the per-location schedules under it (contract lines), each defining the interval, duration, and product requirements of the service visits it generates.
-
-## Requirements
-
-### Requirement: Contract data model
-The system SHALL persist each contract with a unique identifier, the customer it belongs to, and a soft-delete flag.
-
-#### Scenario: Contract is persisted with required fields
-- **WHEN** a contract is created with id and customer_id
-- **THEN** the system persists the contract and both fields are retrievable unchanged
+## MODIFIED Requirements
 
 ### Requirement: Contract Line data model
 The system SHALL persist each contract line with a unique identifier, the contract it belongs to, the customer location it applies to, a start date, an optional end date, a recurrence interval expressed as an interval unit (`week`, `month`, or `quarter`) and an interval count, a visit duration in minutes, the products it requires, a priority (1 = high, 2 = medium, 3 = low, defaulting to 2), and a soft-delete flag.
@@ -19,35 +6,6 @@ The system SHALL persist each contract line with a unique identifier, the contra
 #### Scenario: Contract line is persisted with required fields
 - **WHEN** a contract line is created with id, contract_id, customer_location_id, start_date, interval_unit, interval_count, duration_minutes, and one or more required products
 - **THEN** the system persists the contract line and all fields are retrievable unchanged, with no end date unless one was given and a priority of 2 unless one was given
-
-### Requirement: A contract can have multiple lines
-The system SHALL allow a contract to have one or more contract lines.
-
-#### Scenario: Contract with multiple lines
-- **WHEN** a contract has two or more contract lines persisted with its contract_id
-- **THEN** each line is retrievable and associated with that contract
-
-### Requirement: A contract line can require multiple products
-The system SHALL allow a contract line to require more than one product.
-
-#### Scenario: Contract line with multiple required products
-- **WHEN** a contract line is associated with two or more products
-- **THEN** each association is retrievable and the contract line's required products include all of them
-
-### Requirement: Create, update, and soft-delete a contract
-The system SHALL allow a user to create a contract for a customer, update which customer it belongs to, and soft-delete it. A soft-deleted contract SHALL NOT be permanently removed.
-
-#### Scenario: Creating a contract
-- **WHEN** a user creates a contract for a customer
-- **THEN** the system persists a new contract linked to that customer, with no contract lines yet
-
-#### Scenario: Updating a contract
-- **WHEN** a user updates a contract's customer
-- **THEN** the system persists the change and the contract is now linked to the new customer
-
-#### Scenario: Soft-deleting a contract
-- **WHEN** a user soft-deletes a contract
-- **THEN** the system marks it deleted rather than removing it, and it no longer appears in the default contract list
 
 ### Requirement: Create, update, and soft-delete a contract line
 The system SHALL allow a user to create a contract line under a contract for one of that contract's customer's locations, update its customer location, dates, interval unit and count, duration, priority, and required products, and soft-delete it. A soft-deleted contract line SHALL NOT be permanently removed.
@@ -68,23 +26,7 @@ The system SHALL allow a user to create a contract line under a contract for one
 - **WHEN** a user soft-deletes a contract line
 - **THEN** the system marks it deleted rather than removing it, it no longer appears in the default contract line list, and any service visits generated from it (and any assignment made against one of those visits) are permanently removed
 
-### Requirement: Soft-deleting a contract cascades to its lines
-The system SHALL soft-delete every contract line belonging to a contract when that contract is soft-deleted, removing their generated service visits the same way a direct contract line deletion does.
-
-#### Scenario: Deleting a contract deletes its lines
-- **WHEN** a user soft-deletes a contract that has one or more contract lines
-- **THEN** the system also marks each of those contract lines deleted and permanently removes their generated service visits (and any assignments against them)
-
-### Requirement: Deleted contracts and contract lines are hidden by default
-The system SHALL exclude soft-deleted contracts from the contract list, and soft-deleted contract lines from a contract's list of lines, returned to callers by default.
-
-#### Scenario: Deleted contract is excluded from the list
-- **WHEN** a caller requests the list of contracts
-- **THEN** contracts marked deleted are not included in the result
-
-#### Scenario: Deleted contract line is excluded from its contract's lines
-- **WHEN** a caller requests a contract's lines
-- **THEN** contract lines marked deleted are not included in the result
+## ADDED Requirements
 
 ### Requirement: A contract line's recurrence interval is limited to a fixed set of combinations
 The system SHALL only accept an interval unit and count combination from a fixed set: `week` with a count of 1, 2, 3, or 4; `month` with a count of 1, 2, or 3; or `quarter` with a count of 1. The system SHALL reject any other combination.

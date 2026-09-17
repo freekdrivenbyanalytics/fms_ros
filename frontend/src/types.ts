@@ -170,12 +170,15 @@ export interface CustomerLocationUpdateInput {
   city: string | null;
 }
 
+export type ContractLineIntervalUnit = "week" | "month" | "quarter";
+
 export interface ContractLine {
   id: number;
   contract_id: number;
   start_date: string;
   end_date: string | null;
-  interval_days: number;
+  interval_unit: ContractLineIntervalUnit;
+  interval_count: number;
   duration_minutes: number;
   priority: number;
   customer_location: CustomerLocation;
@@ -200,7 +203,8 @@ export interface ContractLineCreateInput {
   customer_location_id: number;
   start_date: string;
   end_date: string | null;
-  interval_days: number;
+  interval_unit: ContractLineIntervalUnit;
+  interval_count: number;
   duration_minutes: number;
   priority: number;
   required_product_ids: number[];
@@ -210,11 +214,29 @@ export interface ContractLineUpdateInput {
   customer_location_id: number;
   start_date: string;
   end_date: string | null;
-  interval_days: number;
+  interval_unit: ContractLineIntervalUnit;
+  interval_count: number;
   duration_minutes: number;
   priority: number;
   required_product_ids: number[];
 }
+
+export interface ContractLineIntervalOption {
+  label: string;
+  interval_unit: ContractLineIntervalUnit;
+  interval_count: number;
+}
+
+export const CONTRACT_LINE_INTERVAL_OPTIONS: ContractLineIntervalOption[] = [
+  { label: "Every week", interval_unit: "week", interval_count: 1 },
+  { label: "Every 2 weeks", interval_unit: "week", interval_count: 2 },
+  { label: "Every 3 weeks", interval_unit: "week", interval_count: 3 },
+  { label: "Every 4 weeks", interval_unit: "week", interval_count: 4 },
+  { label: "Every month", interval_unit: "month", interval_count: 1 },
+  { label: "Every 2 months", interval_unit: "month", interval_count: 2 },
+  { label: "Every 3 months", interval_unit: "month", interval_count: 3 },
+  { label: "Every quarter", interval_unit: "quarter", interval_count: 1 },
+];
 
 export type LunchType = "none" | "fixed" | "flexible";
 export type DayType = "working" | "holiday" | "sick";

@@ -399,7 +399,10 @@ class ContractLine(Base):
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date)
-    interval_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "week", "month", or "quarter" — see schemas.ALLOWED_CONTRACT_LINE_INTERVALS
+    # for the fixed set of (interval_unit, interval_count) pairs this may take.
+    interval_unit: Mapped[str] = mapped_column(String, nullable=False)
+    interval_count: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=2, server_default="2")
     delete_flag: Mapped[bool] = mapped_column(

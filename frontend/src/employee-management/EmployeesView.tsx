@@ -275,7 +275,16 @@ function EmployeeForm({ regions, skills, existingEmployee, onSaved, onCancel }: 
         </div>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Skills</div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs uppercase tracking-wide text-slate-400">Skills</div>
+          <button
+            type="button"
+            onClick={() => setSkillIds(skills.map((skill) => skill.id))}
+            className="text-xs text-slate-500 hover:text-slate-800 underline"
+          >
+            Select all
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {skills.map((skill) => (
             <label key={skill.id} className="flex items-center gap-1 text-sm">

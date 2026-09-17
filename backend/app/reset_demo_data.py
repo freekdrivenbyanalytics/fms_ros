@@ -44,7 +44,8 @@ DEMO_DATA_DIR = Path(__file__).resolve().parent / "demo_data"
 CUSTOMERS_CSV = DEMO_DATA_DIR / "customers.csv"
 CONTRACT_LINES_CSV = DEMO_DATA_DIR / "contract_lines.csv"
 
-CONTRACT_LINE_INTERVAL_DAYS = 15
+CONTRACT_LINE_INTERVAL_UNIT = "week"
+CONTRACT_LINE_INTERVAL_COUNT = 2
 CONTRACT_LINE_DURATION_MINUTES = 45
 DEMO_PRODUCT_NUMBERS = ["TJN10001", "TJN10002", "TJN10003", "TJN10004"]
 HELD_BACK_PRODUCT_NUMBER = "TJN10004"
@@ -163,7 +164,8 @@ def _seed_contracts_and_visits(
             customer_location=location,
             start_date=today,
             end_date=None,
-            interval_days=CONTRACT_LINE_INTERVAL_DAYS,
+            interval_unit=CONTRACT_LINE_INTERVAL_UNIT,
+            interval_count=CONTRACT_LINE_INTERVAL_COUNT,
             duration_minutes=CONTRACT_LINE_DURATION_MINUTES,
             required_products=[product],
         )
@@ -172,7 +174,7 @@ def _seed_contracts_and_visits(
         lines_created += 1
 
         occurrence_dates = generate_occurrence_dates(
-            line.start_date, line.interval_days, line.end_date
+            line.start_date, line.interval_unit, line.interval_count, line.end_date
         )
         for occurrence_date in occurrence_dates:
             db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))

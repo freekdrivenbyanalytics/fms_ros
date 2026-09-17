@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import type { Contract, CustomerLocation } from "../types";
+import type { Contract, ContractLine, CustomerLocation } from "../types";
+import { CONTRACT_LINE_INTERVAL_OPTIONS } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+
+function formatInterval(unit: ContractLine["interval_unit"], count: number): string {
+  const match = CONTRACT_LINE_INTERVAL_OPTIONS.find(
+    (option) => option.interval_unit === unit && option.interval_count === count
+  );
+  return match ? match.label : `Every ${count} ${unit}(s)`;
+}
 
 interface Props {
   customerLocations: CustomerLocation[];
@@ -50,7 +58,7 @@ export function CustomerLocationsView({
             <ul className="space-y-1">
               {locationLines.map((line) => (
                 <li key={line.id}>
-                  Every {line.interval_days} days, {line.duration_minutes} min —{" "}
+                  {formatInterval(line.interval_unit, line.interval_count)}, {line.duration_minutes} min —{" "}
                   {line.required_products.map((product) => `${product.number} ${product.name}`).join(", ") ||
                     "no products required"}
                 </li>

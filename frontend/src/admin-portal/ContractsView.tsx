@@ -10,11 +10,13 @@ import {
 import type {
   Contract,
   ContractLine,
+  ContractLineIntervalUnit,
   Customer,
   CustomerLocation,
   Product,
   ServiceVisit,
 } from "../types";
+import { CONTRACT_LINE_INTERVAL_OPTIONS } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
@@ -23,6 +25,13 @@ const PRIORITY_LABELS: Record<number, string> = {
   2: "Medium priority",
   3: "Low priority",
 };
+
+function formatInterval(unit: ContractLineIntervalUnit, count: number): string {
+  const match = CONTRACT_LINE_INTERVAL_OPTIONS.find(
+    (option) => option.interval_unit === unit && option.interval_count === count
+  );
+  return match ? match.label.toLowerCase() : `every ${count} ${unit}(s)`;
+}
 
 interface Props {
   contracts: Contract[];
@@ -346,7 +355,7 @@ function ContractLineRow({ line, locations, visits, products, onChanged }: Contr
             {line.customer_location.address} ({line.customer_location.region?.name ?? "no region"})
           </div>
           <div className="text-slate-600 mt-1">
-            Every {line.interval_days} days, {line.duration_minutes} min — {line.start_date}
+            {formatInterval(line.interval_unit, line.interval_count)}, {line.duration_minutes} min — {line.start_date}
             {line.end_date ? ` to ${line.end_date}` : ""}
             {" — "}
             {PRIORITY_LABELS[line.priority] ?? `priority ${line.priority}`}
@@ -435,8 +444,10 @@ function ContractLineForm({
   const [startDate, setStartDate] = useState(existingLine?.start_date ?? "");
   const [endDate, setEndDate] = useState(existingLine?.end_date ?? "");
   const [noEndDate, setNoEndDate] = useState(existingLine ? existingLine.end_date === null : false);
-  const [intervalDays, setIntervalDays] = useState(
-    existingLine ? String(existingLine.interval_days) : ""
+  const [intervalKey, setIntervalKey] = useState(
+    existingLine
+      ? `${existingLine.interval_unit}:${existingLine.interval_count}`
+      : `${CONTRACT_LINE_INTERVAL_OPTIONS[0].interval_unit}:${CONTRACT_LINE_INTERVAL_OPTIONS[0].interval_count}`
   );
   const [durationMinutes, setDurationMinutes] = useState(
     existingLine ? String(existingLine.duration_minutes) : ""
@@ -454,15 +465,20 @@ function ContractLineForm({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!customerLocationId || !startDate || !intervalDays || !durationMinutes) return;
+    if (!customerLocationId || !startDate || !intervalKey || !durationMinutes) return;
     setSubmitting(true);
     setError(null);
     try {
+      const [intervalUnit, intervalCount] = intervalKey.split(":") as [
+        ContractLineIntervalUnit,
+        string,
+      ];
       const payload = {
         customer_location_id: Number(customerLocationId),
         start_date: startDate,
         end_date: noEndDate ? null : (endDate || null),
-        interval_days: Number(intervalDays),
+        interval_unit: intervalUnit,
+        interval_count: Number(intervalCount),
         duration_minutes: Number(durationMinutes),
         priority,
         required_product_ids: productIds,
@@ -500,59 +516,70 @@ function ContractLineForm({
           </option>
         ))}
       </select>
-      <div className="flex gap-2">
-        <input
-          type="date"
-          value={startDate}
-          onChange={(event) => setStartDate(event.target.value)}
-          className="text-sm border border-slate-300 rounded-md px-2 py-1"
-          required
-        />
-        <input
-          type="date"
-          value={noEndDate ? "2099-12-31" : endDate}
-          onChange={(event) => setEndDate(event.target.value)}
-          placeholder="End date (optional)"
-          disabled={noEndDate}
-          className="text-sm border border-slate-300 rounded-md px-2 py-1 disabled:bg-slate-100 disabled:text-slate-400"
-        />
-        <label className="flex items-center gap-1 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={noEndDate}
-            onChange={(event) => setNoEndDate(event.target.checked)}
-          />
-          No end date
+      <div>
+        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+          Schedule
         </label>
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          min={1}
-          value={intervalDays}
-          onChange={(event) => setIntervalDays(event.target.value)}
-          placeholder="Interval (days)"
-          className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
-          required
-        />
-        <input
-          type="number"
-          min={1}
-          value={durationMinutes}
-          onChange={(event) => setDurationMinutes(event.target.value)}
-          placeholder="Duration (min)"
-          className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
-          required
-        />
-        <select
-          value={priority}
-          onChange={(event) => setPriority(Number(event.target.value))}
-          className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
-        >
-          <option value={1}>High priority</option>
-          <option value={2}>Medium priority</option>
-          <option value={3}>Low priority</option>
-        </select>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value)}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1"
+            required
+          />
+          <input
+            type="date"
+            value={noEndDate ? "2099-12-31" : endDate}
+            onChange={(event) => setEndDate(event.target.value)}
+            placeholder="End date (optional)"
+            disabled={noEndDate}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 disabled:bg-slate-100 disabled:text-slate-400"
+          />
+          <label className="flex items-center gap-1 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={noEndDate}
+              onChange={(event) => setNoEndDate(event.target.checked)}
+            />
+            No end date
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={intervalKey}
+            onChange={(event) => setIntervalKey(event.target.value)}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
+            required
+          >
+            {CONTRACT_LINE_INTERVAL_OPTIONS.map((option) => (
+              <option
+                key={`${option.interval_unit}:${option.interval_count}`}
+                value={`${option.interval_unit}:${option.interval_count}`}
+              >
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min={1}
+            value={durationMinutes}
+            onChange={(event) => setDurationMinutes(event.target.value)}
+            placeholder="Duration (min)"
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
+            required
+          />
+          <select
+            value={priority}
+            onChange={(event) => setPriority(Number(event.target.value))}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 w-36"
+          >
+            <option value={1}>High priority</option>
+            <option value={2}>Medium priority</option>
+            <option value={3}>Low priority</option>
+          </select>
+        </div>
       </div>
       <div>
         <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">

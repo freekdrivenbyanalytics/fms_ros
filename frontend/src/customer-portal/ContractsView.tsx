@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { bookAdHocVisit, getFreeSlots } from "../api";
 import type { Contract, ContractLine, FreeSlot, ServiceVisit } from "../types";
+import { CONTRACT_LINE_INTERVAL_OPTIONS } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+
+function formatInterval(unit: ContractLine["interval_unit"], count: number): string {
+  const match = CONTRACT_LINE_INTERVAL_OPTIONS.find(
+    (option) => option.interval_unit === unit && option.interval_count === count
+  );
+  return match ? match.label : `Every ${count} ${unit}(s)`;
+}
 
 interface Props {
   contracts: Contract[];
@@ -37,7 +45,7 @@ export function ContractsView({ contracts, serviceVisits, onChanged }: Props) {
                       {line.customer_location.region?.name ?? "no region"})
                     </div>
                     <div className="text-slate-600 mt-1">
-                      Every {line.interval_days} days, {line.duration_minutes} min —{" "}
+                      {formatInterval(line.interval_unit, line.interval_count)}, {line.duration_minutes} min —{" "}
                       {line.start_date}
                       {line.end_date ? ` to ${line.end_date}` : ""}
                     </div>
