@@ -7,7 +7,7 @@ DEFAULT_TIME_LIMIT_SECONDS = 30
 
 class EmployeeIn(BaseModel):
     id: int
-    product_ids: list[int]
+    employee_skill_ids: list[int]
     region_ids: list[int]
     latitude: float
     longitude: float
@@ -24,7 +24,7 @@ class VisitIn(BaseModel):
     id: int
     requested_date: date
     duration_minutes: int
-    required_product_ids: list[int]
+    required_skill_ids: list[int]
     region_id: int
     location_id: int
     latitude: float

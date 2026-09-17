@@ -1,24 +1,24 @@
 import { useEffect, useState } from "react";
-import { listEmployees, listProducts, listRegions } from "../api";
-import type { Employee, Product, Region } from "../types";
+import { listEmployees, listRegions, listSkills } from "../api";
+import type { Employee, Region, Skill } from "../types";
 import { EmployeesView } from "./EmployeesView";
 
 export function EmployeeManagementApp() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   async function reload() {
-    const [employeesData, regionsData, productsData] = await Promise.all([
+    const [employeesData, regionsData, skillsData] = await Promise.all([
       listEmployees(),
       listRegions(),
-      listProducts(),
+      listSkills(),
     ]);
     setEmployees(employeesData);
     setRegions(regionsData);
-    setProducts(productsData);
+    setSkills(skillsData);
   }
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export function EmployeeManagementApp() {
         <h1 className="text-lg font-semibold text-slate-900 mb-4">Employee Management</h1>
       </aside>
       <main className="flex-1 p-8">
-        <EmployeesView employees={employees} regions={regions} products={products} onChanged={reload} />
+        <EmployeesView employees={employees} regions={regions} skills={skills} onChanged={reload} />
       </main>
     </div>
   );

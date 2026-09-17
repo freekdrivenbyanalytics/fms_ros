@@ -1,15 +1,20 @@
-import type { Product, Region } from "../types";
+import type { Region } from "../types";
+
+export interface FilterOption {
+  id: number;
+  name: string;
+}
 
 export interface FilterableFields {
   name: string;
   address?: string;
   regions: Region[];
-  products: Product[];
+  secondary: FilterOption[];
 }
 
 export interface FilterOptions {
   regions: Region[];
-  products: Product[];
+  secondary: FilterOption[];
 }
 
 export function collectFilterOptions<T>(
@@ -17,17 +22,17 @@ export function collectFilterOptions<T>(
   extract: (item: T) => FilterableFields
 ): FilterOptions {
   const regionMap = new Map<number, Region>();
-  const productMap = new Map<number, Product>();
+  const secondaryMap = new Map<number, FilterOption>();
 
   for (const item of items) {
-    const { regions, products } = extract(item);
+    const { regions, secondary } = extract(item);
     for (const region of regions) regionMap.set(region.id, region);
-    for (const product of products) productMap.set(product.id, product);
+    for (const option of secondary) secondaryMap.set(option.id, option);
   }
 
   return {
     regions: Array.from(regionMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
-    products: Array.from(productMap.values()).sort((a, b) => a.number.localeCompare(b.number)),
+    secondary: Array.from(secondaryMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
@@ -36,12 +41,12 @@ export function filterItems<T>(
   extract: (item: T) => FilterableFields,
   search: string,
   selectedRegionIds: number[],
-  selectedProductIds: number[]
+  selectedSecondaryIds: number[]
 ): T[] {
   const query = search.trim().toLowerCase();
 
   return items.filter((item) => {
-    const { name, address, regions, products } = extract(item);
+    const { name, address, regions, secondary } = extract(item);
 
     if (query) {
       const haystack = `${name} ${address ?? ""}`.toLowerCase();
@@ -53,8 +58,8 @@ export function filterItems<T>(
     }
 
     if (
-      selectedProductIds.length > 0 &&
-      !products.some((p) => selectedProductIds.includes(p.id))
+      selectedSecondaryIds.length > 0 &&
+      !secondary.some((s) => selectedSecondaryIds.includes(s.id))
     ) {
       return false;
     }

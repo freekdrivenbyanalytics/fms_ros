@@ -35,19 +35,55 @@ employee_regions = Table(
     Column("region_id", ForeignKey("regions.id"), primary_key=True),
 )
 
-employee_products = Table(
-    "employee_products",
-    Base.metadata,
-    Column("employee_id", ForeignKey("employees.id"), primary_key=True),
-    Column("product_id", ForeignKey("products.id"), primary_key=True),
-)
-
 contract_line_products = Table(
     "contract_line_products",
     Base.metadata,
     Column("contract_line_id", ForeignKey("contract_lines.id"), primary_key=True),
     Column("product_id", ForeignKey("products.id"), primary_key=True),
 )
+
+product_skills = Table(
+    "product_skills",
+    Base.metadata,
+    Column("product_id", ForeignKey("products.id"), primary_key=True),
+    Column("skill_id", ForeignKey("skills.id"), primary_key=True),
+)
+
+employee_skills = Table(
+    "employee_skills",
+    Base.metadata,
+    Column("employee_id", ForeignKey("employees.id"), primary_key=True),
+    Column("skill_id", ForeignKey("skills.id"), primary_key=True),
+)
+
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    products: Mapped[list["Product"]] = relationship(
+        secondary=product_skills, back_populates="skills"
+    )
+    employees: Mapped[list["Employee"]] = relationship(
+        secondary=employee_skills, back_populates="skills"
+    )
+
+
+class ServiceOrderType(Base):
+    __tablename__ = "service_order_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    products: Mapped[list["Product"]] = relationship(back_populates="service_order_type")
 
 
 class Region(Base):
@@ -140,9 +176,15 @@ class Product(Base):
     product_type: Mapped[str] = mapped_column(
         String, nullable=False, default="TJN", server_default="TJN"
     )
+    service_order_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("service_order_types.id")
+    )
 
-    employees: Mapped[list["Employee"]] = relationship(
-        secondary=employee_products, back_populates="products"
+    skills: Mapped[list["Skill"]] = relationship(
+        secondary=product_skills, back_populates="products"
+    )
+    service_order_type: Mapped["ServiceOrderType | None"] = relationship(
+        back_populates="products"
     )
     contract_lines: Mapped[list["ContractLine"]] = relationship(
         secondary=contract_line_products, back_populates="required_products"
@@ -397,8 +439,8 @@ class Employee(Base):
     regions: Mapped[list["Region"]] = relationship(
         secondary=employee_regions, back_populates="employees"
     )
-    products: Mapped[list["Product"]] = relationship(
-        secondary=employee_products, back_populates="employees"
+    skills: Mapped[list["Skill"]] = relationship(
+        secondary=employee_skills, back_populates="employees"
     )
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="employee")
     schedule_templates: Mapped[list["EmployeeScheduleTemplate"]] = relationship(

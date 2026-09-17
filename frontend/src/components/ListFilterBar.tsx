@@ -1,4 +1,4 @@
-import type { Product, Region } from "../types";
+import type { Region } from "../types";
 
 interface Option {
   id: number;
@@ -12,9 +12,10 @@ interface ListFilterBarProps {
   regionOptions: Region[];
   selectedRegionIds: number[];
   onRegionIdsChange: (ids: number[]) => void;
-  productOptions: Product[];
-  selectedProductIds: number[];
-  onProductIdsChange: (ids: number[]) => void;
+  secondaryLabel: string;
+  secondaryOptions: Option[];
+  selectedSecondaryIds: number[];
+  onSecondaryIdsChange: (ids: number[]) => void;
 }
 
 export function ListFilterBar({
@@ -24,9 +25,10 @@ export function ListFilterBar({
   regionOptions,
   selectedRegionIds,
   onRegionIdsChange,
-  productOptions,
-  selectedProductIds,
-  onProductIdsChange,
+  secondaryLabel,
+  secondaryOptions,
+  selectedSecondaryIds,
+  onSecondaryIdsChange,
 }: ListFilterBarProps) {
   return (
     <div className="mb-3 flex flex-wrap gap-2">
@@ -44,10 +46,10 @@ export function ListFilterBar({
         onChange={onRegionIdsChange}
       />
       <MultiSelectFilter
-        label="Product"
-        options={productOptions}
-        selectedIds={selectedProductIds}
-        onChange={onProductIdsChange}
+        label={secondaryLabel}
+        options={secondaryOptions}
+        selectedIds={selectedSecondaryIds}
+        onChange={onSecondaryIdsChange}
       />
     </div>
   );

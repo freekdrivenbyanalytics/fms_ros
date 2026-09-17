@@ -18,7 +18,7 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
     # back-to-back regardless of driving time.
     request = OptimizeRequest(
         employees=[
-            EmployeeIn(id=1, product_ids=[], region_ids=[1], latitude=52.0, longitude=5.0)
+            EmployeeIn(id=1, employee_skill_ids=[], region_ids=[1], latitude=52.0, longitude=5.0)
         ],
         employee_day_schedules=[
             EmployeeDayScheduleIn(employee_id=1, date=DAY, start_minutes=480, end_minutes=1200)
@@ -28,7 +28,7 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
                 id=1,
                 requested_date=DAY,
                 duration_minutes=60,
-                required_product_ids=[],
+                required_skill_ids=[],
                 region_id=1,
                 location_id=100,
                 latitude=52.0,
@@ -40,7 +40,7 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
                 id=2,
                 requested_date=DAY,
                 duration_minutes=60,
-                required_product_ids=[],
+                required_skill_ids=[],
                 region_id=1,
                 location_id=200,
                 latitude=52.2,

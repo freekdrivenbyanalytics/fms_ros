@@ -11,8 +11,10 @@ from app.models import (
     CustomerLocation,
     DrivingTime,
     Employee,
+    Product,
     ServiceVisit,
 )
+from app.qualification import required_skill_ids
 
 # Bounds solver problem size - see design.md ("days_ahead is capped at 14")
 # in the add-optimize-run-parameters change.
@@ -41,7 +43,7 @@ def _is_locked(assignment: Assignment) -> bool:
 def _employee_payload(employee: Employee) -> dict:
     return {
         "id": employee.id,
-        "product_ids": [p.id for p in employee.products],
+        "employee_skill_ids": [s.id for s in employee.skills],
         "region_ids": [r.id for r in employee.regions],
         "latitude": employee.latitude,
         "longitude": employee.longitude,
@@ -79,7 +81,7 @@ def _visit_payload(visit: ServiceVisit) -> dict:
         "id": visit.id,
         "requested_date": effective_schedule_date(visit).isoformat(),
         "duration_minutes": visit.contract_line.duration_minutes,
-        "required_product_ids": [p.id for p in visit.contract_line.required_products],
+        "required_skill_ids": list(required_skill_ids(visit.contract_line)),
         "region_id": location.region_id,
         "location_id": location.id,
         "latitude": location.latitude,
@@ -155,14 +157,16 @@ def build_optimize_payload(
     employees = (
         db.query(Employee)
         .filter(Employee.delete_flag.is_(False))
-        .options(joinedload(Employee.regions), joinedload(Employee.products))
+        .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .order_by(Employee.id)
         .all()
     )
     all_visits = (
         db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_products),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
             joinedload(ServiceVisit.contract_line)
             .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),

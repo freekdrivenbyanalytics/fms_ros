@@ -40,7 +40,9 @@ from app.models import (
     LocationKind,
     Product,
     Region,
+    ServiceOrderType,
     ServiceVisit,
+    Skill,
     VisitStatus,
 )
 from app.schemas import (
@@ -92,7 +94,13 @@ from app.schemas import (
     RegionOut,
     RegionUpdate,
     RescoSyncSummary,
+    ServiceOrderTypeCreate,
+    ServiceOrderTypeOut,
+    ServiceOrderTypeUpdate,
     ServiceVisitOut,
+    SkillCreate,
+    SkillOut,
+    SkillUpdate,
 )
 from app.resco import (
     sync_all_employees,
@@ -153,7 +161,7 @@ def _employee_out(
         latitude=employee.latitude,
         longitude=employee.longitude,
         regions=[RegionOut.model_validate(region) for region in employee.regions],
-        products=[ProductOut.model_validate(product) for product in employee.products],
+        skills=[SkillOut.model_validate(skill) for skill in employee.skills],
         schedule_templates=[
             EmployeeScheduleTemplateOut.model_validate(template)
             for template in employee.schedule_templates
@@ -171,22 +179,22 @@ def _employee_out(
 def _employee_query(db: Session):
     return db.query(Employee).options(
         joinedload(Employee.regions),
-        joinedload(Employee.products),
+        joinedload(Employee.skills),
         joinedload(Employee.schedule_templates),
         joinedload(Employee.schedule_overrides),
     )
 
 
-def _lookup_regions_and_products(
-    db: Session, region_ids: list[int], product_ids: list[int]
-) -> tuple[list[Region], list[Product]]:
+def _lookup_regions_and_skills(
+    db: Session, region_ids: list[int], skill_ids: list[int]
+) -> tuple[list[Region], list[Skill]]:
     regions = db.query(Region).filter(Region.id.in_(region_ids)).all()
     if len(regions) != len(set(region_ids)):
         raise HTTPException(status_code=404, detail="One or more regions not found")
-    products = db.query(Product).filter(Product.id.in_(product_ids)).all()
-    if len(products) != len(set(product_ids)):
-        raise HTTPException(status_code=404, detail="One or more products not found")
-    return regions, products
+    skills = db.query(Skill).filter(Skill.id.in_(skill_ids)).all()
+    if len(skills) != len(set(skill_ids)):
+        raise HTTPException(status_code=404, detail="One or more skills not found")
+    return regions, skills
 
 
 def _tripletex_client() -> TripletexClient:
@@ -195,6 +203,20 @@ def _tripletex_client() -> TripletexClient:
 
 def _prefixed_product_number(product_type: str, number: str) -> str:
     return number if number.startswith(product_type) else f"{product_type}{number}"
+
+
+def _lookup_skills(db: Session, skill_ids: list[int]) -> list[Skill]:
+    skills = db.query(Skill).filter(Skill.id.in_(skill_ids)).all()
+    if len(skills) != len(set(skill_ids)):
+        raise HTTPException(status_code=404, detail="One or more skills not found")
+    return skills
+
+
+def _validate_service_order_type_id(db: Session, service_order_type_id: int | None) -> None:
+    if service_order_type_id is None:
+        return
+    if db.get(ServiceOrderType, service_order_type_id) is None:
+        raise HTTPException(status_code=404, detail="Service order type not found")
 
 
 def _customer_location_display_address(
@@ -217,7 +239,7 @@ def list_employees(db: Session = Depends(get_db)) -> list[EmployeeOut]:
 
 @app.post("/employees", response_model=EmployeeOut, status_code=201)
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> EmployeeOut:
-    regions, products = _lookup_regions_and_products(db, payload.region_ids, payload.product_ids)
+    regions, skills = _lookup_regions_and_skills(db, payload.region_ids, payload.skill_ids)
 
     employee = Employee(
         first_name=payload.first_name,
@@ -227,7 +249,7 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
         latitude=payload.latitude,
         longitude=payload.longitude,
         regions=regions,
-        products=products,
+        skills=skills,
     )
     db.add(employee)
     db.commit()
@@ -250,7 +272,7 @@ def update_employee(
     if employee is None:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    regions, products = _lookup_regions_and_products(db, payload.region_ids, payload.product_ids)
+    regions, skills = _lookup_regions_and_skills(db, payload.region_ids, payload.skill_ids)
 
     employee.first_name = payload.first_name
     employee.last_name = payload.last_name
@@ -259,7 +281,7 @@ def update_employee(
     employee.latitude = payload.latitude
     employee.longitude = payload.longitude
     employee.regions = regions
-    employee.products = products
+    employee.skills = skills
     db.commit()
     db.refresh(employee)
 
@@ -591,6 +613,91 @@ def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
+@app.get("/skills", response_model=list[SkillOut])
+def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
+    return db.query(Skill).filter(Skill.delete_flag.is_(False)).order_by(Skill.id).all()
+
+
+@app.post("/skills", response_model=SkillOut, status_code=201)
+def create_skill(payload: SkillCreate, db: Session = Depends(get_db)) -> Skill:
+    skill = Skill(name=payload.name)
+    db.add(skill)
+    db.commit()
+    db.refresh(skill)
+    return skill
+
+
+@app.patch("/skills/{skill_id}", response_model=SkillOut)
+def update_skill(skill_id: int, payload: SkillUpdate, db: Session = Depends(get_db)) -> Skill:
+    skill = db.get(Skill, skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    skill.name = payload.name
+    db.commit()
+    db.refresh(skill)
+    return skill
+
+
+@app.delete("/skills/{skill_id}", status_code=204)
+def delete_skill(skill_id: int, db: Session = Depends(get_db)) -> None:
+    skill = db.get(Skill, skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    skill.delete_flag = True
+    db.commit()
+
+
+@app.get("/service-order-types", response_model=list[ServiceOrderTypeOut])
+def list_service_order_types(db: Session = Depends(get_db)) -> list[ServiceOrderType]:
+    return (
+        db.query(ServiceOrderType)
+        .filter(ServiceOrderType.delete_flag.is_(False))
+        .order_by(ServiceOrderType.id)
+        .all()
+    )
+
+
+@app.post("/service-order-types", response_model=ServiceOrderTypeOut, status_code=201)
+def create_service_order_type(
+    payload: ServiceOrderTypeCreate, db: Session = Depends(get_db)
+) -> ServiceOrderType:
+    service_order_type = ServiceOrderType(name=payload.name)
+    db.add(service_order_type)
+    db.commit()
+    db.refresh(service_order_type)
+    return service_order_type
+
+
+@app.patch("/service-order-types/{service_order_type_id}", response_model=ServiceOrderTypeOut)
+def update_service_order_type(
+    service_order_type_id: int,
+    payload: ServiceOrderTypeUpdate,
+    db: Session = Depends(get_db),
+) -> ServiceOrderType:
+    service_order_type = db.get(ServiceOrderType, service_order_type_id)
+    if service_order_type is None:
+        raise HTTPException(status_code=404, detail="Service order type not found")
+
+    service_order_type.name = payload.name
+    db.commit()
+    db.refresh(service_order_type)
+    return service_order_type
+
+
+@app.delete("/service-order-types/{service_order_type_id}", status_code=204)
+def delete_service_order_type(
+    service_order_type_id: int, db: Session = Depends(get_db)
+) -> None:
+    service_order_type = db.get(ServiceOrderType, service_order_type_id)
+    if service_order_type is None:
+        raise HTTPException(status_code=404, detail="Service order type not found")
+
+    service_order_type.delete_flag = True
+    db.commit()
+
+
 @app.post("/customer-locations/assign-regions", response_model=list[CustomerLocationOut])
 def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[CustomerLocation]:
     assign_regions_by_geofence(db)
@@ -645,6 +752,8 @@ def sync_products_endpoint(db: Session = Depends(get_db)) -> list[Product]:
 @app.post("/products", response_model=ProductOut, status_code=201)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Product:
     full_number = _prefixed_product_number(payload.product_type, payload.number)
+    skills = _lookup_skills(db, payload.skill_ids)
+    _validate_service_order_type_id(db, payload.service_order_type_id)
 
     client = _tripletex_client()
     try:
@@ -659,6 +768,8 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Pro
         number=full_number,
         name=payload.name,
         product_type=payload.product_type,
+        skills=skills,
+        service_order_type_id=payload.service_order_type_id,
     )
     db.add(product)
     db.commit()
@@ -680,10 +791,15 @@ def update_product(
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    skills = _lookup_skills(db, payload.skill_ids)
+    _validate_service_order_type_id(db, payload.service_order_type_id)
+
     full_number = _prefixed_product_number(payload.product_type, payload.number)
     product.number = full_number
     product.name = payload.name
     product.product_type = payload.product_type
+    product.skills = skills
+    product.service_order_type_id = payload.service_order_type_id
     db.commit()
     db.refresh(product)
 
@@ -988,7 +1104,12 @@ def list_contracts(db: Session = Depends(get_db)) -> list[ContractOut]:
             joinedload(Contract.lines)
             .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.region),
-            joinedload(Contract.lines).joinedload(ContractLine.required_products),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.service_order_type),
         )
         .order_by(Contract.id)
         .all()
@@ -1287,7 +1408,9 @@ def list_service_visits(
     db: Session = Depends(get_db),
 ) -> list[ServiceVisit]:
     query = db.query(ServiceVisit).options(
-        joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_products),
+        joinedload(ServiceVisit.contract_line)
+        .joinedload(ContractLine.required_products)
+        .joinedload(Product.skills),
         joinedload(ServiceVisit.contract_line)
         .joinedload(ContractLine.customer_location)
         .joinedload(CustomerLocation.customer),
@@ -1308,10 +1431,11 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
         db.query(Assignment)
         .options(
             joinedload(Assignment.employee).joinedload(Employee.regions),
-            joinedload(Assignment.employee).joinedload(Employee.products),
+            joinedload(Assignment.employee).joinedload(Employee.skills),
             joinedload(Assignment.service_visit)
             .joinedload(ServiceVisit.contract_line)
-            .joinedload(ContractLine.required_products),
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
             joinedload(Assignment.service_visit)
             .joinedload(ServiceVisit.contract_line)
             .joinedload(ContractLine.customer_location)
@@ -1496,7 +1620,9 @@ def propose_optimization(
         v.id: v
         for v in db.query(ServiceVisit)
         .options(
-            joinedload(ServiceVisit.contract_line).joinedload(ContractLine.required_products),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
             joinedload(ServiceVisit.contract_line)
             .joinedload(ContractLine.customer_location)
             .joinedload(CustomerLocation.customer),
@@ -1509,7 +1635,7 @@ def propose_optimization(
     employees_by_id = {
         e.id: e
         for e in db.query(Employee)
-        .options(joinedload(Employee.regions), joinedload(Employee.products))
+        .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .all()
     }
 

@@ -23,24 +23,56 @@ export interface RegionUpdateInput {
 
 export type ProductType = "TJN" | "PRD";
 
+export interface Skill {
+  id: number;
+  name: string;
+}
+
+export interface SkillCreateInput {
+  name: string;
+}
+
+export interface SkillUpdateInput {
+  name: string;
+}
+
+export interface ServiceOrderType {
+  id: number;
+  name: string;
+}
+
+export interface ServiceOrderTypeCreateInput {
+  name: string;
+}
+
+export interface ServiceOrderTypeUpdateInput {
+  name: string;
+}
+
 export interface Product {
   id: number;
   number: string;
   product_type: ProductType;
   name: string;
   resco_product_id: string | null;
+  skills: Skill[];
+  service_order_type: ServiceOrderType | null;
 }
 
 export interface ProductCreateInput {
   product_type: ProductType;
   number: string;
   name: string;
+  skill_ids: number[];
+  service_order_type_id: number | null;
 }
 
 export interface ProductUpdateInput {
   product_type: ProductType;
   number: string;
   name: string;
+  skill_ids: number[];
+  service_order_type_id: number | null;
 }
 
 export interface Customer {
@@ -254,7 +286,7 @@ export interface Employee {
   latitude: number;
   longitude: number;
   regions: Region[];
-  products: Product[];
+  skills: Skill[];
   schedule_templates: EmployeeScheduleTemplate[];
   schedule_overrides: EmployeeScheduleDayOverride[];
   resco_sync: EmployeeRescoSyncResult | null;
@@ -268,7 +300,7 @@ export interface EmployeeCreateInput {
   latitude: number;
   longitude: number;
   region_ids: number[];
-  product_ids: number[];
+  skill_ids: number[];
 }
 
 export interface EmployeeUpdateInput {
@@ -279,7 +311,7 @@ export interface EmployeeUpdateInput {
   latitude: number;
   longitude: number;
   region_ids: number[];
-  product_ids: number[];
+  skill_ids: number[];
 }
 
 export interface RescoSyncSummary {
@@ -295,6 +327,7 @@ export interface ServiceVisit {
   requested_date: string;
   status: VisitStatus;
   contract_line: ContractLine;
+  required_skills: Skill[];
 }
 
 export interface Assignment {

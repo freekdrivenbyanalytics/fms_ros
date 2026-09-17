@@ -45,6 +45,36 @@ class RegionUpdate(BaseModel):
         return _validate_geo_shape(value)
 
 
+class SkillOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class SkillCreate(BaseModel):
+    name: str
+
+
+class SkillUpdate(BaseModel):
+    name: str
+
+
+class ServiceOrderTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class ServiceOrderTypeCreate(BaseModel):
+    name: str
+
+
+class ServiceOrderTypeUpdate(BaseModel):
+    name: str
+
+
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,18 +83,24 @@ class ProductOut(BaseModel):
     product_type: str
     name: str
     resco_product_id: str | None = None
+    skills: list[SkillOut] = []
+    service_order_type: ServiceOrderTypeOut | None = None
 
 
 class ProductCreate(BaseModel):
     product_type: Literal["TJN", "PRD"]
     number: str
     name: str
+    skill_ids: list[int] = []
+    service_order_type_id: int | None = None
 
 
 class ProductUpdate(BaseModel):
     product_type: Literal["TJN", "PRD"]
     number: str
     name: str
+    skill_ids: list[int] = []
+    service_order_type_id: int | None = None
 
 
 class CustomerOut(BaseModel):
@@ -328,7 +364,7 @@ class EmployeeOut(BaseModel):
     latitude: float
     longitude: float
     regions: list[RegionOut]
-    products: list[ProductOut]
+    skills: list[SkillOut]
     schedule_templates: list[EmployeeScheduleTemplateOut]
     schedule_overrides: list[EmployeeScheduleDayOverrideOut]
     resco_sync: EmployeeRescoSyncResult | None = None
@@ -342,7 +378,7 @@ class EmployeeCreate(BaseModel):
     latitude: float
     longitude: float
     region_ids: list[int]
-    product_ids: list[int] = []
+    skill_ids: list[int] = []
 
 
 class EmployeeUpdate(BaseModel):
@@ -353,7 +389,7 @@ class EmployeeUpdate(BaseModel):
     latitude: float
     longitude: float
     region_ids: list[int]
-    product_ids: list[int] = []
+    skill_ids: list[int] = []
 
 
 class RescoSyncSummary(BaseModel):
@@ -371,6 +407,16 @@ class ServiceVisitOut(BaseModel):
     requested_date: date
     status: VisitStatus
     contract_line: ContractLineOut
+    required_skills: list[SkillOut] = []
+
+    @model_validator(mode="after")
+    def _compute_required_skills(self) -> "ServiceVisitOut":
+        seen: dict[int, SkillOut] = {}
+        for product in self.contract_line.required_products:
+            for skill in product.skills:
+                seen[skill.id] = skill
+        self.required_skills = list(seen.values())
+        return self
 
 
 class AssignmentCreate(BaseModel):

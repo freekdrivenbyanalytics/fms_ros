@@ -16,7 +16,7 @@ function extract(visit: ServiceVisit) {
     name: visit.contract_line.customer_location.customer.name,
     address: visit.contract_line.customer_location.address,
     regions: visit.contract_line.customer_location.region ? [visit.contract_line.customer_location.region] : [],
-    products: visit.contract_line.required_products,
+    secondary: visit.contract_line.required_products,
   };
 }
 
@@ -25,7 +25,7 @@ export function UnassignedVisitList({ visits, employees, onAssigned }: ListProps
   const [regionIds, setRegionIds] = useState<number[]>([]);
   const [productIds, setProductIds] = useState<number[]>([]);
 
-  const { regions: regionOptions, products: productOptions } = useMemo(
+  const { regions: regionOptions, secondary: productOptions } = useMemo(
     () => collectFilterOptions(visits, extract),
     [visits]
   );
@@ -45,9 +45,10 @@ export function UnassignedVisitList({ visits, employees, onAssigned }: ListProps
         regionOptions={regionOptions}
         selectedRegionIds={regionIds}
         onRegionIdsChange={setRegionIds}
-        productOptions={productOptions}
-        selectedProductIds={productIds}
-        onProductIdsChange={setProductIds}
+        secondaryLabel="Product"
+        secondaryOptions={productOptions}
+        selectedSecondaryIds={productIds}
+        onSecondaryIdsChange={setProductIds}
       />
       {visits.length === 0 ? (
         <p className="text-sm text-slate-500">No unassigned visits.</p>
@@ -122,6 +123,14 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
                     className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                   >
                     {product.number} {product.name}
+                  </span>
+                ))}
+                {visit.required_skills.map((skill) => (
+                  <span
+                    key={skill.id}
+                    className="inline-block rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700"
+                  >
+                    {skill.name}
                   </span>
                 ))}
               </div>

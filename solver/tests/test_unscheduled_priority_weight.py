@@ -38,7 +38,7 @@ def _unassigned_visit(
         id=visit_id,
         requested_date=DAY,
         duration_minutes=60,
-        required_product_ids=frozenset(),
+        required_skill_ids=frozenset(),
         region_id=1,
         location_id=100 + visit_id,
         latitude=52.0,
@@ -110,7 +110,7 @@ def test_priority_does_not_override_scheduling_more_visits_than_fewer() -> None:
     # fewer, regardless of priority.
     request = OptimizeRequest(
         employees=[
-            EmployeeIn(id=1, product_ids=[], region_ids=[1], latitude=52.0, longitude=5.0)
+            EmployeeIn(id=1, employee_skill_ids=[], region_ids=[1], latitude=52.0, longitude=5.0)
         ],
         employee_day_schedules=[
             EmployeeDayScheduleIn(
@@ -122,7 +122,7 @@ def test_priority_does_not_override_scheduling_more_visits_than_fewer() -> None:
                 id=1,
                 requested_date="2026-01-05",
                 duration_minutes=60,
-                required_product_ids=[],
+                required_skill_ids=[],
                 region_id=1,
                 location_id=100,
                 latitude=52.0,
@@ -134,7 +134,7 @@ def test_priority_does_not_override_scheduling_more_visits_than_fewer() -> None:
                 id=2,
                 requested_date="2026-01-05",
                 duration_minutes=60,
-                required_product_ids=[],
+                required_skill_ids=[],
                 region_id=1,
                 location_id=100,
                 latitude=52.0,

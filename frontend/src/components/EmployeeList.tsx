@@ -7,22 +7,22 @@ import { ListFilterBar } from "./ListFilterBar";
 export function EmployeeList({ employees }: { employees: Employee[] }) {
   const [search, setSearch] = useState("");
   const [regionIds, setRegionIds] = useState<number[]>([]);
-  const [productIds, setProductIds] = useState<number[]>([]);
+  const [skillIds, setSkillIds] = useState<number[]>([]);
 
   const extract = (employee: Employee) => ({
     name: employee.name,
     regions: employee.regions,
-    products: employee.products,
+    secondary: employee.skills,
   });
 
-  const { regions: regionOptions, products: productOptions } = useMemo(
+  const { regions: regionOptions, secondary: skillOptions } = useMemo(
     () => collectFilterOptions(employees, extract),
     [employees]
   );
 
   const filteredEmployees = useMemo(
-    () => filterItems(employees, extract, search, regionIds, productIds),
-    [employees, search, regionIds, productIds]
+    () => filterItems(employees, extract, search, regionIds, skillIds),
+    [employees, search, regionIds, skillIds]
   );
 
   return (
@@ -35,9 +35,10 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
         regionOptions={regionOptions}
         selectedRegionIds={regionIds}
         onRegionIdsChange={setRegionIds}
-        productOptions={productOptions}
-        selectedProductIds={productIds}
-        onProductIdsChange={setProductIds}
+        secondaryLabel="Skill"
+        secondaryOptions={skillOptions}
+        selectedSecondaryIds={skillIds}
+        onSecondaryIdsChange={setSkillIds}
       />
       {employees.length === 0 ? (
         <p className="text-sm text-slate-500">No employees.</p>
@@ -63,12 +64,12 @@ export function EmployeeList({ employees }: { employees: Employee[] }) {
                           {region.name}
                         </span>
                       ))}
-                      {employee.products.map((product) => (
+                      {employee.skills.map((skill) => (
                         <span
-                          key={product.id}
+                          key={skill.id}
                           className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
                         >
-                          {product.number} {product.name}
+                          {skill.name}
                         </span>
                       ))}
                     </div>

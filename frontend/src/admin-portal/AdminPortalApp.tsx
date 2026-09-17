@@ -6,7 +6,9 @@ import {
   listEmployees,
   listProducts,
   listRegions,
+  listServiceOrderTypes,
   listServiceVisits,
+  listSkills,
 } from "../api";
 import type {
   Contract,
@@ -15,7 +17,9 @@ import type {
   Employee,
   Product,
   Region,
+  ServiceOrderType,
   ServiceVisit,
+  Skill,
 } from "../types";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
@@ -23,10 +27,14 @@ import { CustomersView } from "./CustomersView";
 import { DemoScheduleView } from "./DemoScheduleView";
 import { ProductsView } from "./ProductsView";
 import { RegionsView } from "./RegionsView";
+import { ServiceOrderTypesView } from "./ServiceOrderTypesView";
+import { SkillsView } from "./SkillsView";
 
 type Entity =
   | "regions"
   | "products"
+  | "skills"
+  | "service-order-types"
   | "contracts"
   | "customers"
   | "customer-locations"
@@ -35,6 +43,8 @@ type Entity =
 const ENTITY_LABELS: Record<Entity, string> = {
   regions: "Regions",
   products: "Products",
+  skills: "Skills",
+  "service-order-types": "Service Order Types",
   contracts: "Contracts",
   customers: "Customers",
   "customer-locations": "Customer Locations",
@@ -44,6 +54,8 @@ const ENTITY_LABELS: Record<Entity, string> = {
 const ENTITY_ORDER: Entity[] = [
   "regions",
   "products",
+  "skills",
+  "service-order-types",
   "contracts",
   "customers",
   "customer-locations",
@@ -54,6 +66,8 @@ export function AdminPortalApp() {
   const [entity, setEntity] = useState<Entity>("regions");
   const [regions, setRegions] = useState<Region[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [serviceOrderTypes, setServiceOrderTypes] = useState<ServiceOrderType[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
@@ -66,6 +80,8 @@ export function AdminPortalApp() {
     const [
       regionsData,
       productsData,
+      skillsData,
+      serviceOrderTypesData,
       employeesData,
       customersData,
       customerLocationsData,
@@ -74,6 +90,8 @@ export function AdminPortalApp() {
     ] = await Promise.all([
       listRegions(),
       listProducts(),
+      listSkills(),
+      listServiceOrderTypes(),
       listEmployees(),
       listCustomers(),
       listCustomerLocations(),
@@ -82,6 +100,8 @@ export function AdminPortalApp() {
     ]);
     setRegions(regionsData);
     setProducts(productsData);
+    setSkills(skillsData);
+    setServiceOrderTypes(serviceOrderTypesData);
     setEmployees(employeesData);
     setCustomers(customersData);
     setCustomerLocations(customerLocationsData);
@@ -134,7 +154,23 @@ export function AdminPortalApp() {
           />
         )}
         {entity === "products" && (
-          <ProductsView products={products} employees={employees} contracts={contracts} onChanged={reload} />
+          <ProductsView
+            products={products}
+            contracts={contracts}
+            skills={skills}
+            serviceOrderTypes={serviceOrderTypes}
+            onChanged={reload}
+          />
+        )}
+        {entity === "skills" && (
+          <SkillsView skills={skills} products={products} onChanged={reload} />
+        )}
+        {entity === "service-order-types" && (
+          <ServiceOrderTypesView
+            serviceOrderTypes={serviceOrderTypes}
+            products={products}
+            onChanged={reload}
+          />
         )}
         {entity === "contracts" && (
           <ContractsView

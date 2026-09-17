@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.employee_schedule import resolve_employee_schedule
 from app.models import Assignment, ContractLine, Employee
+from app.qualification import required_skill_ids
 
 FREE_SLOT_HORIZON_DAYS = 14
 
@@ -32,18 +33,18 @@ def _time_from_minutes(minutes: int) -> time:
 
 def _qualifying_employees(db: Session, contract_line: ContractLine) -> list[Employee]:
     region_id = contract_line.customer_location.region_id
-    required_product_ids = {product.id for product in contract_line.required_products}
+    needed_skill_ids = required_skill_ids(contract_line)
     employees = (
         db.query(Employee)
         .filter(Employee.delete_flag.is_(False))
-        .options(joinedload(Employee.regions), joinedload(Employee.products))
+        .options(joinedload(Employee.regions), joinedload(Employee.skills))
         .all()
     )
     return [
         employee
         for employee in employees
         if region_id in {region.id for region in employee.regions}
-        and required_product_ids.issubset({product.id for product in employee.products})
+        and needed_skill_ids.issubset({skill.id for skill in employee.skills})
     ]
 
 
@@ -90,9 +91,10 @@ def _find_gaps(
 
 def find_free_slots(db: Session, contract_line: ContractLine) -> list[FreeSlot]:
     """Every candidate free slot for a contract line over the next
-    FREE_SLOT_HORIZON_DAYS days: an employee with the line's required
-    products, scoped to its region, with a resolved working-hours window and
-    no conflicting existing assignment for that window."""
+    FREE_SLOT_HORIZON_DAYS days: an employee holding every skill the line's
+    required products require, scoped to its region, with a resolved
+    working-hours window and no conflicting existing assignment for that
+    window."""
     employees = _qualifying_employees(db, contract_line)
     duration_minutes = contract_line.duration_minutes
 
