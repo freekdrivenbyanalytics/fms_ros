@@ -3,6 +3,38 @@
 A standalone FastAPI service that wraps [Timefold Solver](https://timefold.ai) to propose an
 employee/visit schedule. See the root `README.md` for how to run it locally.
 
+## Running multiple worker processes
+
+By default `uvicorn app.main:app --reload --port 8100` runs a single worker process. The
+backend's `parallel` execution mode (see `add-parallel-region-solving`) dispatches several
+concurrent `/optimize` requests, one per independent region group, and relies on the solver
+service having more than one worker process to actually run them in parallel rather than queue
+them behind each other:
+
+```sh
+uvicorn app.main:app --workers 4 --port 8100
+```
+
+`--workers N` starts N independent OS processes, each with its own Python interpreter and its
+own embedded JVM (Timefold's Python binding starts one JVM per process via `app/jvm.py`, on the
+first solve each worker handles). A sensible default is `4`, but size it to the machine actually
+running the service: **each worker boots its own JVM and consumes memory accordingly**, so total
+memory usage scales with the worker count, not just CPU. `--reload` and `--workers` are mutually
+exclusive in uvicorn, so a multi-worker deployment drops `--reload`.
+
+`single` execution mode (the default) only ever sends one request at a time, so it works
+unchanged with any worker count, including the single-worker default.
+
+**Windows note:** `uvicorn --workers N` on Windows has been observed to occasionally fail one
+worker's startup with `OSError: [WinError 10022] An invalid argument was supplied` while binding
+the shared listening socket (seen in local testing, not consistently reproducible - it didn't
+happen every time `--workers N` was started). Uvicorn's supervisor detects the dead worker and
+automatically respawns it within a second or two, and the replacement starts up and warms up
+normally, so the service self-heals without intervention. If you start the service and see this
+once in the log, check that the expected number of `Solver warm-up complete` lines eventually
+appears (one per worker, including any respawns) before relying on it for a `parallel` run - the
+same live-check this change's proposal already calls for.
+
 ## How the optimizer works
 
 ### It optimizes the whole problem jointly, not greedily

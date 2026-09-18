@@ -397,6 +397,7 @@ export interface OptimizationProposal {
 export interface OptimizeRunOptions {
   days_ahead: number;
   time_limit_seconds?: number;
+  execution_mode?: "single" | "parallel";
 }
 
 export interface OptimizationApplyResult {

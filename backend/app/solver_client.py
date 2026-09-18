@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 import httpx
@@ -15,6 +17,7 @@ from app.models import (
     ServiceVisit,
 )
 from app.qualification import required_skill_ids
+from app.solver_partitioning import group_regions_by_shared_employees
 
 # Bounds solver problem size - see design.md ("days_ahead is capped at 14")
 # in the add-optimize-run-parameters change.
@@ -144,16 +147,17 @@ def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
     ]
 
 
-def build_optimize_payload(
-    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
-) -> tuple[dict, list[int]]:
-    """Build the solver request payload.
+@dataclass
+class _RunData:
+    employees: list[Employee]
+    ready_visits: list[ServiceVisit]
+    locked_assignments: list[Assignment]
+    excluded_visit_ids: list[int]
+    candidate_dates: set[date]
+    all_region_ids: set[int]
 
-    Returns (payload, excluded_visit_ids): payload is what's sent to the
-    solver; excluded_visit_ids are candidate visits the solver never even
-    sees (no resolved location), which the caller should still report as
-    unscheduled since the solver's own response won't mention them.
-    """
+
+def _load_run_data(db: Session, days_ahead: int) -> _RunData:
     employees = (
         db.query(Employee)
         .filter(Employee.delete_flag.is_(False))
@@ -198,15 +202,100 @@ def build_optimize_payload(
     region_ids = {v.contract_line.customer_location.region_id for v in ready_visits}
     region_ids.update(r.id for e in employees for r in e.regions)
 
-    payload = {
+    return _RunData(
+        employees=employees,
+        ready_visits=ready_visits,
+        locked_assignments=locked_assignments,
+        excluded_visit_ids=excluded_visit_ids,
+        candidate_dates=candidate_dates,
+        all_region_ids=region_ids,
+    )
+
+
+def _assemble_payload(
+    db: Session,
+    employees: list[Employee],
+    visits: list[ServiceVisit],
+    locked_assignments: list[Assignment],
+    candidate_dates: set[date],
+    region_ids: set[int],
+    time_limit_seconds: int | None,
+) -> dict:
+    return {
         "employees": [_employee_payload(e) for e in employees],
         "employee_day_schedules": _employee_day_schedule_payloads(db, employees, candidate_dates),
-        "visits": [_visit_payload(v) for v in ready_visits],
+        "visits": [_visit_payload(v) for v in visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "driving_times": _driving_time_payloads(db, region_ids),
         "time_limit_seconds": time_limit_seconds or settings.solver_time_limit_seconds,
     }
-    return payload, excluded_visit_ids
+
+
+def build_optimize_payload(
+    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
+) -> tuple[dict, list[int]]:
+    """Build the solver request payload.
+
+    Returns (payload, excluded_visit_ids): payload is what's sent to the
+    solver; excluded_visit_ids are candidate visits the solver never even
+    sees (no resolved location), which the caller should still report as
+    unscheduled since the solver's own response won't mention them.
+    """
+    data = _load_run_data(db, days_ahead)
+    payload = _assemble_payload(
+        db,
+        data.employees,
+        data.ready_visits,
+        data.locked_assignments,
+        data.candidate_dates,
+        data.all_region_ids,
+        time_limit_seconds,
+    )
+    return payload, data.excluded_visit_ids
+
+
+def _group_subset(
+    data: _RunData, group_region_ids: set[int]
+) -> tuple[list[Employee], list[ServiceVisit], list[Assignment], set[date], set[int]]:
+    group_employees = [e for e in data.employees if {r.id for r in e.regions} & group_region_ids]
+    group_employee_ids = {e.id for e in group_employees}
+    group_visits = [
+        v
+        for v in data.ready_visits
+        if v.contract_line.customer_location.region_id in group_region_ids
+    ]
+    group_locked = [a for a in data.locked_assignments if a.employee_id in group_employee_ids]
+    group_dates = {effective_schedule_date(v) for v in group_visits}
+    return group_employees, group_visits, group_locked, group_dates, group_region_ids
+
+
+def build_parallel_group_payloads(
+    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
+) -> tuple[list[dict] | None, list[int]]:
+    """Build one payload per employee-disjoint region group, for `parallel`
+    execution mode.
+
+    Each group's payload is a real subset of the full run's
+    employees/visits/driving-times/existing-assignments: only rows
+    belonging to that group's regions/employees, built with the same
+    per-item payload builders `build_optimize_payload` uses.
+
+    Returns (group_payloads, excluded_visit_ids). group_payloads is None
+    when the run's ready-to-schedule visits' regions form a single connected
+    group (including zero or one region) - the caller should fall back to
+    `build_optimize_payload`'s ordinary single-call path in that case, since
+    there is nothing to usefully split.
+    """
+    data = _load_run_data(db, days_ahead)
+    region_ids_with_visits = {v.contract_line.customer_location.region_id for v in data.ready_visits}
+    groups = group_regions_by_shared_employees(data.employees, region_ids_with_visits)
+    if len(groups) < 2:
+        return None, data.excluded_visit_ids
+    group_payloads = [
+        _assemble_payload(db, *_group_subset(data, group_region_ids), time_limit_seconds)
+        for group_region_ids in groups
+    ]
+    return group_payloads, data.excluded_visit_ids
 
 
 def request_proposal(payload: dict) -> dict:
@@ -214,3 +303,22 @@ def request_proposal(payload: dict) -> dict:
     response = httpx.post(f"{settings.solver_base_url}/optimize", json=payload, timeout=timeout)
     response.raise_for_status()
     return response.json()
+
+
+def request_parallel_proposals(payloads: list[dict]) -> dict:
+    """Dispatch one solver call per group concurrently and merge the results
+    into one response, in the same shape `request_proposal` returns.
+
+    Only called with 2+ payloads (see `build_parallel_group_payloads`); a
+    single group is handled by `request_proposal` directly instead. A
+    failure in any one group's call propagates (matching a single-call
+    failure) rather than returning a partial merge.
+    """
+    with ThreadPoolExecutor(max_workers=len(payloads)) as pool:
+        results = list(pool.map(request_proposal, payloads))
+    return {
+        "scheduled": [item for result in results for item in result["scheduled"]],
+        "unscheduled_visit_ids": [
+            visit_id for result in results for visit_id in result["unscheduled_visit_ids"]
+        ],
+    }

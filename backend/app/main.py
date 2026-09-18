@@ -135,7 +135,13 @@ from app.resco import (
     sync_employee,
     sync_product,
 )
-from app.solver_client import build_optimize_payload, effective_schedule_date, request_proposal
+from app.solver_client import (
+    build_optimize_payload,
+    build_parallel_group_payloads,
+    effective_schedule_date,
+    request_parallel_proposals,
+    request_proposal,
+)
 from app.tripletex import (
     TripletexAuthError,
     TripletexClient,
@@ -1682,15 +1688,31 @@ def propose_optimization(
     options: OptimizeRunOptions | None = None, db: Session = Depends(get_db)
 ) -> OptimizationProposal:
     options = options or OptimizeRunOptions()
-    payload, excluded_visit_ids = build_optimize_payload(
-        db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
-    )
-    try:
-        result = request_proposal(payload)
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Solver request failed: {exc}"
-        ) from exc
+
+    group_payloads = None
+    excluded_visit_ids: list[int] = []
+    if options.execution_mode == "parallel":
+        group_payloads, excluded_visit_ids = build_parallel_group_payloads(
+            db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
+        )
+
+    if group_payloads is not None:
+        try:
+            result = request_parallel_proposals(group_payloads)
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Solver request failed: {exc}"
+            ) from exc
+    else:
+        payload, excluded_visit_ids = build_optimize_payload(
+            db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
+        )
+        try:
+            result = request_proposal(payload)
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Solver request failed: {exc}"
+            ) from exc
 
     visits_by_id = {
         v.id: v

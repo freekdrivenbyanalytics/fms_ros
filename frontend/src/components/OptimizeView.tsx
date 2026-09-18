@@ -27,6 +27,7 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
   const [applyResult, setApplyResult] = useState<OptimizationApplyResult | null>(null);
   const [daysAhead, setDaysAhead] = useState(2);
   const [timeLimitSeconds, setTimeLimitSeconds] = useState("");
+  const [executionMode, setExecutionMode] = useState<"single" | "parallel">("single");
 
   async function handleRun() {
     setRunning(true);
@@ -36,6 +37,7 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
       const result = await proposeOptimization({
         days_ahead: daysAhead,
         time_limit_seconds: timeLimitSeconds ? Number(timeLimitSeconds) : undefined,
+        execution_mode: executionMode,
       });
       setProposal(result);
     } catch (err) {
@@ -95,6 +97,19 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
             onChange={(event) => setTimeLimitSeconds(event.target.value)}
             className="w-28 text-sm border border-slate-300 rounded-md px-2 py-1.5"
           />
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+            Execution mode
+          </label>
+          <select
+            value={executionMode}
+            onChange={(event) => setExecutionMode(event.target.value as "single" | "parallel")}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1.5"
+          >
+            <option value="single">Standard</option>
+            <option value="parallel">Parallel by region</option>
+          </select>
         </div>
       </div>
 

@@ -69,7 +69,8 @@ The backend calls this service at `solver_base_url` (`http://localhost:8100` by 
 
 See `solver/README.md` for how the optimizer actually decides what to schedule (why it isn't
 greedy, why "closest customer first" isn't the rule, and how travel time is weighed against
-scheduling more visits).
+scheduling more visits), and for running multiple worker processes to support `parallel`
+execution mode.
 
 ## Convenience: start everything at once
 

@@ -506,6 +506,7 @@ class ProposedAssignmentOut(BaseModel):
 class OptimizeRunOptions(BaseModel):
     days_ahead: int = 2
     time_limit_seconds: int | None = None
+    execution_mode: Literal["single", "parallel"] = "single"
 
 
 class OptimizationProposal(BaseModel):
