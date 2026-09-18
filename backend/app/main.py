@@ -3,12 +3,23 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.ad_hoc_visits import find_free_slots
+from app.auth import (
+    SESSION_COOKIE_NAME,
+    create_session_token,
+    customer_scope_ids,
+    get_current_user,
+    hash_password,
+    require_admin,
+    require_customer_access,
+    require_session,
+    verify_password,
+)
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.demo_schedule_refresh import refresh_demo_schedule
@@ -41,8 +52,11 @@ from app.models import (
     Product,
     Region,
     ServiceOrderType,
+    ServiceRequest,
+    ServiceRequestStatus,
     ServiceVisit,
     Skill,
+    User,
     VisitStatus,
 )
 from app.schemas import (
@@ -58,6 +72,7 @@ from app.schemas import (
     ContractOut,
     ContractUpdate,
     CustomerCreate,
+    CustomerDashboardOut,
     CustomerLocationCoordinatesUpdate,
     CustomerLocationCreate,
     CustomerLocationOut,
@@ -97,10 +112,19 @@ from app.schemas import (
     ServiceOrderTypeCreate,
     ServiceOrderTypeOut,
     ServiceOrderTypeUpdate,
+    ServiceRequestCreate,
+    ServiceRequestOut,
     ServiceVisitOut,
     SkillCreate,
     SkillOut,
     SkillUpdate,
+    CurrentUserOut,
+    UserAdminUpdate,
+    UserCreate,
+    UserCustomersUpdate,
+    UserLoginRequest,
+    UserOut,
+    UserPasswordReset,
 )
 from app.resco import (
     sync_all_employees,
@@ -145,6 +169,7 @@ app.add_middleware(
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
@@ -226,7 +251,7 @@ def _customer_location_display_address(
     return ", ".join(part for part in [address_line_1, locality] if part)
 
 
-@app.get("/employees", response_model=list[EmployeeOut])
+@app.get("/employees", response_model=list[EmployeeOut], dependencies=[Depends(require_admin)])
 def list_employees(db: Session = Depends(get_db)) -> list[EmployeeOut]:
     employees = (
         _employee_query(db)
@@ -237,7 +262,7 @@ def list_employees(db: Session = Depends(get_db)) -> list[EmployeeOut]:
     return [_employee_out(employee) for employee in employees]
 
 
-@app.post("/employees", response_model=EmployeeOut, status_code=201)
+@app.post("/employees", response_model=EmployeeOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> EmployeeOut:
     regions, skills = _lookup_regions_and_skills(db, payload.region_ids, payload.skill_ids)
 
@@ -264,7 +289,7 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)) -> E
     return _employee_out(employee, resco_sync=resco_sync)
 
 
-@app.patch("/employees/{employee_id}", response_model=EmployeeOut)
+@app.patch("/employees/{employee_id}", response_model=EmployeeOut, dependencies=[Depends(require_admin)])
 def update_employee(
     employee_id: int, payload: EmployeeUpdate, db: Session = Depends(get_db)
 ) -> EmployeeOut:
@@ -294,12 +319,12 @@ def update_employee(
     return _employee_out(employee, resco_sync=resco_sync)
 
 
-@app.post("/employees/sync-resco", response_model=RescoSyncSummary)
+@app.post("/employees/sync-resco", response_model=RescoSyncSummary, dependencies=[Depends(require_admin)])
 def sync_employees_to_resco(db: Session = Depends(get_db)) -> RescoSyncSummary:
     return sync_all_employees(db)
 
 
-@app.delete("/employees/{employee_id}", status_code=204)
+@app.delete("/employees/{employee_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_employee(employee_id: int, db: Session = Depends(get_db)) -> None:
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -327,6 +352,7 @@ def _validate_template_hours(
 @app.get(
     "/employees/{employee_id}/schedule-templates",
     response_model=list[EmployeeScheduleTemplateOut],
+    dependencies=[Depends(require_admin)],
 )
 def list_schedule_templates(
     employee_id: int, db: Session = Depends(get_db)
@@ -346,6 +372,7 @@ def list_schedule_templates(
     "/employees/{employee_id}/schedule-templates",
     response_model=EmployeeScheduleTemplateOut,
     status_code=201,
+    dependencies=[Depends(require_admin)],
 )
 def create_schedule_template(
     employee_id: int,
@@ -366,7 +393,9 @@ def create_schedule_template(
 
 
 @app.patch(
-    "/schedule-templates/{template_id}", response_model=EmployeeScheduleTemplateOut
+    "/schedule-templates/{template_id}",
+    response_model=EmployeeScheduleTemplateOut,
+    dependencies=[Depends(require_admin)],
 )
 def update_schedule_template(
     template_id: int,
@@ -397,7 +426,7 @@ def update_schedule_template(
     return template
 
 
-@app.delete("/schedule-templates/{template_id}", status_code=204)
+@app.delete("/schedule-templates/{template_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_schedule_template(template_id: int, db: Session = Depends(get_db)) -> None:
     template = db.get(EmployeeScheduleTemplate, template_id)
     if template is None:
@@ -432,6 +461,7 @@ def _validate_override_hours(
 @app.get(
     "/employees/{employee_id}/schedule-overrides",
     response_model=list[EmployeeScheduleDayOverrideOut],
+    dependencies=[Depends(require_admin)],
 )
 def list_schedule_overrides(
     employee_id: int, db: Session = Depends(get_db)
@@ -451,6 +481,7 @@ def list_schedule_overrides(
     "/employees/{employee_id}/schedule-overrides",
     response_model=EmployeeScheduleDayOverrideOut,
     status_code=201,
+    dependencies=[Depends(require_admin)],
 )
 def create_schedule_override(
     employee_id: int,
@@ -484,7 +515,9 @@ def create_schedule_override(
 
 
 @app.patch(
-    "/schedule-overrides/{override_id}", response_model=EmployeeScheduleDayOverrideOut
+    "/schedule-overrides/{override_id}",
+    response_model=EmployeeScheduleDayOverrideOut,
+    dependencies=[Depends(require_admin)],
 )
 def update_schedule_override(
     override_id: int,
@@ -512,7 +545,7 @@ def update_schedule_override(
     return override
 
 
-@app.delete("/schedule-overrides/{override_id}", status_code=204)
+@app.delete("/schedule-overrides/{override_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_schedule_override(override_id: int, db: Session = Depends(get_db)) -> None:
     override = db.get(EmployeeScheduleDayOverride, override_id)
     if override is None:
@@ -526,6 +559,7 @@ def delete_schedule_override(override_id: int, db: Session = Depends(get_db)) ->
     "/employees/{employee_id}/schedule-overrides/bulk",
     response_model=list[EmployeeScheduleDayOverrideOut],
     status_code=201,
+    dependencies=[Depends(require_admin)],
 )
 def create_schedule_overrides_bulk(
     employee_id: int,
@@ -560,7 +594,7 @@ def create_schedule_overrides_bulk(
     return overrides
 
 
-@app.get("/regions", response_model=list[RegionOut])
+@app.get("/regions", response_model=list[RegionOut], dependencies=[Depends(require_admin)])
 def list_regions(db: Session = Depends(get_db)) -> list[Region]:
     return (
         db.query(Region)
@@ -570,7 +604,7 @@ def list_regions(db: Session = Depends(get_db)) -> list[Region]:
     )
 
 
-@app.post("/regions", response_model=RegionOut, status_code=201)
+@app.post("/regions", response_model=RegionOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_region(payload: RegionCreate, db: Session = Depends(get_db)) -> Region:
     region = Region(
         name=payload.name,
@@ -584,7 +618,7 @@ def create_region(payload: RegionCreate, db: Session = Depends(get_db)) -> Regio
     return region
 
 
-@app.patch("/regions/{region_id}", response_model=RegionOut)
+@app.patch("/regions/{region_id}", response_model=RegionOut, dependencies=[Depends(require_admin)])
 def update_region(
     region_id: int, payload: RegionUpdate, db: Session = Depends(get_db)
 ) -> Region:
@@ -603,7 +637,7 @@ def update_region(
     return region
 
 
-@app.delete("/regions/{region_id}", status_code=204)
+@app.delete("/regions/{region_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
     region = db.get(Region, region_id)
     if region is None:
@@ -613,12 +647,12 @@ def delete_region(region_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@app.get("/skills", response_model=list[SkillOut])
+@app.get("/skills", response_model=list[SkillOut], dependencies=[Depends(require_admin)])
 def list_skills(db: Session = Depends(get_db)) -> list[Skill]:
     return db.query(Skill).filter(Skill.delete_flag.is_(False)).order_by(Skill.id).all()
 
 
-@app.post("/skills", response_model=SkillOut, status_code=201)
+@app.post("/skills", response_model=SkillOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_skill(payload: SkillCreate, db: Session = Depends(get_db)) -> Skill:
     skill = Skill(name=payload.name)
     db.add(skill)
@@ -627,7 +661,7 @@ def create_skill(payload: SkillCreate, db: Session = Depends(get_db)) -> Skill:
     return skill
 
 
-@app.patch("/skills/{skill_id}", response_model=SkillOut)
+@app.patch("/skills/{skill_id}", response_model=SkillOut, dependencies=[Depends(require_admin)])
 def update_skill(skill_id: int, payload: SkillUpdate, db: Session = Depends(get_db)) -> Skill:
     skill = db.get(Skill, skill_id)
     if skill is None:
@@ -639,7 +673,7 @@ def update_skill(skill_id: int, payload: SkillUpdate, db: Session = Depends(get_
     return skill
 
 
-@app.delete("/skills/{skill_id}", status_code=204)
+@app.delete("/skills/{skill_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_skill(skill_id: int, db: Session = Depends(get_db)) -> None:
     skill = db.get(Skill, skill_id)
     if skill is None:
@@ -649,7 +683,7 @@ def delete_skill(skill_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@app.get("/service-order-types", response_model=list[ServiceOrderTypeOut])
+@app.get("/service-order-types", response_model=list[ServiceOrderTypeOut], dependencies=[Depends(require_admin)])
 def list_service_order_types(db: Session = Depends(get_db)) -> list[ServiceOrderType]:
     return (
         db.query(ServiceOrderType)
@@ -659,7 +693,7 @@ def list_service_order_types(db: Session = Depends(get_db)) -> list[ServiceOrder
     )
 
 
-@app.post("/service-order-types", response_model=ServiceOrderTypeOut, status_code=201)
+@app.post("/service-order-types", response_model=ServiceOrderTypeOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_service_order_type(
     payload: ServiceOrderTypeCreate, db: Session = Depends(get_db)
 ) -> ServiceOrderType:
@@ -670,7 +704,7 @@ def create_service_order_type(
     return service_order_type
 
 
-@app.patch("/service-order-types/{service_order_type_id}", response_model=ServiceOrderTypeOut)
+@app.patch("/service-order-types/{service_order_type_id}", response_model=ServiceOrderTypeOut, dependencies=[Depends(require_admin)])
 def update_service_order_type(
     service_order_type_id: int,
     payload: ServiceOrderTypeUpdate,
@@ -686,7 +720,7 @@ def update_service_order_type(
     return service_order_type
 
 
-@app.delete("/service-order-types/{service_order_type_id}", status_code=204)
+@app.delete("/service-order-types/{service_order_type_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_service_order_type(
     service_order_type_id: int, db: Session = Depends(get_db)
 ) -> None:
@@ -698,7 +732,7 @@ def delete_service_order_type(
     db.commit()
 
 
-@app.post("/customer-locations/assign-regions", response_model=list[CustomerLocationOut])
+@app.post("/customer-locations/assign-regions", response_model=list[CustomerLocationOut], dependencies=[Depends(require_admin)])
 def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[CustomerLocation]:
     assign_regions_by_geofence(db)
     db.commit()
@@ -714,7 +748,7 @@ def assign_customer_location_regions(db: Session = Depends(get_db)) -> list[Cust
     )
 
 
-@app.post("/regions/{region_id}/driving-times", response_model=DrivingTimeComputeSummary)
+@app.post("/regions/{region_id}/driving-times", response_model=DrivingTimeComputeSummary, dependencies=[Depends(require_admin)])
 def compute_driving_times(region_id: int, db: Session = Depends(get_db)) -> dict:
     region = db.get(Region, region_id)
     if region is None:
@@ -724,16 +758,18 @@ def compute_driving_times(region_id: int, db: Session = Depends(get_db)) -> dict
 
 
 @app.get("/products", response_model=list[ProductOut])
-def list_products(db: Session = Depends(get_db)) -> list[Product]:
-    return (
-        db.query(Product)
-        .filter(Product.delete_flag.is_(False), Product.archived.is_(False))
-        .order_by(Product.number)
-        .all()
+def list_products(
+    db: Session = Depends(get_db), user: User = Depends(require_session)
+) -> list[Product]:
+    query = db.query(Product).filter(
+        Product.delete_flag.is_(False), Product.archived.is_(False)
     )
+    if not user.is_admin:
+        query = query.filter(Product.product_type == "PRD")
+    return query.order_by(Product.number).all()
 
 
-@app.post("/products/sync", response_model=list[ProductOut])
+@app.post("/products/sync", response_model=list[ProductOut], dependencies=[Depends(require_admin)])
 def sync_products_endpoint(db: Session = Depends(get_db)) -> list[Product]:
     try:
         sync_products(db)
@@ -749,7 +785,7 @@ def sync_products_endpoint(db: Session = Depends(get_db)) -> list[Product]:
     )
 
 
-@app.post("/products", response_model=ProductOut, status_code=201)
+@app.post("/products", response_model=ProductOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Product:
     full_number = _prefixed_product_number(payload.product_type, payload.number)
     skills = _lookup_skills(db, payload.skill_ids)
@@ -783,7 +819,7 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Pro
     return product
 
 
-@app.patch("/products/{product_id}", response_model=ProductOut)
+@app.patch("/products/{product_id}", response_model=ProductOut, dependencies=[Depends(require_admin)])
 def update_product(
     product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)
 ) -> Product:
@@ -817,7 +853,7 @@ def update_product(
     return product
 
 
-@app.delete("/products/{product_id}", status_code=204)
+@app.delete("/products/{product_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_product(product_id: int, db: Session = Depends(get_db)) -> None:
     product = db.get(Product, product_id)
     if product is None:
@@ -828,16 +864,21 @@ def delete_product(product_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @app.get("/customers", response_model=list[CustomerOut])
-def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
-    return (
-        db.query(Customer)
-        .filter(Customer.delete_flag.is_(False), Customer.archived.is_(False))
-        .order_by(Customer.id)
-        .all()
+def list_customers(
+    db: Session = Depends(get_db), user: User = Depends(require_session)
+) -> list[Customer]:
+    query = db.query(Customer).filter(
+        Customer.delete_flag.is_(False), Customer.archived.is_(False)
     )
+    scope = customer_scope_ids(user)
+    if scope is not None:
+        query = query.filter(Customer.id.in_(scope))
+    return query.order_by(Customer.id).all()
 
 
-@app.post("/customers/sync", response_model=list[CustomerOut])
+@app.post(
+    "/customers/sync", response_model=list[CustomerOut], dependencies=[Depends(require_session)]
+)
 def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
     try:
         sync_customers(db)
@@ -854,12 +895,12 @@ def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
     )
 
 
-@app.post("/customers/sync-resco", response_model=RescoSyncSummary)
+@app.post("/customers/sync-resco", response_model=RescoSyncSummary, dependencies=[Depends(require_admin)])
 def sync_customers_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSyncSummary:
     return sync_customers_to_resco(db)
 
 
-@app.post("/customers", response_model=CustomerOut, status_code=201)
+@app.post("/customers", response_model=CustomerOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
     client = _tripletex_client()
     try:
@@ -882,7 +923,7 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> C
     return customer
 
 
-@app.patch("/customers/{customer_id}", response_model=CustomerOut)
+@app.patch("/customers/{customer_id}", response_model=CustomerOut, dependencies=[Depends(require_admin)])
 def update_customer(
     customer_id: int, payload: CustomerUpdate, db: Session = Depends(get_db)
 ) -> Customer:
@@ -919,7 +960,7 @@ def update_customer(
     return customer
 
 
-@app.delete("/customers/{customer_id}", status_code=204)
+@app.delete("/customers/{customer_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_customer(customer_id: int, db: Session = Depends(get_db)) -> None:
     customer = db.get(Customer, customer_id)
     if customer is None:
@@ -930,11 +971,17 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @app.get("/customer-locations", response_model=list[CustomerLocationOut])
-def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocation]:
+def list_customer_locations(
+    db: Session = Depends(get_db), user: User = Depends(require_session)
+) -> list[CustomerLocation]:
+    query = db.query(CustomerLocation).filter(
+        CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False)
+    )
+    scope = customer_scope_ids(user)
+    if scope is not None:
+        query = query.filter(CustomerLocation.customer_id.in_(scope))
     return (
-        db.query(CustomerLocation)
-        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
-        .options(
+        query.options(
             joinedload(CustomerLocation.customer),
             joinedload(CustomerLocation.region),
         )
@@ -943,12 +990,12 @@ def list_customer_locations(db: Session = Depends(get_db)) -> list[CustomerLocat
     )
 
 
-@app.post("/customer-locations/sync-resco", response_model=RescoSyncSummary)
+@app.post("/customer-locations/sync-resco", response_model=RescoSyncSummary, dependencies=[Depends(require_admin)])
 def sync_customer_locations_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSyncSummary:
     return sync_customer_locations_to_resco(db)
 
 
-@app.patch("/customer-locations/{location_id}/coordinates", response_model=CustomerLocationOut)
+@app.patch("/customer-locations/{location_id}/coordinates", response_model=CustomerLocationOut, dependencies=[Depends(require_admin)])
 def update_customer_location_coordinates(
     location_id: int,
     payload: CustomerLocationCoordinatesUpdate,
@@ -966,7 +1013,7 @@ def update_customer_location_coordinates(
     return location
 
 
-@app.post("/customer-locations", response_model=CustomerLocationOut, status_code=201)
+@app.post("/customer-locations", response_model=CustomerLocationOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_customer_location(
     payload: CustomerLocationCreate, db: Session = Depends(get_db)
 ) -> CustomerLocation:
@@ -1021,7 +1068,7 @@ def create_customer_location(
     return location
 
 
-@app.patch("/customer-locations/{location_id}", response_model=CustomerLocationOut)
+@app.patch("/customer-locations/{location_id}", response_model=CustomerLocationOut, dependencies=[Depends(require_admin)])
 def update_customer_location(
     location_id: int, payload: CustomerLocationUpdate, db: Session = Depends(get_db)
 ) -> CustomerLocation:
@@ -1069,7 +1116,7 @@ def update_customer_location(
     return location
 
 
-@app.delete("/customer-locations/{location_id}", status_code=204)
+@app.delete("/customer-locations/{location_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_customer_location(location_id: int, db: Session = Depends(get_db)) -> None:
     location = db.get(CustomerLocation, location_id)
     if location is None:
@@ -1092,11 +1139,15 @@ def _contract_out(contract: Contract) -> ContractOut:
 
 
 @app.get("/contracts", response_model=list[ContractOut])
-def list_contracts(db: Session = Depends(get_db)) -> list[ContractOut]:
+def list_contracts(
+    db: Session = Depends(get_db), user: User = Depends(require_session)
+) -> list[ContractOut]:
+    query = db.query(Contract).filter(Contract.delete_flag.is_(False))
+    scope = customer_scope_ids(user)
+    if scope is not None:
+        query = query.filter(Contract.customer_id.in_(scope))
     contracts = (
-        db.query(Contract)
-        .filter(Contract.delete_flag.is_(False))
-        .options(
+        query.options(
             joinedload(Contract.customer),
             joinedload(Contract.lines)
             .joinedload(ContractLine.customer_location)
@@ -1117,7 +1168,7 @@ def list_contracts(db: Session = Depends(get_db)) -> list[ContractOut]:
     return [_contract_out(contract) for contract in contracts]
 
 
-@app.post("/contracts", response_model=ContractOut, status_code=201)
+@app.post("/contracts", response_model=ContractOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_contract(payload: ContractCreate, db: Session = Depends(get_db)) -> ContractOut:
     customer = db.get(Customer, payload.customer_id)
     if customer is None:
@@ -1130,7 +1181,7 @@ def create_contract(payload: ContractCreate, db: Session = Depends(get_db)) -> C
     return _contract_out(contract)
 
 
-@app.patch("/contracts/{contract_id}", response_model=ContractOut)
+@app.patch("/contracts/{contract_id}", response_model=ContractOut, dependencies=[Depends(require_admin)])
 def update_contract(
     contract_id: int, payload: ContractUpdate, db: Session = Depends(get_db)
 ) -> ContractOut:
@@ -1223,7 +1274,7 @@ def _regenerate_future_visits(db: Session, line: ContractLine) -> None:
         db.add(ServiceVisit(contract_line_id=line.id, requested_date=occurrence_date))
 
 
-@app.delete("/contracts/{contract_id}", status_code=204)
+@app.delete("/contracts/{contract_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
     contract = db.get(Contract, contract_id)
     if contract is None:
@@ -1236,7 +1287,7 @@ def delete_contract(contract_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@app.post("/contracts/{contract_id}/lines", response_model=ContractLineOut, status_code=201)
+@app.post("/contracts/{contract_id}/lines", response_model=ContractLineOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_contract_line(
     contract_id: int, payload: ContractLineCreate, db: Session = Depends(get_db)
 ) -> ContractLine:
@@ -1282,7 +1333,7 @@ def create_contract_line(
     return line
 
 
-@app.post("/contract-lines/extend-visits", response_model=ContractLineExtendSummary)
+@app.post("/contract-lines/extend-visits", response_model=ContractLineExtendSummary, dependencies=[Depends(require_admin)])
 def extend_contract_line_visits(db: Session = Depends(get_db)) -> dict:
     """Top up every open-ended contract line's generated visits back out to
     OPEN_ENDED_HORIZON_DAYS ahead of today, generating only the occurrences
@@ -1319,11 +1370,20 @@ def extend_contract_line_visits(db: Session = Depends(get_db)) -> dict:
     return {"lines_extended": lines_extended, "visits_created": visits_created}
 
 
+def _check_contract_line_customer_access(line: ContractLine, user: User) -> None:
+    scope = customer_scope_ids(user)
+    if scope is not None and line.customer_location.customer_id not in scope:
+        raise HTTPException(status_code=403, detail="Customer access required")
+
+
 @app.get("/contract-lines/{line_id}/free-slots", response_model=list[FreeSlotOut])
-def get_contract_line_free_slots(line_id: int, db: Session = Depends(get_db)) -> list[FreeSlotOut]:
+def get_contract_line_free_slots(
+    line_id: int, db: Session = Depends(get_db), user: User = Depends(require_session)
+) -> list[FreeSlotOut]:
     line = db.get(ContractLine, line_id)
     if line is None:
         raise HTTPException(status_code=404, detail="Contract line not found")
+    _check_contract_line_customer_access(line, user)
 
     return [
         FreeSlotOut(
@@ -1340,11 +1400,15 @@ def get_contract_line_free_slots(line_id: int, db: Session = Depends(get_db)) ->
     "/contract-lines/{line_id}/ad-hoc-visits", response_model=AssignmentOut, status_code=201
 )
 def book_ad_hoc_visit(
-    line_id: int, payload: AdHocVisitCreate, db: Session = Depends(get_db)
+    line_id: int,
+    payload: AdHocVisitCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_session),
 ) -> Assignment:
     line = db.get(ContractLine, line_id)
     if line is None:
         raise HTTPException(status_code=404, detail="Contract line not found")
+    _check_contract_line_customer_access(line, user)
 
     employee = db.get(Employee, payload.employee_id)
     if employee is None:
@@ -1360,7 +1424,7 @@ def book_ad_hoc_visit(
     return assignment
 
 
-@app.patch("/contract-lines/{line_id}", response_model=ContractLineOut)
+@app.patch("/contract-lines/{line_id}", response_model=ContractLineOut, dependencies=[Depends(require_admin)])
 def update_contract_line(
     line_id: int, payload: ContractLineUpdate, db: Session = Depends(get_db)
 ) -> ContractLine:
@@ -1396,7 +1460,7 @@ def update_contract_line(
     return line
 
 
-@app.delete("/contract-lines/{line_id}", status_code=204)
+@app.delete("/contract-lines/{line_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_contract_line(line_id: int, db: Session = Depends(get_db)) -> None:
     line = db.get(ContractLine, line_id)
     if line is None:
@@ -1412,6 +1476,7 @@ def list_service_visits(
     start_date: date | None = None,
     end_date: date | None = None,
     db: Session = Depends(get_db),
+    user: User = Depends(require_session),
 ) -> list[ServiceVisit]:
     query = db.query(ServiceVisit).options(
         joinedload(ServiceVisit.contract_line)
@@ -1424,6 +1489,11 @@ def list_service_visits(
         .joinedload(ContractLine.customer_location)
         .joinedload(CustomerLocation.region),
     )
+    scope = customer_scope_ids(user)
+    if scope is not None:
+        query = query.join(ServiceVisit.contract_line).join(
+            ContractLine.customer_location
+        ).filter(CustomerLocation.customer_id.in_(scope))
     if start_date is not None:
         query = query.filter(ServiceVisit.requested_date >= start_date)
     if end_date is not None:
@@ -1431,7 +1501,7 @@ def list_service_visits(
     return query.order_by(ServiceVisit.id).all()
 
 
-@app.get("/assignments", response_model=list[AssignmentOut])
+@app.get("/assignments", response_model=list[AssignmentOut], dependencies=[Depends(require_admin)])
 def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
     return (
         db.query(Assignment)
@@ -1456,7 +1526,7 @@ def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
     )
 
 
-@app.get("/day-planning/routes", response_model=DayPlanningRoutesOut)
+@app.get("/day-planning/routes", response_model=DayPlanningRoutesOut, dependencies=[Depends(require_admin)])
 def get_day_planning_routes(date: date, db: Session = Depends(get_db)) -> DayPlanningRoutesOut:
     day_start = datetime.combine(date, time())
     day_end = day_start + timedelta(days=1)
@@ -1536,7 +1606,7 @@ def get_day_planning_routes(date: date, db: Session = Depends(get_db)) -> DayPla
     return DayPlanningRoutesOut(employees=employee_routes)
 
 
-@app.post("/demo/refresh-schedule", response_model=DemoScheduleRefreshSummary)
+@app.post("/demo/refresh-schedule", response_model=DemoScheduleRefreshSummary, dependencies=[Depends(require_admin)])
 def post_refresh_demo_schedule(db: Session = Depends(get_db)) -> dict:
     return refresh_demo_schedule(db)
 
@@ -1558,7 +1628,7 @@ def _assign_visit(
     return assignment
 
 
-@app.post("/assignments", response_model=AssignmentOut, status_code=201)
+@app.post("/assignments", response_model=AssignmentOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_assignment(
     payload: AssignmentCreate, db: Session = Depends(get_db)
 ) -> Assignment:
@@ -1581,7 +1651,7 @@ def create_assignment(
     return assignment
 
 
-@app.delete("/assignments/{service_visit_id}", status_code=204)
+@app.delete("/assignments/{service_visit_id}", status_code=204, dependencies=[Depends(require_admin)])
 def unassign_visit(service_visit_id: int, db: Session = Depends(get_db)) -> None:
     assignment = db.get(Assignment, service_visit_id)
     if assignment is None:
@@ -1593,7 +1663,7 @@ def unassign_visit(service_visit_id: int, db: Session = Depends(get_db)) -> None
     db.commit()
 
 
-@app.patch("/assignments/{service_visit_id}", response_model=AssignmentOut)
+@app.patch("/assignments/{service_visit_id}", response_model=AssignmentOut, dependencies=[Depends(require_admin)])
 def update_assignment_pin(
     service_visit_id: int, payload: AssignmentPinUpdate, db: Session = Depends(get_db)
 ) -> Assignment:
@@ -1607,7 +1677,7 @@ def update_assignment_pin(
     return assignment
 
 
-@app.post("/optimize/propose", response_model=OptimizationProposal)
+@app.post("/optimize/propose", response_model=OptimizationProposal, dependencies=[Depends(require_admin)])
 def propose_optimization(
     options: OptimizeRunOptions | None = None, db: Session = Depends(get_db)
 ) -> OptimizationProposal:
@@ -1667,7 +1737,7 @@ def propose_optimization(
     )
 
 
-@app.post("/optimize/apply", response_model=OptimizationApplyResult)
+@app.post("/optimize/apply", response_model=OptimizationApplyResult, dependencies=[Depends(require_admin)])
 def apply_optimization(
     payload: OptimizationApplyRequest, db: Session = Depends(get_db)
 ) -> OptimizationApplyResult:
@@ -1704,3 +1774,283 @@ def apply_optimization(
         results.append(assignment)
 
     return OptimizationApplyResult(created=results, skipped_visit_ids=skipped)
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        is_admin=user.is_admin,
+        customer_ids=[customer.id for customer in user.customers],
+    )
+
+
+def _current_user_out(user: User) -> CurrentUserOut:
+    return CurrentUserOut(
+        id=user.id,
+        email=user.email,
+        is_admin=user.is_admin,
+        customer_ids=[customer.id for customer in user.customers],
+    )
+
+
+@app.post("/auth/signup", response_model=UserOut, status_code=201)
+def signup(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
+    existing = (
+        db.query(User)
+        .filter(User.email == payload.email, User.delete_flag.is_(False))
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Email already in use")
+
+    user = User(email=payload.email, password_hash=hash_password(payload.password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
+@app.post("/auth/login", response_model=CurrentUserOut)
+def login(payload: UserLoginRequest, response: Response, db: Session = Depends(get_db)) -> CurrentUserOut:
+    user = (
+        db.query(User)
+        .filter(User.email == payload.email, User.delete_flag.is_(False))
+        .first()
+    )
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    token = create_session_token(user)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+    )
+    return _current_user_out(user)
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(response: Response) -> None:
+    response.delete_cookie(key=SESSION_COOKIE_NAME)
+
+
+@app.get("/auth/me", response_model=CurrentUserOut | None)
+def get_me(user: User | None = Depends(get_current_user)) -> CurrentUserOut | None:
+    if user is None:
+        return None
+    return _current_user_out(user)
+
+
+@app.get("/users", response_model=list[UserOut], dependencies=[Depends(require_admin)])
+def list_users(db: Session = Depends(get_db)) -> list[User]:
+    users = db.query(User).filter(User.delete_flag.is_(False)).order_by(User.id).all()
+    return [_user_out(user) for user in users]
+
+
+@app.patch(
+    "/users/{user_id}/customers",
+    response_model=UserOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_user_customers(
+    user_id: int, payload: UserCustomersUpdate, db: Session = Depends(get_db)
+) -> UserOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customers = db.query(Customer).filter(Customer.id.in_(payload.customer_ids)).all()
+    if len(customers) != len(set(payload.customer_ids)):
+        raise HTTPException(status_code=404, detail="One or more customers not found")
+
+    user.customers = customers
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
+@app.patch(
+    "/users/{user_id}/admin",
+    response_model=UserOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_user_admin(
+    user_id: int, payload: UserAdminUpdate, db: Session = Depends(get_db)
+) -> UserOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_admin = payload.is_admin
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
+@app.post(
+    "/users/{user_id}/reset-password",
+    response_model=UserOut,
+    dependencies=[Depends(require_admin)],
+)
+def reset_user_password(
+    user_id: int, payload: UserPasswordReset, db: Session = Depends(get_db)
+) -> UserOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password_hash = hash_password(payload.password)
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
+@app.post("/service-requests", response_model=ServiceRequestOut, status_code=201)
+def create_service_request(
+    payload: ServiceRequestCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_session),
+) -> ServiceRequest:
+    scope = customer_scope_ids(user)
+    if scope is not None and payload.customer_id not in scope:
+        raise HTTPException(status_code=403, detail="Customer access required")
+
+    location = db.get(CustomerLocation, payload.customer_location_id)
+    if location is None or location.customer_id != payload.customer_id:
+        raise HTTPException(
+            status_code=422, detail="Customer location does not belong to the given customer"
+        )
+
+    product = db.get(Product, payload.product_id)
+    if product is None or product.delete_flag or product.product_type != "PRD":
+        raise HTTPException(
+            status_code=422, detail="Product must be a non-deleted PRD-type product"
+        )
+
+    request = ServiceRequest(
+        customer_id=payload.customer_id,
+        customer_location_id=payload.customer_location_id,
+        product_id=payload.product_id,
+        note=payload.note,
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+@app.get(
+    "/service-requests",
+    response_model=list[ServiceRequestOut],
+    dependencies=[Depends(require_admin)],
+)
+def list_service_requests(
+    status: ServiceRequestStatus = ServiceRequestStatus.PENDING, db: Session = Depends(get_db)
+) -> list[ServiceRequest]:
+    return (
+        db.query(ServiceRequest)
+        .filter(ServiceRequest.status == status)
+        .options(
+            joinedload(ServiceRequest.customer),
+            joinedload(ServiceRequest.customer_location).joinedload(CustomerLocation.customer),
+            joinedload(ServiceRequest.customer_location).joinedload(CustomerLocation.region),
+            joinedload(ServiceRequest.product).joinedload(Product.skills),
+            joinedload(ServiceRequest.product).joinedload(Product.service_order_type),
+        )
+        .order_by(ServiceRequest.created_at)
+        .all()
+    )
+
+
+@app.patch(
+    "/service-requests/{request_id}",
+    response_model=ServiceRequestOut,
+    dependencies=[Depends(require_admin)],
+)
+def acknowledge_service_request(request_id: int, db: Session = Depends(get_db)) -> ServiceRequest:
+    request = db.get(ServiceRequest, request_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Service request not found")
+
+    request.status = ServiceRequestStatus.ACKNOWLEDGED
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+@app.get(
+    "/customers/{customer_id}/dashboard",
+    response_model=CustomerDashboardOut,
+)
+def get_customer_dashboard(
+    customer_id: int, db: Session = Depends(get_db), user: User = Depends(require_customer_access)
+) -> CustomerDashboardOut:
+    customer = db.get(Customer, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    locations = (
+        db.query(CustomerLocation)
+        .filter(
+            CustomerLocation.customer_id == customer_id,
+            CustomerLocation.delete_flag.is_(False),
+            CustomerLocation.archived.is_(False),
+        )
+        .options(joinedload(CustomerLocation.customer), joinedload(CustomerLocation.region))
+        .order_by(CustomerLocation.id)
+        .all()
+    )
+
+    contracts = (
+        db.query(Contract)
+        .filter(Contract.customer_id == customer_id, Contract.delete_flag.is_(False))
+        .options(
+            joinedload(Contract.customer),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.region),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
+            joinedload(Contract.lines)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.service_order_type),
+        )
+        .order_by(Contract.id)
+        .all()
+    )
+
+    upcoming_visits = (
+        db.query(ServiceVisit)
+        .join(ServiceVisit.contract_line)
+        .join(ContractLine.customer_location)
+        .filter(
+            CustomerLocation.customer_id == customer_id,
+            ServiceVisit.requested_date >= date.today(),
+        )
+        .options(
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.required_products)
+            .joinedload(Product.skills),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.customer),
+            joinedload(ServiceVisit.contract_line)
+            .joinedload(ContractLine.customer_location)
+            .joinedload(CustomerLocation.region),
+        )
+        .order_by(ServiceVisit.requested_date)
+        .all()
+    )
+
+    return CustomerDashboardOut(
+        customer=CustomerOut.model_validate(customer),
+        customer_locations=[CustomerLocationOut.model_validate(loc) for loc in locations],
+        contracts=[_contract_out(contract) for contract in contracts],
+        upcoming_visits=[ServiceVisitOut.model_validate(visit) for visit in upcoming_visits],
+    )

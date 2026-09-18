@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { listEmployees, listRegions, listSkills } from "../api";
+import { listEmployees, listRegions, listSkills, logout } from "../api";
+import { useRequireRole } from "../shared/auth";
 import type { Employee, Region, Skill } from "../types";
 import { EmployeesView } from "./EmployeesView";
 
+async function handleLogout() {
+  await logout();
+  window.location.href = "/login.html";
+}
+
 export function EmployeeManagementApp() {
+  const { loading: authLoading } = useRequireRole("admin");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -28,7 +35,7 @@ export function EmployeeManagementApp() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div className="p-8 text-slate-500">Loading…</div>;
   }
 
@@ -44,7 +51,16 @@ export function EmployeeManagementApp() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-56 shrink-0 bg-white border-r border-slate-200 p-4">
-        <h1 className="text-lg font-semibold text-slate-900 mb-4">Employee Management</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-lg font-semibold text-slate-900">Employee Management</h1>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-xs text-slate-500 hover:text-slate-800 underline"
+          >
+            Log out
+          </button>
+        </div>
 
         <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
           Viewing as

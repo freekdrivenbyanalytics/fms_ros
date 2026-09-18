@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
-import { listAssignments, listEmployees, listServiceVisits } from "./api";
+import { listAssignments, listEmployees, listServiceVisits, logout } from "./api";
 import { AssignedVisitList } from "./components/AssignedVisitList";
 import { DayPlanningView } from "./components/DayPlanningView";
 import { EmployeeList } from "./components/EmployeeList";
 import { OptimizeView } from "./components/OptimizeView";
 import { UnassignedVisitList } from "./components/UnassignedVisitList";
+import { useRequireRole } from "./shared/auth";
 import type { Assignment, Employee, ServiceVisit } from "./types";
+
+async function handleLogout() {
+  await logout();
+  window.location.href = "/login.html";
+}
 
 type View = "assign" | "planning" | "optimize";
 
@@ -41,6 +47,7 @@ function fourWeeksOut(): string {
 }
 
 function App() {
+  const { loading: authLoading } = useRequireRole("admin");
   const [view, setView] = useState<View>("assign");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [visits, setVisits] = useState<ServiceVisit[]>([]);
@@ -117,7 +124,7 @@ function App() {
   const unassignedVisits = visits.filter((visit) => visit.status === "unassigned");
   const assignedVisits = visits.filter((visit) => visit.status === "assigned");
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div className="p-8 text-slate-500">Loading…</div>;
   }
 
@@ -181,6 +188,13 @@ function App() {
           >
             Admin Portal
           </a>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-md px-3 py-1.5 text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+          >
+            Log out
+          </button>
         </nav>
       </div>
 

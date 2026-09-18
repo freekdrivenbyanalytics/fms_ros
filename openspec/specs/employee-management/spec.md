@@ -109,3 +109,21 @@ The system SHALL show a user-facing error, without persisting the change, when a
 #### Scenario: Over-cap hours are rejected with an explanation
 - **WHEN** a user attempts to create or update a template or day override whose hours exceed its effective max hours per day
 - **THEN** Employee Management shows an error and does not persist the change
+
+### Requirement: Viewing-as employee selector in Employee Management
+The system SHALL let a user pick one specific employee, or "All employees", from a selector in Employee Management's sidebar, filtering the employee list and its scoped content to that choice.
+
+#### Scenario: Selecting a specific employee
+- **WHEN** a user picks a specific employee from the sidebar selector
+- **THEN** the employee list shows only that employee
+
+#### Scenario: Selecting "All employees"
+- **WHEN** a user picks "All employees" from the sidebar selector, or has not made a selection yet
+- **THEN** the employee list shows every non-deleted employee, unfiltered
+
+### Requirement: Select all skills on the employee form
+The system SHALL let a user, from the employee create or edit form, select every existing skill in one action instead of checking each one individually.
+
+#### Scenario: Selecting all skills at once
+- **WHEN** a user activates the "select all skills" control on the employee form
+- **THEN** every existing skill's checkbox becomes checked

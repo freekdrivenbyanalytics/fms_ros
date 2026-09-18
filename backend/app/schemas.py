@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.models import DayType, LocationKind, LunchType, VisitStatus
+from app.models import DayType, LocationKind, LunchType, ServiceRequestStatus, VisitStatus
 
 
 class GeoPoint(BaseModel):
@@ -556,3 +556,69 @@ class DayPlanningRoutesOut(BaseModel):
 class DemoScheduleRefreshSummary(BaseModel):
     days_shifted: int
     visits_unassigned: int
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    is_admin: bool
+    customer_ids: list[int]
+
+
+class CurrentUserOut(BaseModel):
+    id: int
+    email: str
+    is_admin: bool
+    customer_ids: list[int]
+
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserCustomersUpdate(BaseModel):
+    customer_ids: list[int]
+
+
+class UserAdminUpdate(BaseModel):
+    is_admin: bool
+
+
+class UserPasswordReset(BaseModel):
+    password: str
+
+
+class ServiceRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    customer: CustomerOut
+    customer_location: CustomerLocationOut
+    product: ProductOut
+    note: str | None = None
+    status: ServiceRequestStatus
+    created_at: datetime
+
+
+class ServiceRequestCreate(BaseModel):
+    customer_id: int
+    customer_location_id: int
+    product_id: int
+    note: str | None = None
+
+
+class CustomerDashboardOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    customer: CustomerOut
+    customer_locations: list[CustomerLocationOut]
+    contracts: list[ContractOut]
+    upcoming_visits: list[ServiceVisitOut]

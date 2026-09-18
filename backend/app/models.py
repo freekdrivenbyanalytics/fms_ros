@@ -561,3 +561,61 @@ class Assignment(Base):
 
     service_visit: Mapped["ServiceVisit"] = relationship(back_populates="assignment")
     employee: Mapped["Employee"] = relationship(back_populates="assignments")
+
+
+user_customers = Table(
+    "user_customers",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("customer_id", ForeignKey("customers.id"), primary_key=True),
+)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    delete_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    customers: Mapped[list["Customer"]] = relationship(secondary=user_customers)
+
+
+class ServiceRequestStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACKNOWLEDGED = "acknowledged"
+
+
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
+    customer_location_id: Mapped[int] = mapped_column(
+        ForeignKey("customer_locations.id"), nullable=False
+    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    note: Mapped[str | None] = mapped_column(String)
+    status: Mapped[ServiceRequestStatus] = mapped_column(
+        Enum(
+            ServiceRequestStatus,
+            name="service_request_status",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=ServiceRequestStatus.PENDING,
+        server_default=ServiceRequestStatus.PENDING.value,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    customer: Mapped["Customer"] = relationship()
+    customer_location: Mapped["CustomerLocation"] = relationship()
+    product: Mapped["Product"] = relationship()

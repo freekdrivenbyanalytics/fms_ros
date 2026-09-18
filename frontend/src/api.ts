@@ -17,6 +17,8 @@ import type {
   CustomerLocationUpdateInput,
   CustomerUpdateInput,
   DayPlanningRoutes,
+  CurrentUser,
+  CustomerDashboard,
   DemoScheduleRefreshSummary,
   DrivingTimeComputeSummary,
   Employee,
@@ -45,6 +47,12 @@ import type {
   Skill,
   SkillCreateInput,
   SkillUpdateInput,
+  LoginInput,
+  ServiceRequest,
+  ServiceRequestCreateInput,
+  User,
+  UserCreateInput,
+  UserCustomersInput,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -58,12 +66,16 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, credentials: "include" });
+}
+
 export function listEmployees(): Promise<Employee[]> {
-  return fetch(`${API_URL}/employees`).then((res) => handleResponse<Employee[]>(res));
+  return apiFetch(`${API_URL}/employees`).then((res) => handleResponse<Employee[]>(res));
 }
 
 export function createEmployee(input: EmployeeCreateInput): Promise<Employee> {
-  return fetch(`${API_URL}/employees`, {
+  return apiFetch(`${API_URL}/employees`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -71,7 +83,7 @@ export function createEmployee(input: EmployeeCreateInput): Promise<Employee> {
 }
 
 export function updateEmployee(id: number, input: EmployeeUpdateInput): Promise<Employee> {
-  return fetch(`${API_URL}/employees/${id}`, {
+  return apiFetch(`${API_URL}/employees/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -79,13 +91,13 @@ export function updateEmployee(id: number, input: EmployeeUpdateInput): Promise<
 }
 
 export function syncEmployeesToResco(): Promise<RescoSyncSummary> {
-  return fetch(`${API_URL}/employees/sync-resco`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/employees/sync-resco`, { method: "POST" }).then((res) =>
     handleResponse<RescoSyncSummary>(res)
   );
 }
 
 export async function deleteEmployee(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/employees/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/employees/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -97,7 +109,7 @@ export function createScheduleTemplate(
   employeeId: number,
   input: EmployeeScheduleTemplateInput
 ): Promise<EmployeeScheduleTemplate> {
-  return fetch(`${API_URL}/employees/${employeeId}/schedule-templates`, {
+  return apiFetch(`${API_URL}/employees/${employeeId}/schedule-templates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -108,7 +120,7 @@ export function updateScheduleTemplate(
   id: number,
   input: EmployeeScheduleTemplateInput
 ): Promise<EmployeeScheduleTemplate> {
-  return fetch(`${API_URL}/schedule-templates/${id}`, {
+  return apiFetch(`${API_URL}/schedule-templates/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -116,7 +128,7 @@ export function updateScheduleTemplate(
 }
 
 export async function deleteScheduleTemplate(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/schedule-templates/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/schedule-templates/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -128,7 +140,7 @@ export function createScheduleOverride(
   employeeId: number,
   input: EmployeeScheduleDayOverrideInput
 ): Promise<EmployeeScheduleDayOverride> {
-  return fetch(`${API_URL}/employees/${employeeId}/schedule-overrides`, {
+  return apiFetch(`${API_URL}/employees/${employeeId}/schedule-overrides`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -139,7 +151,7 @@ export function updateScheduleOverride(
   id: number,
   input: EmployeeScheduleDayOverrideInput
 ): Promise<EmployeeScheduleDayOverride> {
-  return fetch(`${API_URL}/schedule-overrides/${id}`, {
+  return apiFetch(`${API_URL}/schedule-overrides/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -147,7 +159,7 @@ export function updateScheduleOverride(
 }
 
 export async function deleteScheduleOverride(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/schedule-overrides/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/schedule-overrides/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -159,7 +171,7 @@ export function createScheduleOverridesBulk(
   employeeId: number,
   input: EmployeeScheduleDayOverrideBulkInput
 ): Promise<EmployeeScheduleDayOverride[]> {
-  return fetch(`${API_URL}/employees/${employeeId}/schedule-overrides/bulk`, {
+  return apiFetch(`${API_URL}/employees/${employeeId}/schedule-overrides/bulk`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -173,23 +185,23 @@ export function listServiceVisits(
   if (range?.startDate) params.set("start_date", range.startDate);
   if (range?.endDate) params.set("end_date", range.endDate);
   const query = params.toString();
-  return fetch(`${API_URL}/service-visits${query ? `?${query}` : ""}`).then((res) =>
+  return apiFetch(`${API_URL}/service-visits${query ? `?${query}` : ""}`).then((res) =>
     handleResponse<ServiceVisit[]>(res)
   );
 }
 
 export function listAssignments(): Promise<Assignment[]> {
-  return fetch(`${API_URL}/assignments`).then((res) =>
+  return apiFetch(`${API_URL}/assignments`).then((res) =>
     handleResponse<Assignment[]>(res)
   );
 }
 
 export function listRegions(): Promise<Region[]> {
-  return fetch(`${API_URL}/regions`).then((res) => handleResponse<Region[]>(res));
+  return apiFetch(`${API_URL}/regions`).then((res) => handleResponse<Region[]>(res));
 }
 
 export function createRegion(input: RegionCreateInput): Promise<Region> {
-  return fetch(`${API_URL}/regions`, {
+  return apiFetch(`${API_URL}/regions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -197,7 +209,7 @@ export function createRegion(input: RegionCreateInput): Promise<Region> {
 }
 
 export function updateRegion(id: number, input: RegionUpdateInput): Promise<Region> {
-  return fetch(`${API_URL}/regions/${id}`, {
+  return apiFetch(`${API_URL}/regions/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -205,7 +217,7 @@ export function updateRegion(id: number, input: RegionUpdateInput): Promise<Regi
 }
 
 export async function deleteRegion(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/regions/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/regions/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -214,11 +226,11 @@ export async function deleteRegion(id: number): Promise<void> {
 }
 
 export function listSkills(): Promise<Skill[]> {
-  return fetch(`${API_URL}/skills`).then((res) => handleResponse<Skill[]>(res));
+  return apiFetch(`${API_URL}/skills`).then((res) => handleResponse<Skill[]>(res));
 }
 
 export function createSkill(input: SkillCreateInput): Promise<Skill> {
-  return fetch(`${API_URL}/skills`, {
+  return apiFetch(`${API_URL}/skills`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -226,7 +238,7 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
 }
 
 export function updateSkill(id: number, input: SkillUpdateInput): Promise<Skill> {
-  return fetch(`${API_URL}/skills/${id}`, {
+  return apiFetch(`${API_URL}/skills/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -234,7 +246,7 @@ export function updateSkill(id: number, input: SkillUpdateInput): Promise<Skill>
 }
 
 export async function deleteSkill(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/skills/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/skills/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -243,7 +255,7 @@ export async function deleteSkill(id: number): Promise<void> {
 }
 
 export function listServiceOrderTypes(): Promise<ServiceOrderType[]> {
-  return fetch(`${API_URL}/service-order-types`).then((res) =>
+  return apiFetch(`${API_URL}/service-order-types`).then((res) =>
     handleResponse<ServiceOrderType[]>(res)
   );
 }
@@ -251,7 +263,7 @@ export function listServiceOrderTypes(): Promise<ServiceOrderType[]> {
 export function createServiceOrderType(
   input: ServiceOrderTypeCreateInput
 ): Promise<ServiceOrderType> {
-  return fetch(`${API_URL}/service-order-types`, {
+  return apiFetch(`${API_URL}/service-order-types`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -262,7 +274,7 @@ export function updateServiceOrderType(
   id: number,
   input: ServiceOrderTypeUpdateInput
 ): Promise<ServiceOrderType> {
-  return fetch(`${API_URL}/service-order-types/${id}`, {
+  return apiFetch(`${API_URL}/service-order-types/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -270,7 +282,7 @@ export function updateServiceOrderType(
 }
 
 export async function deleteServiceOrderType(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/service-order-types/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/service-order-types/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -279,17 +291,17 @@ export async function deleteServiceOrderType(id: number): Promise<void> {
 }
 
 export function listProducts(): Promise<Product[]> {
-  return fetch(`${API_URL}/products`).then((res) => handleResponse<Product[]>(res));
+  return apiFetch(`${API_URL}/products`).then((res) => handleResponse<Product[]>(res));
 }
 
 export function syncProducts(): Promise<Product[]> {
-  return fetch(`${API_URL}/products/sync`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/products/sync`, { method: "POST" }).then((res) =>
     handleResponse<Product[]>(res)
   );
 }
 
 export function createProduct(input: ProductCreateInput): Promise<Product> {
-  return fetch(`${API_URL}/products`, {
+  return apiFetch(`${API_URL}/products`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -297,7 +309,7 @@ export function createProduct(input: ProductCreateInput): Promise<Product> {
 }
 
 export function updateProduct(id: number, input: ProductUpdateInput): Promise<Product> {
-  return fetch(`${API_URL}/products/${id}`, {
+  return apiFetch(`${API_URL}/products/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -305,7 +317,7 @@ export function updateProduct(id: number, input: ProductUpdateInput): Promise<Pr
 }
 
 export async function deleteProduct(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/products/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/products/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -314,11 +326,11 @@ export async function deleteProduct(id: number): Promise<void> {
 }
 
 export function listCustomers(): Promise<Customer[]> {
-  return fetch(`${API_URL}/customers`).then((res) => handleResponse<Customer[]>(res));
+  return apiFetch(`${API_URL}/customers`).then((res) => handleResponse<Customer[]>(res));
 }
 
 export function createCustomer(input: CustomerCreateInput): Promise<Customer> {
-  return fetch(`${API_URL}/customers`, {
+  return apiFetch(`${API_URL}/customers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -326,7 +338,7 @@ export function createCustomer(input: CustomerCreateInput): Promise<Customer> {
 }
 
 export function updateCustomer(id: number, input: CustomerUpdateInput): Promise<Customer> {
-  return fetch(`${API_URL}/customers/${id}`, {
+  return apiFetch(`${API_URL}/customers/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -334,7 +346,7 @@ export function updateCustomer(id: number, input: CustomerUpdateInput): Promise<
 }
 
 export async function deleteCustomer(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/customers/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/customers/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -343,13 +355,13 @@ export async function deleteCustomer(id: number): Promise<void> {
 }
 
 export function syncCustomersToResco(): Promise<RescoSyncSummary> {
-  return fetch(`${API_URL}/customers/sync-resco`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/customers/sync-resco`, { method: "POST" }).then((res) =>
     handleResponse<RescoSyncSummary>(res)
   );
 }
 
 export function listCustomerLocations(): Promise<CustomerLocation[]> {
-  return fetch(`${API_URL}/customer-locations`).then((res) =>
+  return apiFetch(`${API_URL}/customer-locations`).then((res) =>
     handleResponse<CustomerLocation[]>(res)
   );
 }
@@ -357,7 +369,7 @@ export function listCustomerLocations(): Promise<CustomerLocation[]> {
 export function createCustomerLocation(
   input: CustomerLocationCreateInput
 ): Promise<CustomerLocation> {
-  return fetch(`${API_URL}/customer-locations`, {
+  return apiFetch(`${API_URL}/customer-locations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -368,7 +380,7 @@ export function updateCustomerLocation(
   id: number,
   input: CustomerLocationUpdateInput
 ): Promise<CustomerLocation> {
-  return fetch(`${API_URL}/customer-locations/${id}`, {
+  return apiFetch(`${API_URL}/customer-locations/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -376,7 +388,7 @@ export function updateCustomerLocation(
 }
 
 export async function deleteCustomerLocation(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/customer-locations/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/customer-locations/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -385,7 +397,7 @@ export async function deleteCustomerLocation(id: number): Promise<void> {
 }
 
 export function syncCustomerLocationsToResco(): Promise<RescoSyncSummary> {
-  return fetch(`${API_URL}/customer-locations/sync-resco`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/customer-locations/sync-resco`, { method: "POST" }).then((res) =>
     handleResponse<RescoSyncSummary>(res)
   );
 }
@@ -394,7 +406,7 @@ export function updateCustomerLocationCoordinates(
   id: number,
   input: CustomerLocationCoordinatesInput
 ): Promise<CustomerLocation> {
-  return fetch(`${API_URL}/customer-locations/${id}/coordinates`, {
+  return apiFetch(`${API_URL}/customer-locations/${id}/coordinates`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -402,23 +414,23 @@ export function updateCustomerLocationCoordinates(
 }
 
 export function assignRegionsByGeofence(): Promise<CustomerLocation[]> {
-  return fetch(`${API_URL}/customer-locations/assign-regions`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/customer-locations/assign-regions`, { method: "POST" }).then((res) =>
     handleResponse<CustomerLocation[]>(res)
   );
 }
 
 export function computeRegionDrivingTimes(regionId: number): Promise<DrivingTimeComputeSummary> {
-  return fetch(`${API_URL}/regions/${regionId}/driving-times`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/regions/${regionId}/driving-times`, { method: "POST" }).then((res) =>
     handleResponse<DrivingTimeComputeSummary>(res)
   );
 }
 
 export function listContracts(): Promise<Contract[]> {
-  return fetch(`${API_URL}/contracts`).then((res) => handleResponse<Contract[]>(res));
+  return apiFetch(`${API_URL}/contracts`).then((res) => handleResponse<Contract[]>(res));
 }
 
 export function createContract(input: ContractCreateInput): Promise<Contract> {
-  return fetch(`${API_URL}/contracts`, {
+  return apiFetch(`${API_URL}/contracts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -429,7 +441,7 @@ export function updateContract(
   id: number,
   input: ContractUpdateInput
 ): Promise<Contract> {
-  return fetch(`${API_URL}/contracts/${id}`, {
+  return apiFetch(`${API_URL}/contracts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -437,7 +449,7 @@ export function updateContract(
 }
 
 export async function deleteContract(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/contracts/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/contracts/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -449,7 +461,7 @@ export function createContractLine(
   contractId: number,
   input: ContractLineCreateInput
 ): Promise<ContractLine> {
-  return fetch(`${API_URL}/contracts/${contractId}/lines`, {
+  return apiFetch(`${API_URL}/contracts/${contractId}/lines`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -460,7 +472,7 @@ export function updateContractLine(
   id: number,
   input: ContractLineUpdateInput
 ): Promise<ContractLine> {
-  return fetch(`${API_URL}/contract-lines/${id}`, {
+  return apiFetch(`${API_URL}/contract-lines/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -468,7 +480,7 @@ export function updateContractLine(
 }
 
 export async function deleteContractLine(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/contract-lines/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_URL}/contract-lines/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.detail ?? `Request failed with status ${res.status}`;
@@ -477,13 +489,13 @@ export async function deleteContractLine(id: number): Promise<void> {
 }
 
 export function extendContractLineVisits(): Promise<ContractLineExtendSummary> {
-  return fetch(`${API_URL}/contract-lines/extend-visits`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/contract-lines/extend-visits`, { method: "POST" }).then((res) =>
     handleResponse<ContractLineExtendSummary>(res)
   );
 }
 
 export function getFreeSlots(lineId: number): Promise<FreeSlot[]> {
-  return fetch(`${API_URL}/contract-lines/${lineId}/free-slots`).then((res) =>
+  return apiFetch(`${API_URL}/contract-lines/${lineId}/free-slots`).then((res) =>
     handleResponse<FreeSlot[]>(res)
   );
 }
@@ -492,7 +504,7 @@ export function bookAdHocVisit(
   lineId: number,
   input: AdHocVisitBookingInput
 ): Promise<Assignment> {
-  return fetch(`${API_URL}/contract-lines/${lineId}/ad-hoc-visits`, {
+  return apiFetch(`${API_URL}/contract-lines/${lineId}/ad-hoc-visits`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -500,13 +512,13 @@ export function bookAdHocVisit(
 }
 
 export function syncCustomers(): Promise<Customer[]> {
-  return fetch(`${API_URL}/customers/sync`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/customers/sync`, { method: "POST" }).then((res) =>
     handleResponse<Customer[]>(res)
   );
 }
 
 export function createAssignment(input: CreateAssignmentInput): Promise<Assignment> {
-  return fetch(`${API_URL}/assignments`, {
+  return apiFetch(`${API_URL}/assignments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -514,7 +526,7 @@ export function createAssignment(input: CreateAssignmentInput): Promise<Assignme
 }
 
 export async function unassignVisit(serviceVisitId: number): Promise<void> {
-  const res = await fetch(`${API_URL}/assignments/${serviceVisitId}`, {
+  const res = await apiFetch(`${API_URL}/assignments/${serviceVisitId}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -528,7 +540,7 @@ export function setAssignmentPinned(
   serviceVisitId: number,
   pinned: boolean
 ): Promise<Assignment> {
-  return fetch(`${API_URL}/assignments/${serviceVisitId}`, {
+  return apiFetch(`${API_URL}/assignments/${serviceVisitId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pinned }),
@@ -538,7 +550,7 @@ export function setAssignmentPinned(
 export function proposeOptimization(
   options?: OptimizeRunOptions
 ): Promise<OptimizationProposal> {
-  return fetch(`${API_URL}/optimize/propose`, {
+  return apiFetch(`${API_URL}/optimize/propose`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options ?? {}),
@@ -548,7 +560,7 @@ export function proposeOptimization(
 export function applyOptimization(
   scheduled: CreateAssignmentInput[]
 ): Promise<OptimizationApplyResult> {
-  return fetch(`${API_URL}/optimize/apply`, {
+  return apiFetch(`${API_URL}/optimize/apply`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scheduled }),
@@ -556,13 +568,91 @@ export function applyOptimization(
 }
 
 export function getDayPlanningRoutes(date: string): Promise<DayPlanningRoutes> {
-  return fetch(`${API_URL}/day-planning/routes?date=${date}`).then((res) =>
+  return apiFetch(`${API_URL}/day-planning/routes?date=${date}`).then((res) =>
     handleResponse<DayPlanningRoutes>(res)
   );
 }
 
 export function refreshDemoSchedule(): Promise<DemoScheduleRefreshSummary> {
-  return fetch(`${API_URL}/demo/refresh-schedule`, { method: "POST" }).then((res) =>
+  return apiFetch(`${API_URL}/demo/refresh-schedule`, { method: "POST" }).then((res) =>
     handleResponse<DemoScheduleRefreshSummary>(res)
+  );
+}
+
+export function signup(input: UserCreateInput): Promise<User> {
+  return apiFetch(`${API_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<User>(res));
+}
+
+export function login(input: LoginInput): Promise<CurrentUser> {
+  return apiFetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<CurrentUser>(res));
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch(`${API_URL}/auth/logout`, { method: "POST" });
+}
+
+export function getCurrentUser(): Promise<CurrentUser> {
+  return apiFetch(`${API_URL}/auth/me`).then((res) => handleResponse<CurrentUser>(res));
+}
+
+export function listUsers(): Promise<User[]> {
+  return apiFetch(`${API_URL}/users`).then((res) => handleResponse<User[]>(res));
+}
+
+export function updateUserCustomers(id: number, input: UserCustomersInput): Promise<User> {
+  return apiFetch(`${API_URL}/users/${id}/customers`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<User>(res));
+}
+
+export function updateUserAdmin(id: number, isAdmin: boolean): Promise<User> {
+  return apiFetch(`${API_URL}/users/${id}/admin`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_admin: isAdmin }),
+  }).then((res) => handleResponse<User>(res));
+}
+
+export function resetUserPassword(id: number, password: string): Promise<User> {
+  return apiFetch(`${API_URL}/users/${id}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  }).then((res) => handleResponse<User>(res));
+}
+
+export function createServiceRequest(input: ServiceRequestCreateInput): Promise<ServiceRequest> {
+  return apiFetch(`${API_URL}/service-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }).then((res) => handleResponse<ServiceRequest>(res));
+}
+
+export function listServiceRequests(): Promise<ServiceRequest[]> {
+  return apiFetch(`${API_URL}/service-requests`).then((res) =>
+    handleResponse<ServiceRequest[]>(res)
+  );
+}
+
+export function acknowledgeServiceRequest(id: number): Promise<ServiceRequest> {
+  return apiFetch(`${API_URL}/service-requests/${id}`, { method: "PATCH" }).then((res) =>
+    handleResponse<ServiceRequest>(res)
+  );
+}
+
+export function getCustomerDashboard(customerId: number): Promise<CustomerDashboard> {
+  return apiFetch(`${API_URL}/customers/${customerId}/dashboard`).then((res) =>
+    handleResponse<CustomerDashboard>(res)
   );
 }

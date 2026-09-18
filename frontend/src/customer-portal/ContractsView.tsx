@@ -5,7 +5,7 @@ import { CONTRACT_LINE_INTERVAL_OPTIONS } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
 
-function formatInterval(unit: ContractLine["interval_unit"], count: number): string {
+export function formatInterval(unit: ContractLine["interval_unit"], count: number): string {
   const match = CONTRACT_LINE_INTERVAL_OPTIONS.find(
     (option) => option.interval_unit === unit && option.interval_count === count
   );
@@ -116,12 +116,12 @@ export function ContractsView({ contracts, serviceVisits, onChanged }: Props) {
   );
 }
 
-interface BookAdHocVisitProps {
+export interface BookAdHocVisitProps {
   line: ContractLine;
   onBooked: () => void | Promise<void>;
 }
 
-function BookAdHocVisit({ line, onBooked }: BookAdHocVisitProps) {
+export function BookAdHocVisit({ line, onBooked }: BookAdHocVisitProps) {
   const [open, setOpen] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slots, setSlots] = useState<FreeSlot[]>([]);

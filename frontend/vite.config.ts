@@ -12,6 +12,7 @@ export default defineConfig({
         customerPortal: resolve(import.meta.dirname,'customer-portal.html'),
         employeeManagement: resolve(import.meta.dirname,'employee-management.html'),
         adminPortal: resolve(import.meta.dirname,'admin-portal.html'),
+        login: resolve(import.meta.dirname,'login.html'),
       },
     },
   },

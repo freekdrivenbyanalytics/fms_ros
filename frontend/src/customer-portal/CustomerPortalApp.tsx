@@ -4,12 +4,20 @@ import {
   listCustomerLocations,
   listCustomers,
   listServiceVisits,
+  logout,
   syncCustomers,
 } from "../api";
+import { useRequireRole } from "../shared/auth";
 import type { Contract, Customer, CustomerLocation, ServiceVisit } from "../types";
 import { ContractsView } from "./ContractsView";
+import { CustomerDashboard } from "./CustomerDashboard";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
+
+async function handleLogout() {
+  await logout();
+  window.location.href = "/login.html";
+}
 
 type Entity = "customers" | "customer-locations" | "contracts";
 
@@ -22,6 +30,7 @@ const ENTITY_LABELS: Record<Entity, string> = {
 const ENTITY_ORDER: Entity[] = ["customers", "customer-locations", "contracts"];
 
 export function CustomerPortalApp() {
+  const { user, loading: authLoading } = useRequireRole("any");
   const [entity, setEntity] = useState<Entity>("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerLocations, setCustomerLocations] = useState<CustomerLocation[]>([]);
@@ -30,7 +39,6 @@ export function CustomerPortalApp() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewingAsCustomerId, setViewingAsCustomerId] = useState<number | null>(null);
-  const [pendingLocationId, setPendingLocationId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
@@ -57,7 +65,7 @@ export function CustomerPortalApp() {
     setServiceVisits(serviceVisitsData);
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div className="p-8 text-slate-500">Loading…</div>;
   }
 
@@ -65,12 +73,16 @@ export function CustomerPortalApp() {
     return <div className="p-8 text-red-600">Failed to load data: {loadError}</div>;
   }
 
-  const scopedCustomer = customers.find((customer) => customer.id === viewingAsCustomerId);
-
-  function handleSelectLocation(locationId: number) {
-    setEntity("customer-locations");
-    setPendingLocationId(locationId);
-  }
+  const isAdmin = user?.is_admin ?? false;
+  // The one customer currently "in scope": explicitly via the admin switcher, or
+  // automatically the sole customer of a non-admin session. Once set, the
+  // consolidated dashboard replaces the Customers/Customer Locations/Contracts
+  // tabs entirely rather than just the old Customer-detail view (see design.md).
+  const dashboardCustomerId = isAdmin
+    ? viewingAsCustomerId
+    : user && user.customer_ids.length === 1
+      ? user.customer_ids[0]
+      : null;
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -95,44 +107,59 @@ export function CustomerPortalApp() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-56 shrink-0 bg-white border-r border-slate-200 p-4">
-        <h1 className="text-lg font-semibold text-slate-900 mb-4">Customer Portal</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-lg font-semibold text-slate-900">Customer Portal</h1>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-xs text-slate-500 hover:text-slate-800 underline"
+          >
+            Log out
+          </button>
+        </div>
 
-        <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
-          Viewing as
-        </label>
-        <select
-          value={viewingAsCustomerId ?? ""}
-          onChange={(event) =>
-            setViewingAsCustomerId(
-              event.target.value === "" ? null : Number(event.target.value)
-            )
-          }
-          className="w-full text-sm border border-slate-300 rounded-md px-2 py-1 mb-4"
-        >
-          <option value="">All customers</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name}
-            </option>
-          ))}
-        </select>
-
-        <nav className="flex flex-col gap-1">
-          {ENTITY_ORDER.map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setEntity(key)}
-              className={`text-left rounded-md px-3 py-2 text-sm font-medium ${
-                entity === key
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
+        {isAdmin && (
+          <>
+            <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+              Viewing as
+            </label>
+            <select
+              value={viewingAsCustomerId ?? ""}
+              onChange={(event) =>
+                setViewingAsCustomerId(
+                  event.target.value === "" ? null : Number(event.target.value)
+                )
+              }
+              className="w-full text-sm border border-slate-300 rounded-md px-2 py-1 mb-4"
             >
-              {ENTITY_LABELS[key]}
-            </button>
-          ))}
-        </nav>
+              <option value="">All customers</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+
+        {dashboardCustomerId === null && (
+          <nav className="flex flex-col gap-1">
+            {ENTITY_ORDER.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setEntity(key)}
+                className={`text-left rounded-md px-3 py-2 text-sm font-medium ${
+                  entity === key
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {ENTITY_LABELS[key]}
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="mt-6 pt-4 border-t border-slate-200">
           <div className="text-xs uppercase tracking-wide text-slate-400 mb-2 px-3">
             Other portals
@@ -160,37 +187,38 @@ export function CustomerPortalApp() {
         </div>
       </aside>
       <main className="flex-1 p-8">
-        {entity === "customers" && (
-          <div>
-            {refreshError && (
-              <p className="text-sm text-red-600 mb-3">
-                Failed to refresh: {refreshError}
-              </p>
+        {dashboardCustomerId !== null ? (
+          <CustomerDashboard customerId={dashboardCustomerId} />
+        ) : (
+          <>
+            {entity === "customers" && (
+              <div>
+                {refreshError && (
+                  <p className="text-sm text-red-600 mb-3">
+                    Failed to refresh: {refreshError}
+                  </p>
+                )}
+                <CustomersView
+                  customers={customers}
+                  onRefresh={handleRefresh}
+                  refreshing={refreshing}
+                />
+              </div>
             )}
-            <CustomersView
-              customers={customers}
-              customerLocations={customerLocations}
-              scopedCustomer={scopedCustomer}
-              onSelectLocation={handleSelectLocation}
-              onRefresh={handleRefresh}
-              refreshing={refreshing}
-            />
-          </div>
-        )}
-        {entity === "customer-locations" && (
-          <CustomerLocationsView
-            customerLocations={customerLocations}
-            contracts={contracts}
-            initialSelectedId={pendingLocationId ?? undefined}
-            onInitialSelectionConsumed={() => setPendingLocationId(null)}
-          />
-        )}
-        {entity === "contracts" && (
-          <ContractsView
-            contracts={contracts}
-            serviceVisits={serviceVisits}
-            onChanged={reloadContractsAndVisits}
-          />
+            {entity === "customer-locations" && (
+              <CustomerLocationsView
+                customerLocations={customerLocations}
+                contracts={contracts}
+              />
+            )}
+            {entity === "contracts" && (
+              <ContractsView
+                contracts={contracts}
+                serviceVisits={serviceVisits}
+                onChanged={reloadContractsAndVisits}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

@@ -441,3 +441,52 @@ export interface DemoScheduleRefreshSummary {
   days_shifted: number;
   visits_unassigned: number;
 }
+
+export interface User {
+  id: number;
+  email: string;
+  is_admin: boolean;
+  customer_ids: number[];
+}
+
+export interface UserCreateInput {
+  email: string;
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export type CurrentUser = User | null;
+
+export interface UserCustomersInput {
+  customer_ids: number[];
+}
+
+export type ServiceRequestStatus = "pending" | "acknowledged";
+
+export interface ServiceRequest {
+  id: number;
+  customer: Customer;
+  customer_location: CustomerLocation;
+  product: Product;
+  note: string | null;
+  status: ServiceRequestStatus;
+  created_at: string;
+}
+
+export interface ServiceRequestCreateInput {
+  customer_id: number;
+  customer_location_id: number;
+  product_id: number;
+  note: string | null;
+}
+
+export interface CustomerDashboard {
+  customer: Customer;
+  customer_locations: CustomerLocation[];
+  contracts: Contract[];
+  upcoming_visits: ServiceVisit[];
+}
