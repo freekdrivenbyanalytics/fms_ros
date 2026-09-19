@@ -138,10 +138,9 @@ from app.resco import (
     sync_product,
 )
 from app.solver_client import (
-    build_optimize_payload,
-    build_parallel_group_payloads,
     request_parallel_proposals,
     request_proposal,
+    resolve_run_payloads,
 )
 from app.tripletex import (
     TripletexAuthError,
@@ -1698,15 +1697,17 @@ def propose_optimization(
 ) -> OptimizationProposal:
     options = options or OptimizeRunOptions()
 
-    group_payloads = None
-    excluded_visit_ids: list[int] = []
-    if options.execution_mode == "parallel":
-        group_payloads, excluded_visit_ids = build_parallel_group_payloads(
-            db,
-            days_ahead=options.days_ahead,
-            time_limit_seconds=options.time_limit_seconds,
-            plan_from_time=options.plan_from_time,
-        )
+    # `parallel` always attempts a split; `single` also splits automatically
+    # once the run's ready-visit count crosses parallel_split_visit_threshold
+    # - see solver_client.resolve_run_payloads and design.md's "Mandatory
+    # region-splitting above a problem-size threshold".
+    payload, group_payloads, excluded_visit_ids = resolve_run_payloads(
+        db,
+        days_ahead=options.days_ahead,
+        time_limit_seconds=options.time_limit_seconds,
+        plan_from_time=options.plan_from_time,
+        force_split=options.execution_mode == "parallel",
+    )
 
     if group_payloads is not None:
         try:
@@ -1716,12 +1717,7 @@ def propose_optimization(
                 status_code=502, detail=f"Solver request failed: {exc}"
             ) from exc
     else:
-        payload, excluded_visit_ids = build_optimize_payload(
-            db,
-            days_ahead=options.days_ahead,
-            time_limit_seconds=options.time_limit_seconds,
-            plan_from_time=options.plan_from_time,
-        )
+        assert payload is not None
         try:
             result = request_proposal(payload)
         except httpx.HTTPError as exc:

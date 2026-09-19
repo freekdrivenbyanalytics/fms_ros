@@ -420,32 +420,30 @@ def _group_subset(
     return group_employees, group_visits, group_locked, data.candidate_dates, group_region_ids
 
 
-def build_parallel_group_payloads(
+def _group_payloads_from_data(
     db: Session,
-    days_ahead: int = 2,
-    time_limit_seconds: int | None = None,
-    plan_from_time: str | None = None,
-) -> tuple[list[dict] | None, list[int]]:
-    """Build one payload per employee-disjoint region group, for `parallel`
-    execution mode.
+    data: _RunData,
+    time_limit_seconds: int | None,
+    plan_from_time: str | None,
+) -> list[dict] | None:
+    """Build one payload per employee-disjoint region group from
+    already-loaded `_RunData`.
 
     Each group's payload is a real subset of the full run's
     employees/visits/driving-times/existing-assignments: only rows
     belonging to that group's regions/employees, built with the same
     per-item payload builders `build_optimize_payload` uses.
 
-    Returns (group_payloads, excluded_visit_ids). group_payloads is None
-    when the run's ready-to-schedule visits' regions form a single connected
-    group (including zero or one region) - the caller should fall back to
-    `build_optimize_payload`'s ordinary single-call path in that case, since
-    there is nothing to usefully split.
+    Returns None when the run's ready-to-schedule visits' regions form a
+    single connected group (including zero or one region) - the caller
+    should fall back to a single payload in that case, since there is
+    nothing to usefully split.
     """
-    data = _load_run_data(db, days_ahead)
     region_ids_with_visits = {v.contract_line.customer_location.region_id for v in data.ready_visits}
     groups = group_regions_by_shared_employees(data.employees, region_ids_with_visits)
     if len(groups) < 2:
-        return None, data.excluded_visit_ids
-    group_payloads = [
+        return None
+    return [
         _assemble_payload(
             db,
             *_group_subset(data, group_region_ids),
@@ -455,7 +453,84 @@ def build_parallel_group_payloads(
         )
         for group_region_ids in groups
     ]
+
+
+def build_parallel_group_payloads(
+    db: Session,
+    days_ahead: int = 2,
+    time_limit_seconds: int | None = None,
+    plan_from_time: str | None = None,
+) -> tuple[list[dict] | None, list[int]]:
+    """Build one payload per employee-disjoint region group, for `parallel`
+    execution mode.
+
+    Returns (group_payloads, excluded_visit_ids). group_payloads is None
+    when the run's ready-to-schedule visits' regions form a single connected
+    group (including zero or one region) - the caller should fall back to
+    `build_optimize_payload`'s ordinary single-call path in that case, since
+    there is nothing to usefully split.
+    """
+    data = _load_run_data(db, days_ahead)
+    group_payloads = _group_payloads_from_data(db, data, time_limit_seconds, plan_from_time)
     return group_payloads, data.excluded_visit_ids
+
+
+def _should_attempt_split(ready_visit_count: int, force_split: bool) -> bool:
+    """Whether a run should attempt to split into per-region groups - always
+    when `force_split` (parallel mode explicitly requested), or when the
+    run's ready-visit count crosses `parallel_split_visit_threshold` (see
+    design.md's "Mandatory region-splitting above a problem-size
+    threshold"). This only decides whether a split is *attempted* - whether
+    one is actually *possible* depends on the region graph, which
+    `_group_payloads_from_data` decides separately (falling back to None
+    when the regions turn out fully connected)."""
+    return force_split or ready_visit_count > settings.parallel_split_visit_threshold
+
+
+def resolve_run_payloads(
+    db: Session,
+    days_ahead: int = 2,
+    time_limit_seconds: int | None = None,
+    plan_from_time: str | None = None,
+    force_split: bool = False,
+) -> tuple[dict | None, list[dict] | None, list[int]]:
+    """Decide whether a run solves as one problem or splits into per-region
+    groups, loading `_RunData` exactly once either way - the entry point
+    `propose_optimization` uses instead of choosing between
+    `build_optimize_payload`/`build_parallel_group_payloads` itself.
+
+    Splits (attempts `_group_payloads_from_data`) when `force_split` is set
+    (the caller explicitly requested `parallel` mode) or the run's
+    ready-visit count exceeds `settings.parallel_split_visit_threshold` -
+    see improve-multi-day-solve-quality's design.md ("Mandatory
+    region-splitting above a problem-size threshold"): construction
+    heuristic doesn't reliably finish initializing large unsplit problems
+    within a practical time budget, and splitting is the validated fix.
+
+    Returns (single_payload, group_payloads, excluded_visit_ids): exactly
+    one of single_payload/group_payloads is not None - a split that turns
+    out to have nothing to split (regions fully connected) falls back to a
+    single payload, matching `build_parallel_group_payloads`' own fallback.
+    """
+    data = _load_run_data(db, days_ahead)
+
+    if _should_attempt_split(len(data.ready_visits), force_split):
+        group_payloads = _group_payloads_from_data(db, data, time_limit_seconds, plan_from_time)
+        if group_payloads is not None:
+            return None, group_payloads, data.excluded_visit_ids
+
+    payload = _assemble_payload(
+        db,
+        data.employees,
+        data.ready_visits,
+        data.locked_assignments,
+        data.candidate_dates,
+        data.all_region_ids,
+        time_limit_seconds,
+        data.previous_occurrence_by_visit_id,
+        plan_from_time,
+    )
+    return payload, None, data.excluded_visit_ids
 
 
 def request_proposal(payload: dict) -> dict:

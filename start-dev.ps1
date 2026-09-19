@@ -13,10 +13,10 @@ Start-Process powershell -ArgumentList @(
     "cd '$root\backend'; .\.venv\Scripts\Activate.ps1; uvicorn app.main:app --reload"
 )
 
-Write-Host "Starting solver service (http://localhost:8100)..."
+Write-Host "Starting solver service (http://localhost:8100, 4 worker processes)..."
 Start-Process powershell -ArgumentList @(
     "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
-    "cd '$root\solver'; .\.venv\Scripts\Activate.ps1; uvicorn app.main:app --reload --port 8100"
+    "cd '$root\solver'; .\.venv\Scripts\Activate.ps1; uvicorn app.main:app --port 8100 --workers 4"
 )
 
 Write-Host "Starting frontend (http://localhost:5173)..."

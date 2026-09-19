@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     tripletex_session_ttl_seconds: int = 3600
     solver_base_url: str = "http://localhost:8100"
     solver_time_limit_seconds: int = 30
+    # Above this many ready-to-schedule visits, a run splits into independent
+    # per-region-group solves even when `single` mode was requested - see
+    # improve-multi-day-solve-quality's design.md ("Mandatory region-splitting
+    # above a problem-size threshold"). Starting value from real-data
+    # measurement: an unsplit ~150-visit run failed badly, ~60-visit split
+    # groups converged comfortably. A tuning question, not a fixed constant -
+    # revisit as real usage patterns become clearer.
+    parallel_split_visit_threshold: int = 75
     tomtom_api_key: str = ""
     # Resco's OData v4 API (org "sfm"), confirmed against the live service.
     # Authenticates via HTTP Basic auth (username/password), read from .env
