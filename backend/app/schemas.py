@@ -507,6 +507,9 @@ class OptimizeRunOptions(BaseModel):
     days_ahead: int = 2
     time_limit_seconds: int | None = None
     execution_mode: Literal["single", "parallel"] = "single"
+    # "HH:MM"; no visit is proposed to start earlier than this today. Does
+    # not affect any other date in the run's scheduling window.
+    plan_from_time: str | None = None
 
 
 class OptimizationProposal(BaseModel):

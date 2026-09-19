@@ -28,6 +28,7 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
   const [daysAhead, setDaysAhead] = useState(2);
   const [timeLimitSeconds, setTimeLimitSeconds] = useState("");
   const [executionMode, setExecutionMode] = useState<"single" | "parallel">("single");
+  const [planFromTime, setPlanFromTime] = useState("08:00");
 
   async function handleRun() {
     setRunning(true);
@@ -38,6 +39,7 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
         days_ahead: daysAhead,
         time_limit_seconds: timeLimitSeconds ? Number(timeLimitSeconds) : undefined,
         execution_mode: executionMode,
+        plan_from_time: planFromTime || undefined,
       });
       setProposal(result);
     } catch (err) {
@@ -110,6 +112,17 @@ export function OptimizeView({ onApplied }: OptimizeViewProps) {
             <option value="single">Standard</option>
             <option value="parallel">Parallel by region</option>
           </select>
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">
+            Plan from
+          </label>
+          <input
+            type="time"
+            value={planFromTime}
+            onChange={(event) => setPlanFromTime(event.target.value)}
+            className="w-28 text-sm border border-slate-300 rounded-md px-2 py-1.5"
+          />
         </div>
       </div>
 

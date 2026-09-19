@@ -1693,7 +1693,10 @@ def propose_optimization(
     excluded_visit_ids: list[int] = []
     if options.execution_mode == "parallel":
         group_payloads, excluded_visit_ids = build_parallel_group_payloads(
-            db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
+            db,
+            days_ahead=options.days_ahead,
+            time_limit_seconds=options.time_limit_seconds,
+            plan_from_time=options.plan_from_time,
         )
 
     if group_payloads is not None:
@@ -1705,7 +1708,10 @@ def propose_optimization(
             ) from exc
     else:
         payload, excluded_visit_ids = build_optimize_payload(
-            db, days_ahead=options.days_ahead, time_limit_seconds=options.time_limit_seconds
+            db,
+            days_ahead=options.days_ahead,
+            time_limit_seconds=options.time_limit_seconds,
+            plan_from_time=options.plan_from_time,
         )
         try:
             result = request_proposal(payload)

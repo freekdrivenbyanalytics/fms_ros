@@ -28,6 +28,11 @@ def _minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
 
 
+def _parse_hhmm(value: str) -> time:
+    hour, minute = value.split(":")
+    return time(int(hour), int(minute))
+
+
 def effective_schedule_date(visit: ServiceVisit) -> date:
     """The date a schedule run may propose this visit on.
 
@@ -53,13 +58,41 @@ def _employee_payload(employee: Employee) -> dict:
     }
 
 
+def apply_plan_from_floor(
+    start_minutes: int, end_minutes: int, is_today: bool, plan_from_minutes: int | None
+) -> tuple[int, int] | None:
+    """Clamp a resolved (start_minutes, end_minutes) working-hours window
+    against a plan-from-time floor, for today only.
+
+    Returns the (possibly unchanged) window, or None when the floor
+    consumes the entire remaining window - the caller should then omit that
+    day's entry, same as when there's no resolved schedule at all."""
+    if plan_from_minutes is None or not is_today:
+        return start_minutes, end_minutes
+    start_minutes = max(start_minutes, plan_from_minutes)
+    if start_minutes >= end_minutes:
+        return None
+    return start_minutes, end_minutes
+
+
 def _employee_day_schedule_payloads(
-    db: Session, employees: list[Employee], dates: set[date]
+    db: Session,
+    employees: list[Employee],
+    dates: set[date],
+    plan_from_time: str | None = None,
 ) -> list[dict]:
     """One EmployeeDaySchedule entry per (employee, date) that resolves to an
     actual working-hours window; pairs with no schedule are omitted rather
     than sent with null hours, so the solver's if_not_exists constraint can
-    tell an employee has no schedule that date."""
+    tell an employee has no schedule that date.
+
+    plan_from_time, when given, floors today's start_minutes to no earlier
+    than that time (never earlier than the employee's own resolved start);
+    every other date is unaffected. See apply_plan_from_floor."""
+    plan_from_minutes = (
+        _minutes_since_midnight(_parse_hhmm(plan_from_time)) if plan_from_time else None
+    )
+    today = date.today()
     schedules = []
     for employee in employees:
         for target_date in dates:
@@ -67,12 +100,21 @@ def _employee_day_schedule_payloads(
             if resolved is None:
                 continue
             work_start, work_end = resolved
+            clamped = apply_plan_from_floor(
+                _minutes_since_midnight(work_start),
+                _minutes_since_midnight(work_end),
+                target_date == today,
+                plan_from_minutes,
+            )
+            if clamped is None:
+                continue
+            start_minutes, end_minutes = clamped
             schedules.append(
                 {
                     "employee_id": employee.id,
                     "date": target_date.isoformat(),
-                    "start_minutes": _minutes_since_midnight(work_start),
-                    "end_minutes": _minutes_since_midnight(work_end),
+                    "start_minutes": start_minutes,
+                    "end_minutes": end_minutes,
                 }
             )
     return schedules
@@ -220,10 +262,13 @@ def _assemble_payload(
     candidate_dates: set[date],
     region_ids: set[int],
     time_limit_seconds: int | None,
+    plan_from_time: str | None = None,
 ) -> dict:
     return {
         "employees": [_employee_payload(e) for e in employees],
-        "employee_day_schedules": _employee_day_schedule_payloads(db, employees, candidate_dates),
+        "employee_day_schedules": _employee_day_schedule_payloads(
+            db, employees, candidate_dates, plan_from_time
+        ),
         "visits": [_visit_payload(v) for v in visits],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "driving_times": _driving_time_payloads(db, region_ids),
@@ -232,7 +277,10 @@ def _assemble_payload(
 
 
 def build_optimize_payload(
-    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
+    db: Session,
+    days_ahead: int = 2,
+    time_limit_seconds: int | None = None,
+    plan_from_time: str | None = None,
 ) -> tuple[dict, list[int]]:
     """Build the solver request payload.
 
@@ -250,6 +298,7 @@ def build_optimize_payload(
         data.candidate_dates,
         data.all_region_ids,
         time_limit_seconds,
+        plan_from_time,
     )
     return payload, data.excluded_visit_ids
 
@@ -270,7 +319,10 @@ def _group_subset(
 
 
 def build_parallel_group_payloads(
-    db: Session, days_ahead: int = 2, time_limit_seconds: int | None = None
+    db: Session,
+    days_ahead: int = 2,
+    time_limit_seconds: int | None = None,
+    plan_from_time: str | None = None,
 ) -> tuple[list[dict] | None, list[int]]:
     """Build one payload per employee-disjoint region group, for `parallel`
     execution mode.
@@ -292,7 +344,9 @@ def build_parallel_group_payloads(
     if len(groups) < 2:
         return None, data.excluded_visit_ids
     group_payloads = [
-        _assemble_payload(db, *_group_subset(data, group_region_ids), time_limit_seconds)
+        _assemble_payload(
+            db, *_group_subset(data, group_region_ids), time_limit_seconds, plan_from_time
+        )
         for group_region_ids in groups
     ]
     return group_payloads, data.excluded_visit_ids

@@ -17,10 +17,12 @@ export function DayPlanningView({ employees, assignments }: Props) {
   const [date, setDate] = useState(() => todayKey());
   const [routes, setRoutes] = useState<DayPlanningRoutes | null>(null);
   const [routesError, setRoutesError] = useState<string | null>(null);
+  const [routesLoading, setRoutesLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setRoutesError(null);
+    setRoutesLoading(true);
     getDayPlanningRoutes(date)
       .then((result) => {
         if (!cancelled) setRoutes(result);
@@ -30,6 +32,9 @@ export function DayPlanningView({ employees, assignments }: Props) {
           setRoutes(null);
           setRoutesError(err instanceof Error ? err.message : "Failed to load routes");
         }
+      })
+      .finally(() => {
+        if (!cancelled) setRoutesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -172,8 +177,11 @@ export function DayPlanningView({ employees, assignments }: Props) {
 
       <div className="mt-6">
         <h3 className="text-sm font-medium text-slate-700 mb-2">Routes</h3>
-        {routesError && <p className="text-sm text-red-600 mb-2">{routesError}</p>}
-        {routes && <DayRouteMap routes={routes} />}
+        {routesLoading && <p className="text-sm text-slate-500">Loading routes…</p>}
+        {!routesLoading && routesError && (
+          <p className="text-sm text-red-600 mb-2">{routesError}</p>
+        )}
+        {!routesLoading && routes && <DayRouteMap routes={routes} />}
       </div>
     </section>
   );
