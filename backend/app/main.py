@@ -64,6 +64,7 @@ from app.schemas import (
     AssignmentCreate,
     AssignmentOut,
     AssignmentPinUpdate,
+    AssignmentRescoSyncResult,
     ContractCreate,
     ContractLineCreate,
     ContractLineExtendSummary,
@@ -128,6 +129,7 @@ from app.schemas import (
 )
 from app.resco import (
     sync_all_employees,
+    sync_assignment,
     sync_customer,
     sync_customer_location,
     sync_customer_locations_to_resco,
@@ -1654,6 +1656,14 @@ def create_assignment(
     assignment = _assign_visit(db, visit, employee, payload.planned_start)
     db.commit()
     db.refresh(assignment)
+
+    try:
+        resco_sync = sync_assignment(db, assignment)
+    except Exception:
+        logger.warning("Resco sync failed for assignment %s", assignment.service_visit_id, exc_info=True)
+        resco_sync = AssignmentRescoSyncResult(status="failed", detail="Resco sync failed")
+    assignment.resco_sync = resco_sync
+
     return assignment
 
 
@@ -1799,6 +1809,14 @@ def apply_optimization(
         )
         db.commit()
         db.refresh(assignment)
+
+        try:
+            resco_sync = sync_assignment(db, assignment)
+        except Exception:
+            logger.warning("Resco sync failed for assignment %s", assignment.service_visit_id, exc_info=True)
+            resco_sync = AssignmentRescoSyncResult(status="failed", detail="Resco sync failed")
+        assignment.resco_sync = resco_sync
+
         results.append(assignment)
 
     return OptimizationApplyResult(created=results, skipped_visit_ids=skipped)

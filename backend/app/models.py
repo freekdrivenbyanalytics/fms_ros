@@ -558,6 +558,8 @@ class Assignment(Base):
     pinned: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    resco_work_order_id: Mapped[str | None] = mapped_column(String)
+    resco_work_order_schedule_id: Mapped[str | None] = mapped_column(String)
 
     service_visit: Mapped["ServiceVisit"] = relationship(back_populates="assignment")
     employee: Mapped["Employee"] = relationship(back_populates="assignments")

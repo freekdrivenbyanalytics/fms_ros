@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Customer, CustomerLocation, Employee, Product
+from app.models import Assignment, Customer, CustomerLocation, Employee, Product
 from app.schemas import (
+    AssignmentRescoSyncResult,
     CustomerLocationRescoSyncResult,
     CustomerRescoSyncResult,
     EmployeeRescoSyncResult,
@@ -20,6 +24,16 @@ class RescoAuthError(RuntimeError):
 
 class RescoApiError(RuntimeError):
     pass
+
+
+# This codebase's datetimes are otherwise naive throughout - this is the one
+# place a wall-clock time crosses into an external API that requires an
+# explicit, DST-aware UTC offset (Resco's Edm.DateTimeOffset fields).
+_LOCAL_TZ = ZoneInfo("Europe/Oslo")
+
+
+def _to_resco_datetime(dt: datetime) -> str:
+    return dt.replace(tzinfo=_LOCAL_TZ).isoformat()
 
 
 class RescoClient:
@@ -176,6 +190,87 @@ class RescoClient:
         if response.status_code >= 400:
             raise RescoApiError(
                 f"Resco product update failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+
+    def find_resource_id_for_user(self, resco_user_id: str) -> str:
+        """The fs_resource Resco auto-provisions for a systemuser the moment
+        that user is created - this system never creates or manages
+        fs_resource records itself, only looks up the one that already
+        exists for a synced employee."""
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.get(
+                f"{self._base_url}/fs_resource",
+                auth=self._auth(),
+                params={"$filter": f"__targetid_id eq '{resco_user_id}'"},
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco resource lookup failed: {response.status_code} {response.text}"
+            )
+        matches = response.json()["value"]
+        if len(matches) != 1:
+            raise RescoApiError(
+                f"Expected exactly one Resco resource for user {resco_user_id}, found {len(matches)}"
+            )
+        return matches[0]["id"]
+
+    @staticmethod
+    def _work_order_payload(assignment: Assignment) -> dict:
+        location = assignment.service_visit.contract_line.customer_location
+        return {
+            "name": location.customer.name,
+            "fs_assetid_fs_asset@odata.bind": f"/fs_asset({location.resco_asset_id})",
+        }
+
+    def create_work_order(self, assignment: Assignment) -> dict:
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.post(
+                f"{self._base_url}/fs_workorder",
+                auth=self._auth(),
+                json=self._work_order_payload(assignment),
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco work order create failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+
+    @staticmethod
+    def _work_order_schedule_payload(assignment: Assignment, resource_id: str) -> dict:
+        return {
+            "scheduledstart": _to_resco_datetime(assignment.planned_start),
+            "scheduledend": _to_resco_datetime(assignment.planned_end),
+            "resourceid_fs_resource@odata.bind": f"/fs_resource({resource_id})",
+        }
+
+    def create_work_order_schedule(
+        self, assignment: Assignment, work_order_id: str, resource_id: str
+    ) -> dict:
+        payload = self._work_order_schedule_payload(assignment, resource_id)
+        payload["workorderid_fs_workorder@odata.bind"] = f"/fs_workorder({work_order_id})"
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.post(
+                f"{self._base_url}/fs_workorderschedule",
+                auth=self._auth(),
+                json=payload,
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco work order schedule create failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+
+    def update_work_order_schedule(self, assignment: Assignment, resource_id: str) -> dict:
+        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
+            response = client.patch(
+                f"{self._base_url}/fs_workorderschedule('{assignment.resco_work_order_schedule_id}')",
+                auth=self._auth(),
+                json=self._work_order_schedule_payload(assignment, resource_id),
+            )
+        if response.status_code >= 400:
+            raise RescoApiError(
+                f"Resco work order schedule update failed: {response.status_code} {response.text}"
             )
         return response.json()
 
@@ -373,3 +468,34 @@ def sync_products_to_resco(db: Session) -> RescoSyncSummary:
                 errors.append(f"{product.name}: {result.detail}")
 
     return RescoSyncSummary(created=created, updated=updated, skipped=0, failed=failed, errors=errors)
+
+
+def sync_assignment(db: Session, assignment: Assignment) -> AssignmentRescoSyncResult:
+    employee = assignment.employee
+    location = assignment.service_visit.contract_line.customer_location
+
+    if not employee.resco_user_id:
+        return AssignmentRescoSyncResult(status="skipped", detail="Employee not yet synced to Resco")
+    if not location.resco_asset_id:
+        return AssignmentRescoSyncResult(
+            status="skipped", detail="Customer location not yet synced to Resco"
+        )
+
+    client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
+    try:
+        resource_id = client.find_resource_id_for_user(employee.resco_user_id)
+        if assignment.resco_work_order_id:
+            client.update_work_order_schedule(assignment, resource_id)
+        else:
+            work_order = client.create_work_order(assignment)
+            assignment.resco_work_order_id = str(work_order["id"])
+            schedule = client.create_work_order_schedule(
+                assignment, assignment.resco_work_order_id, resource_id
+            )
+            assignment.resco_work_order_schedule_id = str(schedule["id"])
+            db.add(assignment)
+            db.commit()
+    except Exception as exc:
+        return AssignmentRescoSyncResult(status="failed", detail=str(exc))
+
+    return AssignmentRescoSyncResult(status="synced")

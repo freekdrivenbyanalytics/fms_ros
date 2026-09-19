@@ -387,6 +387,11 @@ class ProductRescoSyncResult(BaseModel):
     detail: str | None = None
 
 
+class AssignmentRescoSyncResult(BaseModel):
+    status: Literal["synced", "skipped", "failed"]
+    detail: str | None = None
+
+
 class EmployeeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -482,6 +487,7 @@ class AssignmentOut(BaseModel):
     pinned: bool
     employee: EmployeeOut
     service_visit: ServiceVisitOut
+    resco_sync: AssignmentRescoSyncResult | None = None
 
     @model_validator(mode="after")
     def _lock_if_started(self) -> "AssignmentOut":
