@@ -140,7 +140,6 @@ from app.resco import (
 from app.solver_client import (
     build_optimize_payload,
     build_parallel_group_payloads,
-    effective_schedule_date,
     request_parallel_proposals,
     request_proposal,
 )
@@ -1757,7 +1756,9 @@ def propose_optimization(
     for item in result["scheduled"]:
         visit = visits_by_id[item["visit_id"]]
         employee = employees_by_id[item["employee_id"]]
-        day_start = datetime.combine(effective_schedule_date(visit), time())
+        # The date the solver actually chose for this visit - may differ
+        # from its nominal requested_date; see add-multi-day-scheduling-window.
+        day_start = datetime.combine(date.fromisoformat(item["date"]), time())
         scheduled.append(
             ProposedAssignmentOut(
                 service_visit_id=visit.id,

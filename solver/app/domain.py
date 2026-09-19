@@ -4,6 +4,11 @@ ensure_jvm_env()
 
 from dataclasses import dataclass, field
 from datetime import date
+# Aliased for VisitAssignment.date's own annotation only: `date: Annotated[date
+# | None, ...] = field(...)` would otherwise self-shadow, since the default
+# value gets bound to the class-body name `date` before that same line's
+# annotation expression is evaluated.
+from datetime import date as _Date
 from typing import Annotated
 
 from timefold.solver.domain import (
@@ -51,9 +56,14 @@ class EmployeeDaySchedule:
 
 @dataclass(frozen=True)
 class ExistingAssignmentFact:
+    """A locked (pinned or already-started) assignment. `date` is the date
+    this assignment actually occupies (its planned_start's date) - not the
+    visit's nominal requested_date, which can differ once a visit has been
+    rescheduled."""
+
     id: Annotated[str, PlanningId]
     employee: Employee
-    requested_date: date
+    date: date
     start_minutes: int
     end_minutes: int
     location_id: int
@@ -79,6 +89,10 @@ class DrivingTimeFact:
 @dataclass
 class VisitAssignment:
     id: Annotated[int, PlanningId]
+    # Fixed nominal (contract-cadence) date - never mutated. Used only as the
+    # preference anchor for the "stay close to your own schedule" soft
+    # constraint; "same day" grouping (double-booking, driving-time gaps,
+    # working-hours lookups) uses the `date` planning variable below instead.
     requested_date: date
     duration_minutes: int
     required_skill_ids: frozenset
@@ -92,6 +106,17 @@ class VisitAssignment:
     # the "Unscheduled visit" constraint size its priority-tier weighting to
     # this run's actual scale. See constraints.py's _unscheduled_priority_weight.
     total_visit_count: int
+    # Nominal days between this visit's requested_date and its contract
+    # line's immediately preceding occurrence's requested_date - None if
+    # there is no preceding occurrence. Paired with exactly one of
+    # previous_visit_id/previous_actual_date below.
+    interval_days: int | None = field(default=None)
+    # The preceding occurrence, when it's also a candidate in this same run
+    # (so its own `date` is being jointly decided too).
+    previous_visit_id: int | None = field(default=None)
+    # The preceding occurrence's actual date, when it's fixed (a locked
+    # assignment) rather than a candidate in this run.
+    previous_actual_date: date | None = field(default=None)
     employee: Annotated[
         Employee | None,
         PlanningVariable(value_range_provider_refs=["employee_range"], allows_unassigned=True),
@@ -100,6 +125,12 @@ class VisitAssignment:
         int | None,
         PlanningVariable(value_range_provider_refs=["start_time_range"], allows_unassigned=True),
     ] = field(default=None)
+    # The chosen date - bounded to the run's scheduling window (see
+    # Schedule.candidate_dates), never earlier than today.
+    date: Annotated[
+        _Date | None,
+        PlanningVariable(value_range_provider_refs=["date_range"], allows_unassigned=True),
+    ] = field(default=None)
 
     def end_minutes(self) -> int | None:
         if self.start_minutes is None:
@@ -107,7 +138,7 @@ class VisitAssignment:
         return self.start_minutes + self.duration_minutes
 
     def is_unassigned(self) -> bool:
-        return self.employee is None or self.start_minutes is None
+        return self.employee is None or self.start_minutes is None or self.date is None
 
 
 @planning_solution
@@ -120,5 +151,6 @@ class Schedule:
     existing_assignments: Annotated[list[ExistingAssignmentFact], ProblemFactCollectionProperty]
     driving_times: Annotated[list[DrivingTimeFact], ProblemFactCollectionProperty]
     start_times: Annotated[list[int], ValueRangeProvider(id="start_time_range")]
+    candidate_dates: Annotated[list[date], ValueRangeProvider(id="date_range")]
     visits: Annotated[list[VisitAssignment], PlanningEntityCollectionProperty]
     score: Annotated[HardMediumSoftScore | None, PlanningScore] = field(default=None)

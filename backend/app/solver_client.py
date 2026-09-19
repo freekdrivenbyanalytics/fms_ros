@@ -120,11 +120,20 @@ def _employee_day_schedule_payloads(
     return schedules
 
 
-def _visit_payload(visit: ServiceVisit) -> dict:
+def _visit_payload(
+    visit: ServiceVisit,
+    previous_occurrence: tuple[int | None, date | None, int | None],
+) -> dict:
+    """previous_occurrence is (previous_visit_id, previous_actual_date,
+    interval_days) - see _compute_previous_occurrences."""
     location = visit.contract_line.customer_location
+    previous_visit_id, previous_actual_date, interval_days = previous_occurrence
     return {
         "id": visit.id,
-        "requested_date": effective_schedule_date(visit).isoformat(),
+        # The true nominal (contract-cadence) date - no longer floored to
+        # today. It's now only the preference anchor the solver's `date`
+        # choice is scored against, not the date it must land on.
+        "requested_date": visit.requested_date.isoformat(),
         "duration_minutes": visit.contract_line.duration_minutes,
         "required_skill_ids": list(required_skill_ids(visit.contract_line)),
         "region_id": location.region_id,
@@ -133,6 +142,9 @@ def _visit_payload(visit: ServiceVisit) -> dict:
         "longitude": location.longitude,
         "priority": visit.contract_line.priority,
         "days_until_due": (effective_schedule_date(visit) - date.today()).days,
+        "interval_days": interval_days,
+        "previous_visit_id": previous_visit_id,
+        "previous_actual_date": previous_actual_date.isoformat() if previous_actual_date else None,
     }
 
 
@@ -143,7 +155,9 @@ def _existing_assignment_payload(assignment: Assignment) -> dict:
     return {
         "id": str(assignment.service_visit_id),
         "employee_id": assignment.employee_id,
-        "requested_date": assignment.service_visit.requested_date.isoformat(),
+        # The date this assignment actually occupies - not the visit's
+        # nominal requested_date, which can differ once rescheduled.
+        "date": assignment.planned_start.date().isoformat(),
         "start_minutes": start_minutes,
         "end_minutes": start_minutes + duration,
         "location_id": location.id,
@@ -164,13 +178,22 @@ def _is_ready_to_schedule(visit: ServiceVisit) -> bool:
     )
 
 
+def _window_dates(days_ahead: int) -> set[date]:
+    """Every date in the run's scheduling window - today through today +
+    min(days_ahead, MAX_DAYS_AHEAD) - 1. This is both the solver's `date`
+    planning variable's value range and the set of dates every employee's
+    working-hours schedule must be sent for, since a visit may now be
+    proposed on any date in the window, not only the dates visits happen to
+    nominally fall on."""
+    today = date.today()
+    return {today + timedelta(days=d) for d in range(min(days_ahead, MAX_DAYS_AHEAD))}
+
+
 def _is_within_scheduling_window(visit: ServiceVisit, days_ahead: int) -> bool:
     """A schedule run only ever proposes visits within days_ahead days of
     today (today itself counting as day 0), capped at MAX_DAYS_AHEAD to keep
     the solver's problem size to what's actually actionable."""
-    today = date.today()
-    window = {today + timedelta(days=d) for d in range(min(days_ahead, MAX_DAYS_AHEAD))}
-    return effective_schedule_date(visit) in window
+    return effective_schedule_date(visit) in _window_dates(days_ahead)
 
 
 def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
@@ -189,6 +212,49 @@ def _driving_time_payloads(db: Session, region_ids: set[int]) -> list[dict]:
     ]
 
 
+# (previous_visit_id, previous_actual_date, interval_days) - see
+# _compute_previous_occurrences.
+_PreviousOccurrence = tuple[int | None, date | None, int | None]
+_NO_PREVIOUS_OCCURRENCE: _PreviousOccurrence = (None, None, None)
+
+
+def _compute_previous_occurrences(
+    all_visits: list[ServiceVisit],
+) -> dict[int, _PreviousOccurrence]:
+    """For every visit, find its contract line's immediately preceding
+    occurrence (by requested_date) among all_visits - already loaded by
+    _load_run_data, no new query needed - and resolve it to exactly one of:
+
+    - previous_visit_id: the preceding occurrence, when it's itself
+      schedulable this run (no locked assignment) - its own `date` is being
+      jointly decided too, so the solver compares chosen dates directly.
+    - previous_actual_date: the preceding occurrence's actual date, when it
+      has a locked assignment instead (pinned, already started, or
+      otherwise fixed) - a plain fact, not a decision.
+    - neither, when there is no preceding occurrence (the contract line's
+      first visit) or the preceding occurrence couldn't be resolved (e.g.
+      not ready to schedule) - the interval preference simply doesn't apply.
+    """
+    by_contract_line: dict[int, list[ServiceVisit]] = {}
+    for v in all_visits:
+        by_contract_line.setdefault(v.contract_line_id, []).append(v)
+
+    result: dict[int, _PreviousOccurrence] = {}
+    for visits in by_contract_line.values():
+        ordered = sorted(visits, key=lambda v: v.requested_date)
+        for i, visit in enumerate(ordered):
+            if i == 0:
+                result[visit.id] = _NO_PREVIOUS_OCCURRENCE
+                continue
+            previous = ordered[i - 1]
+            interval_days = (visit.requested_date - previous.requested_date).days
+            if previous.assignment is not None and _is_locked(previous.assignment):
+                result[visit.id] = (None, previous.assignment.planned_start.date(), interval_days)
+            else:
+                result[visit.id] = (previous.id, None, interval_days)
+    return result
+
+
 @dataclass
 class _RunData:
     employees: list[Employee]
@@ -197,6 +263,7 @@ class _RunData:
     excluded_visit_ids: list[int]
     candidate_dates: set[date]
     all_region_ids: set[int]
+    previous_occurrence_by_visit_id: dict[int, _PreviousOccurrence]
 
 
 def _load_run_data(db: Session, days_ahead: int) -> _RunData:
@@ -239,10 +306,14 @@ def _load_run_data(db: Session, days_ahead: int) -> _RunData:
         if not (_is_ready_to_schedule(v) and _is_within_scheduling_window(v, days_ahead))
     ]
 
-    candidate_dates = {effective_schedule_date(v) for v in ready_visits}
+    # The full scheduling window, not just the dates visits happen to
+    # nominally fall on - a visit may now be proposed on any date in it.
+    candidate_dates = _window_dates(days_ahead)
 
     region_ids = {v.contract_line.customer_location.region_id for v in ready_visits}
     region_ids.update(r.id for e in employees for r in e.regions)
+
+    previous_occurrence_by_visit_id = _compute_previous_occurrences(all_visits)
 
     return _RunData(
         employees=employees,
@@ -251,7 +322,27 @@ def _load_run_data(db: Session, days_ahead: int) -> _RunData:
         excluded_visit_ids=excluded_visit_ids,
         candidate_dates=candidate_dates,
         all_region_ids=region_ids,
+        previous_occurrence_by_visit_id=previous_occurrence_by_visit_id,
     )
+
+
+def _default_time_limit_seconds(window_days: int) -> int:
+    """The solver time budget to use when the caller doesn't specify one,
+    scaled with the scheduling window size.
+
+    A flat `settings.solver_time_limit_seconds` (30s) was tuned for the old
+    single-day solve. The multi-day `date` planning variable multiplies
+    each visit's search space by the window size, and testing against a
+    realistic dataset (~150 visits, 3 employees) showed solve quality
+    visibly degrading at a flat 30s as days_ahead grows - fewer visits
+    scheduled than the single-day baseline, and no spread to later days at
+    all. Scaling the default recovers some of that quality; it does not
+    fully resolve it at this data volume - see design.md's Risks and the
+    follow-up change exploring solver tuning and mandatory region-splitting
+    at larger problem sizes. Capped at 90s to stay within a practical
+    bound for a synchronous request.
+    """
+    return min(settings.solver_time_limit_seconds + 10 * (window_days - 1), 90)
 
 
 def _assemble_payload(
@@ -262,6 +353,7 @@ def _assemble_payload(
     candidate_dates: set[date],
     region_ids: set[int],
     time_limit_seconds: int | None,
+    previous_occurrence_by_visit_id: dict[int, _PreviousOccurrence],
     plan_from_time: str | None = None,
 ) -> dict:
     return {
@@ -269,10 +361,16 @@ def _assemble_payload(
         "employee_day_schedules": _employee_day_schedule_payloads(
             db, employees, candidate_dates, plan_from_time
         ),
-        "visits": [_visit_payload(v) for v in visits],
+        "visits": [
+            _visit_payload(
+                v, previous_occurrence_by_visit_id.get(v.id, _NO_PREVIOUS_OCCURRENCE)
+            )
+            for v in visits
+        ],
         "existing_assignments": [_existing_assignment_payload(a) for a in locked_assignments],
         "driving_times": _driving_time_payloads(db, region_ids),
-        "time_limit_seconds": time_limit_seconds or settings.solver_time_limit_seconds,
+        "candidate_dates": sorted(d.isoformat() for d in candidate_dates),
+        "time_limit_seconds": time_limit_seconds or _default_time_limit_seconds(len(candidate_dates)),
     }
 
 
@@ -298,6 +396,7 @@ def build_optimize_payload(
         data.candidate_dates,
         data.all_region_ids,
         time_limit_seconds,
+        data.previous_occurrence_by_visit_id,
         plan_from_time,
     )
     return payload, data.excluded_visit_ids
@@ -306,6 +405,10 @@ def build_optimize_payload(
 def _group_subset(
     data: _RunData, group_region_ids: set[int]
 ) -> tuple[list[Employee], list[ServiceVisit], list[Assignment], set[date], set[int]]:
+    """A group's own employees/visits/locked-assignments, but sharing the
+    full run's candidate_dates - the region split is orthogonal to date, so
+    every group needs the same full-window schedule/date coverage as the
+    single-mode path."""
     group_employees = [e for e in data.employees if {r.id for r in e.regions} & group_region_ids]
     group_employee_ids = {e.id for e in group_employees}
     group_visits = [
@@ -314,8 +417,7 @@ def _group_subset(
         if v.contract_line.customer_location.region_id in group_region_ids
     ]
     group_locked = [a for a in data.locked_assignments if a.employee_id in group_employee_ids]
-    group_dates = {effective_schedule_date(v) for v in group_visits}
-    return group_employees, group_visits, group_locked, group_dates, group_region_ids
+    return group_employees, group_visits, group_locked, data.candidate_dates, group_region_ids
 
 
 def build_parallel_group_payloads(
@@ -345,7 +447,11 @@ def build_parallel_group_payloads(
         return None, data.excluded_visit_ids
     group_payloads = [
         _assemble_payload(
-            db, *_group_subset(data, group_region_ids), time_limit_seconds, plan_from_time
+            db,
+            *_group_subset(data, group_region_ids),
+            time_limit_seconds,
+            data.previous_occurrence_by_visit_id,
+            plan_from_time,
         )
         for group_region_ids in groups
     ]
@@ -353,7 +459,11 @@ def build_parallel_group_payloads(
 
 
 def request_proposal(payload: dict) -> dict:
-    timeout = settings.solver_time_limit_seconds + 10
+    # Must track the payload's own time_limit_seconds, not a flat default -
+    # _default_time_limit_seconds scales it with the window size, and a
+    # fixed timeout here would cut the request off before the solver's own
+    # time limit elapses.
+    timeout = payload["time_limit_seconds"] + 10
     response = httpx.post(f"{settings.solver_base_url}/optimize", json=payload, timeout=timeout)
     response.raise_for_status()
     return response.json()

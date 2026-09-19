@@ -46,6 +46,7 @@ def _visit(visit_id: int, start_minutes: int, duration_minutes: int, location_id
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=start_minutes,
+        date=DAY,
     )
 
 
@@ -101,6 +102,7 @@ def test_gap_smaller_than_fallback_estimate_is_penalized(verifier: ConstraintVer
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
+        date=DAY,
     )
     # ~52.1,5.1 is roughly 10km from 52.0,5.0 - at the assumed 40 km/h that's
     # about 15 minutes, comfortably more than the 1-minute gap below.
@@ -118,6 +120,7 @@ def test_gap_smaller_than_fallback_estimate_is_penalized(verifier: ConstraintVer
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=601,
+        date=DAY,
     )
     verifier.verify_that(driving_time_gap_between_proposed_visits_fallback).given(
         earlier, later
@@ -139,6 +142,7 @@ def test_gap_at_least_fallback_estimate_is_not_penalized(verifier: ConstraintVer
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
+        date=DAY,
     )
     later = VisitAssignment(
         id=2,
@@ -154,6 +158,7 @@ def test_gap_at_least_fallback_estimate_is_not_penalized(verifier: ConstraintVer
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=600,
+        date=DAY,
     )
     verifier.verify_that(driving_time_gap_between_proposed_visits_fallback).given(
         earlier, later
@@ -167,7 +172,7 @@ def test_gap_to_existing_assignment_smaller_than_driving_time_is_penalized(
     existing = ExistingAssignmentFact(
         id="e1",
         employee=EMPLOYEE,
-        requested_date=DAY,
+        date=DAY,
         start_minutes=610,
         end_minutes=670,
         location_id=200,
@@ -193,7 +198,7 @@ def test_gap_to_existing_assignment_equal_to_driving_time_is_not_penalized(
     existing = ExistingAssignmentFact(
         id="e1",
         employee=EMPLOYEE,
-        requested_date=DAY,
+        date=DAY,
         start_minutes=620,
         end_minutes=680,
         location_id=200,
@@ -229,11 +234,12 @@ def test_gap_to_existing_assignment_fallback_smaller_than_estimate_is_penalized(
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=540,
+        date=DAY,
     )
     existing = ExistingAssignmentFact(
         id="e1",
         employee=EMPLOYEE,
-        requested_date=DAY,
+        date=DAY,
         start_minutes=601,
         end_minutes=661,
         location_id=200,
@@ -297,6 +303,7 @@ def test_first_visit_fallback_before_home_drive_completes_is_penalized(
         total_visit_count=1,
         employee=EMPLOYEE,
         start_minutes=481,
+        date=DAY,
     )
     verifier.verify_that(driving_time_gap_before_first_visit_fallback).given(
         first_visit, schedule

@@ -79,6 +79,7 @@ def test_proposed_gap_respects_driving_time_or_leaves_a_visit_unscheduled() -> N
                 duration_minutes=60,
             ),
         ],
+        candidate_dates=[DAY],
         time_limit_seconds=5,
     )
 

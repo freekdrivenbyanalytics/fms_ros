@@ -44,6 +44,7 @@ def _warm_up() -> None:
                 days_until_due=0,
             )
         ],
+        candidate_dates=[date(2000, 1, 1)],
         time_limit_seconds=1,
     )
     solve_schedule(warm_up_request)

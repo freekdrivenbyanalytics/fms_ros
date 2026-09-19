@@ -22,6 +22,9 @@ class EmployeeDayScheduleIn(BaseModel):
 
 class VisitIn(BaseModel):
     id: int
+    # Fixed nominal (contract-cadence) date - the preference anchor, not
+    # necessarily the date this visit gets scheduled on. See
+    # OptimizeRequest.candidate_dates for the actual value range.
     requested_date: date
     duration_minutes: int
     required_skill_ids: list[int]
@@ -31,12 +34,21 @@ class VisitIn(BaseModel):
     longitude: float
     priority: int
     days_until_due: int
+    # Nominal days since this visit's contract line's previous occurrence -
+    # None if there is no previous occurrence. Paired with at most one of
+    # previous_visit_id/previous_actual_date.
+    interval_days: int | None = None
+    previous_visit_id: int | None = None
+    previous_actual_date: date | None = None
 
 
 class ExistingAssignmentIn(BaseModel):
     id: str
     employee_id: int
-    requested_date: date
+    # The date this locked assignment actually occupies (its planned_start's
+    # date) - not the visit's nominal requested_date, which can differ once
+    # a visit has been rescheduled.
+    date: date
     start_minutes: int
     end_minutes: int
     location_id: int
@@ -58,12 +70,17 @@ class OptimizeRequest(BaseModel):
     visits: list[VisitIn]
     existing_assignments: list[ExistingAssignmentIn] = []
     driving_times: list[DrivingTimeIn] = []
+    # Every date a visit may be scheduled on this run - the `date` planning
+    # variable's value range. Required, not defaulted: the caller decides
+    # the run's scheduling window, the solver never invents one.
+    candidate_dates: list[date]
     time_limit_seconds: int | None = None
 
 
 class ScheduledVisitOut(BaseModel):
     visit_id: int
     employee_id: int
+    date: date
     start_minutes: int
     end_minutes: int
 

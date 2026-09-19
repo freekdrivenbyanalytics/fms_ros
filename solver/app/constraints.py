@@ -51,6 +51,23 @@ _URGENCY_CAP = 14
 # which is in [1, URGENCY_CAP] for any in-window visit).
 _URGENCY_UPPER_BOUND = _URGENCY_CAP + 1
 
+# Per day of drift from a visit's own requested_date. Deliberately large
+# relative to typical per-leg travel-time penalties (a leg is usually
+# 5-60 minutes * _TIME_WEIGHT_PER_MINUTE = 50-600) so the solver only drifts
+# a visit off its own schedule when a hard constraint actually forces it,
+# never merely to shave a little travel time. A starting value, not a tuned
+# one - see add-multi-day-scheduling-window's design.md Risks.
+_NOMINAL_DATE_WEIGHT_PER_DAY = 1000
+# Per day short of the contract line's requested interval since the
+# *nominal* date of the previous occurrence. Deliberately weaker than
+# _NOMINAL_DATE_WEIGHT_PER_DAY (currently a 10:1 ratio) so a visit's own
+# requested date still wins when it's feasible, even though scheduling it
+# there means less than a full interval has passed since the previous
+# occurrence's nominal date (see the worked example in design.md) - this
+# constraint only meaningfully steers the choice among dates *other than*
+# the visit's own requested date.
+_INTERVAL_SHORTFALL_WEIGHT_PER_DAY = 100
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -66,7 +83,7 @@ def _haversine_fallback_minutes(lat1: float, lon1: float, lat2: float, lon2: flo
 
 
 def _is_scheduled(visit: VisitAssignment) -> bool:
-    return visit.employee is not None and visit.start_minutes is not None
+    return visit.employee is not None and visit.start_minutes is not None and visit.date is not None
 
 
 def _is_unassigned(visit: VisitAssignment) -> bool:
@@ -143,17 +160,21 @@ def _employee_fallback_minutes(v: VisitAssignment) -> int:
 # Shared joiner lists, at module scope so both define_constraints and the
 # standalone constraint functions below (each independently unit-testable
 # via ConstraintVerifier.verify_that) can use them.
+#
+# These join on each visit's *chosen* `date` (the planning variable), not its
+# fixed `requested_date` - "same day" now means "same day as actually
+# proposed", since a visit is free to land on any date in the run's window.
 _same_employee_same_date = [
     Joiners.equal(lambda v: v.employee),
-    Joiners.equal(lambda v: v.requested_date),
+    Joiners.equal(lambda v: v.date),
 ]
 _same_employee_same_date_cross = [
     Joiners.equal(lambda v: v.employee, lambda e: e.employee),
-    Joiners.equal(lambda v: v.requested_date, lambda e: e.requested_date),
+    Joiners.equal(lambda v: v.date, lambda e: e.date),
 ]
 _visit_employee_id_same_date_schedule = [
     Joiners.equal(lambda v: v.employee.id, lambda s: s.employee_id),
-    Joiners.equal(lambda v: v.requested_date, lambda s: s.date),
+    Joiners.equal(lambda v: v.date, lambda s: s.date),
 ]
 # A visit's own driving-time leg to another location is always customer
 # location <-> customer location; an employee's home leg is always
@@ -170,7 +191,7 @@ _employee_leg_kind_joiners = [
 ]
 _first_visit_of_day_joiners = [
     Joiners.equal(lambda v: v.employee, lambda o: o.employee),
-    Joiners.equal(lambda v: v.requested_date, lambda o: o.requested_date),
+    Joiners.equal(lambda v: v.date, lambda o: o.date),
     Joiners.greater_than(lambda v: v.start_minutes, lambda o: o.start_minutes),
 ]
 # Same shape as _employee_leg_kind_joiners, but for use after a stream has
@@ -335,6 +356,70 @@ def driving_time_gap_before_first_visit_fallback(
     )
 
 
+def nominal_date_drift(constraint_factory: ConstraintFactory) -> Constraint:
+    """Soft: prefer landing on a visit's own requested_date, drifting only as
+    far as the hard constraints force. See _NOMINAL_DATE_WEIGHT_PER_DAY."""
+    return (
+        constraint_factory.for_each(VisitAssignment)
+        .filter(_is_scheduled)
+        .penalize(
+            HardMediumSoftScore.ONE_SOFT,
+            lambda v: abs((v.date - v.requested_date).days) * _NOMINAL_DATE_WEIGHT_PER_DAY,
+        )
+        .as_constraint("Visit drifted from its requested date")
+    )
+
+
+def interval_since_previous_occurrence_sibling(constraint_factory: ConstraintFactory) -> Constraint:
+    """Soft: keep at least the contract line's requested interval between a
+    visit's proposed date and its immediately preceding occurrence's nominal
+    (requested) date - measured from that occurrence's *own* chosen date
+    here, since it's also a candidate in this same run. See
+    _INTERVAL_SHORTFALL_WEIGHT_PER_DAY for why this is weaker than
+    nominal_date_drift."""
+    return (
+        constraint_factory.for_each(VisitAssignment)
+        .filter(
+            lambda v: _is_scheduled(v)
+            and v.interval_days is not None
+            and v.previous_visit_id is not None
+        )
+        .join(VisitAssignment, Joiners.equal(lambda v: v.previous_visit_id, lambda p: p.id))
+        .filter(lambda v, p: _is_scheduled(p))
+        .penalize(
+            HardMediumSoftScore.ONE_SOFT,
+            lambda v, p: max(0, v.interval_days - (v.date - p.date).days)
+            * _INTERVAL_SHORTFALL_WEIGHT_PER_DAY,
+        )
+        .as_constraint("Visit scheduled sooner than requested interval since previous occurrence")
+    )
+
+
+def interval_since_previous_occurrence_existing(
+    constraint_factory: ConstraintFactory,
+) -> Constraint:
+    """Soft: same as interval_since_previous_occurrence_sibling, when the
+    preceding occurrence isn't a candidate this run (it has a locked
+    assignment) - previous_actual_date is a plain fact already resolved by
+    the backend, so no join is needed here."""
+    return (
+        constraint_factory.for_each(VisitAssignment)
+        .filter(
+            lambda v: _is_scheduled(v)
+            and v.interval_days is not None
+            and v.previous_actual_date is not None
+        )
+        .penalize(
+            HardMediumSoftScore.ONE_SOFT,
+            lambda v: max(0, v.interval_days - (v.date - v.previous_actual_date).days)
+            * _INTERVAL_SHORTFALL_WEIGHT_PER_DAY,
+        )
+        .as_constraint(
+            "Visit scheduled sooner than requested interval since previous occurrence (existing assignment)"
+        )
+    )
+
+
 @constraint_provider
 def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint]:
     same_employee_same_date = _same_employee_same_date
@@ -489,4 +574,11 @@ def define_constraints(constraint_factory: ConstraintFactory) -> list[Constraint
         driving_time_gap_to_existing_assignment_fallback(constraint_factory),
         driving_time_gap_before_first_visit(constraint_factory),
         driving_time_gap_before_first_visit_fallback(constraint_factory),
+        # Soft: prefer a visit's own requested date, and prefer not
+        # compressing the interval since its contract line's previous
+        # occurrence's nominal date. Defined as standalone functions above so
+        # each is independently unit-testable via ConstraintVerifier.
+        nominal_date_drift(constraint_factory),
+        interval_since_previous_occurrence_sibling(constraint_factory),
+        interval_since_previous_occurrence_existing(constraint_factory),
     ]

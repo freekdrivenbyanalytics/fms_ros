@@ -152,6 +152,7 @@ def test_priority_does_not_override_scheduling_more_visits_than_fewer() -> None:
                 duration_minutes=0,
             )
         ],
+        candidate_dates=["2026-01-05"],
         time_limit_seconds=5,
     )
 

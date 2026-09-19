@@ -45,7 +45,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
         ExistingAssignmentFact(
             id=a.id,
             employee=employees_by_id[a.employee_id],
-            requested_date=a.requested_date,
+            date=a.date,
             start_minutes=a.start_minutes,
             end_minutes=a.end_minutes,
             location_id=a.location_id,
@@ -69,6 +69,9 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
             priority=v.priority,
             days_until_due=v.days_until_due,
             total_visit_count=total_visit_count,
+            interval_days=v.interval_days,
+            previous_visit_id=v.previous_visit_id,
+            previous_actual_date=v.previous_actual_date,
         )
         for v in request.visits
     ]
@@ -90,6 +93,7 @@ def _build_schedule(request: OptimizeRequest) -> Schedule:
         existing_assignments=existing_assignments,
         driving_times=driving_times,
         start_times=default_start_time_range(),
+        candidate_dates=list(request.candidate_dates),
         visits=visits,
     )
 
@@ -130,13 +134,14 @@ def solve_schedule(request: OptimizeRequest) -> OptimizeResponse:
     scheduled: list[ScheduledVisitOut] = []
     unscheduled_visit_ids: list[int] = []
     for visit in solution.visits:
-        if visit.employee is None or visit.start_minutes is None:
+        if visit.employee is None or visit.start_minutes is None or visit.date is None:
             unscheduled_visit_ids.append(visit.id)
         else:
             scheduled.append(
                 ScheduledVisitOut(
                     visit_id=visit.id,
                     employee_id=visit.employee.id,
+                    date=visit.date,
                     start_minutes=visit.start_minutes,
                     end_minutes=visit.end_minutes(),
                 )
