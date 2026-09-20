@@ -6,11 +6,9 @@ import { CustomerDashboard } from "./CustomerDashboard";
 
 interface Props {
   customers: Customer[];
-  onRefresh: () => void;
-  refreshing: boolean;
 }
 
-export function CustomersView({ customers, onRefresh, refreshing }: Props) {
+export function CustomersView({ customers }: Props) {
   const [selected, setSelected] = useState<Customer | null>(null);
 
   if (selected) {
@@ -26,14 +24,6 @@ export function CustomersView({ customers, onRefresh, refreshing }: Props) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Customers</h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="text-sm px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
       </div>
       <ListTable
         items={customers}

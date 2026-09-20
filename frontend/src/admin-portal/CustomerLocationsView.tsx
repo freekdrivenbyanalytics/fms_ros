@@ -9,6 +9,7 @@ import {
 import type { Customer, CustomerLocation, RescoSyncSummary } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+import { SyncStatusBadge } from "../shared/SyncStatusBadge";
 
 interface Props {
   customerLocations: CustomerLocation[];
@@ -22,6 +23,7 @@ export function CustomerLocationsView({ customerLocations, customers, onChanged 
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<RescoSyncSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [createSyncWarning, setCreateSyncWarning] = useState<string | null>(null);
 
   const selected = customerLocations.find((location) => location.id === selectedId) ?? null;
 
@@ -44,6 +46,7 @@ export function CustomerLocationsView({ customerLocations, customers, onChanged 
     return (
       <CustomerLocationDetail
         location={selected}
+        initialSyncWarning={createSyncWarning}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -96,6 +99,7 @@ export function CustomerLocationsView({ customerLocations, customers, onChanged 
           customers={customers}
           onCreated={async (location) => {
             setCreating(false);
+            setCreateSyncWarning(location.sync_warning);
             await onChanged();
             setSelectedId(location.id);
           }}
@@ -114,6 +118,15 @@ export function CustomerLocationsView({ customerLocations, customers, onChanged 
           {
             header: "Coordinates Locked",
             render: (location) => (location.coordinates_locked ? "Yes" : "No"),
+          },
+          {
+            header: "Sync status",
+            render: (location) => (
+              <div className="flex gap-1">
+                <SyncStatusBadge label="Tripletex" synced={location.tripletex_id !== null} />
+                <SyncStatusBadge label="Resco" synced={location.resco_asset_id !== null} />
+              </div>
+            ),
           },
         ]}
       />
@@ -238,6 +251,7 @@ function CreateCustomerLocationForm({ customers, onCreated }: CreateCustomerLoca
 
 interface CustomerLocationDetailProps {
   location: CustomerLocation;
+  initialSyncWarning?: string | null;
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -245,6 +259,7 @@ interface CustomerLocationDetailProps {
 
 function CustomerLocationDetail({
   location,
+  initialSyncWarning = null,
   onChanged,
   onDeleted,
   onBack,
@@ -256,6 +271,7 @@ function CustomerLocationDetail({
   const [addressDirty, setAddressDirty] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(initialSyncWarning);
 
   const [latitude, setLatitude] = useState(
     location.latitude !== null ? String(location.latitude) : ""
@@ -274,13 +290,15 @@ function CustomerLocationDetail({
     if (!addressLine1) return;
     setSavingAddress(true);
     setAddressError(null);
+    setSyncWarning(null);
     try {
-      await updateCustomerLocation(location.id, {
+      const updated = await updateCustomerLocation(location.id, {
         address_line_1: addressLine1,
         address_line_2: addressLine2 || null,
         postal_code: postalCode || null,
         city: city || null,
       });
+      setSyncWarning(updated.sync_warning);
       setAddressDirty(false);
       await onChanged();
     } catch (err) {
@@ -408,6 +426,7 @@ function CustomerLocationDetail({
             {savingAddress ? "Saving…" : "Save Address"}
           </button>
           {addressError && <p className="text-xs text-red-600 w-full">{addressError}</p>}
+          {syncWarning && <p className="text-xs text-amber-600 w-full">{syncWarning}</p>}
         </div>
       </DetailField>
 
@@ -456,6 +475,14 @@ function CustomerLocationDetail({
           </button>
           {error && <p className="text-xs text-red-600 w-full">{error}</p>}
         </form>
+      </DetailField>
+      <DetailField label="Tripletex Sync Status">
+        {location.tripletex_id
+          ? `Synced (Tripletex ID ${location.tripletex_id})`
+          : "Not yet synced"}
+      </DetailField>
+      <DetailField label="Resco Sync Status">
+        {location.resco_asset_id ? "Synced" : "Not yet synced"}
       </DetailField>
     </div>
   );

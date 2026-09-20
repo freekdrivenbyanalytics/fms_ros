@@ -158,8 +158,10 @@ class ProductChangeType(str, enum.Enum):
 class Product(Base):
     __tablename__ = "products"
 
-    # Tripletex-sourced fields. id is Tripletex's own product id, not app-generated.
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    # fms_ros-assigned - fms_ros is the system of record. tripletex_id below
+    # is a remembered external reference, set once the product has been
+    # pushed to Tripletex; never used as this table's key.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     number: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     delete_flag: Mapped[bool] = mapped_column(
@@ -170,6 +172,7 @@ class Product(Base):
     archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    tripletex_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     resco_product_id: Mapped[str | None] = mapped_column(String)
     # "TJN" (tjeneste/service) or "PRD" (produkt/product) — always derived from
     # number's actual prefix, never trusted as independently authoritative.
@@ -219,8 +222,10 @@ class CustomerChangeType(str, enum.Enum):
 class Customer(Base):
     __tablename__ = "customers"
 
-    # Tripletex-sourced fields. id is Tripletex's own customer id, not app-generated.
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    # fms_ros-assigned - fms_ros is the system of record. tripletex_id below
+    # is a remembered external reference, set once the customer has been
+    # pushed to Tripletex; never used as this table's key.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     version: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -280,6 +285,7 @@ class Customer(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
 
+    tripletex_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     resco_account_id: Mapped[str | None] = mapped_column(String)
 
     locations: Mapped[list["CustomerLocation"]] = relationship(
@@ -316,8 +322,10 @@ class CustomerLocationChangeType(str, enum.Enum):
 class CustomerLocation(Base):
     __tablename__ = "customer_locations"
 
-    # Tripletex-sourced fields. id is Tripletex's own delivery address id, not app-generated.
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    # fms_ros-assigned - fms_ros is the system of record. tripletex_id below
+    # is a remembered external reference, set once the location has been
+    # pushed to Tripletex; never used as this table's key.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     version: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
@@ -347,6 +355,7 @@ class CustomerLocation(Base):
     archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    tripletex_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     resco_asset_id: Mapped[str | None] = mapped_column(String)
 
     customer: Mapped["Customer"] = relationship(back_populates="locations")

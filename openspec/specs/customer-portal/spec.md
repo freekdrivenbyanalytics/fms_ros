@@ -89,13 +89,6 @@ The system SHALL let a user open a Customer Location or Contract from its list v
 - **WHEN** a user opens a Contract's detail view
 - **THEN** the system shows that contract's own fields, the Customer it belongs to, and its Contract Lines, each showing its Customer Location, dates, interval, duration, and required Products
 
-### Requirement: Refresh customers from Tripletex
-The system SHALL provide a control on the Customer Portal's Customers view that triggers an on-demand Tripletex customer sync, and SHALL refresh the Customers, Customer Locations, and Contracts views' data after the sync completes.
-
-#### Scenario: Planner refreshes customers
-- **WHEN** a user activates the Refresh control on the Customers view
-- **THEN** the system triggers a Tripletex customer sync, and once it completes, the Customers, Customer Locations, and Contracts views reflect the resulting data
-
 ### Requirement: Customer Portal is fully read-only
 The system SHALL NOT provide any create, edit, or delete action for any entity anywhere in the Customer Portal, except booking an ad-hoc visit into a free slot from the Contracts view.
 

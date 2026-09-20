@@ -1,10 +1,6 @@
-# products Specification
+# Spec Delta
 
-## Purpose
-
-Represents the subset of Tripletex's product catalog scoped to a recognized product type prefix ("TJN" for tjeneste/service, "PRD" for produkt/product), used to qualify which employees can perform which contract lines' service visits. Products may originate in Tripletex or be created locally in fms_ros — either way, Tripletex is the system of record and fms_ros stays in sync with it.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Product data model
 The system SHALL persist each product with a unique identifier assigned by fms_ros (not by Tripletex), a product number, a product type (`TJN` for tjeneste/service or `PRD` for produkt/product — derived from the product number's prefix), a product name, a soft-delete flag, a remembered Tripletex product id once the product has been synced to Tripletex, and a remembered Resco Product ID once the product has been synced to Resco.
@@ -40,6 +36,14 @@ The system SHALL allow a user to create a product with a product type (`TJN` or 
 - **WHEN** a product is soft-deleted in fms_ros, and a later Tripletex/Resco bootstrap sync runs
 - **THEN** that product is excluded from the bootstrap sync's candidates, and its corresponding Tripletex/Resco record (if any) is left unmodified
 
+## REMOVED Requirements
+
+### Requirement: Sync products from Tripletex
+**Reason**: fms_ros is now the system of record for products; Tripletex no longer originates new products this system needs to discover, so pulling Tripletex's product catalog into fms_ros (creating local records for ones fms_ros doesn't have, overwriting local fields with Tripletex's, soft-deleting/restoring based on Tripletex's list) no longer fits the ownership model.
+**Migration**: See the new "Products are bootstrap-synced to Tripletex and Resco" requirement - it pushes fms_ros's own catalog outward instead of pulling Tripletex's in, and runs only on demand (never automatically).
+
+## ADDED Requirements
+
 ### Requirement: Products are bootstrap-synced to Tripletex and Resco
 The system SHALL let a user trigger, on demand only (never automatically at backend startup or otherwise), a bootstrap sync of every non-deleted product: for each such product with no remembered Tripletex id, the system SHALL create a corresponding product in Tripletex (using the same number-prefixing rule creation already uses) and remember the returned id; for each with no remembered Resco Product id, the system SHALL create a corresponding Product in Resco and remember the returned id; for each product that already has a remembered Tripletex id and/or Resco Product id, the system SHALL instead push that product's current local number and name as an update to the corresponding Tripletex product and/or Resco record. A failure syncing one product SHALL NOT prevent the sync from continuing to the remaining products.
 
@@ -62,40 +66,3 @@ The system SHALL let a user trigger, on demand only (never automatically at back
 #### Scenario: The bootstrap sync only runs on demand
 - **WHEN** the backend starts
 - **THEN** no product bootstrap sync runs automatically; it only runs when a user explicitly triggers it
-
-### Requirement: List products
-The system SHALL provide an API to retrieve the list of all products, excluding products marked deleted by default.
-
-#### Scenario: Retrieve all products
-- **WHEN** a client requests the list of products
-- **THEN** the system returns all non-deleted persisted products
-
-#### Scenario: Deleted product is excluded from the list
-- **WHEN** a caller requests the list of products
-- **THEN** products marked deleted are not included in the result
-
-### Requirement: A product can require multiple skills
-The system SHALL allow a product to require zero or more skills, and update to allow a user to set which skills a product requires.
-
-#### Scenario: Product with multiple required skills
-- **WHEN** a product is associated with two or more skills
-- **THEN** each association is retrievable and the product's required skills include all of them
-
-#### Scenario: Updating a product's required skills
-- **WHEN** a user updates which skills a product requires
-- **THEN** the system persists the change
-
-### Requirement: A product has an optional service order type
-The system SHALL allow a product to have at most one service order type, and let a user set or clear it.
-
-#### Scenario: Product with a service order type
-- **WHEN** a product is assigned a service order type
-- **THEN** the product's service order type is retrievable
-
-#### Scenario: Product with no service order type
-- **WHEN** a product has never been assigned a service order type
-- **THEN** the product's service order type is retrievable as unset
-
-#### Scenario: Updating a product's service order type
-- **WHEN** a user sets or clears a product's service order type
-- **THEN** the system persists the change

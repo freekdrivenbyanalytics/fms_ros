@@ -27,7 +27,7 @@ The system SHALL, as part of a confirmed reset, attempt to delete every customer
 - **THEN** no product in the connected Tripletex account is deleted or modified
 
 ### Requirement: Resetting demo data removes local records that mirror the deleted Tripletex data
-The system SHALL, as part of a confirmed reset, permanently remove (not soft-delete) every locally persisted service visit, assignment, contract, contract line, customer, and customer location, since the Tripletex records they were synced from no longer exist.
+The system SHALL, as part of a confirmed reset, permanently remove (not soft-delete) every locally persisted service visit, assignment, contract, contract line, customer, and customer location, so reseeding starts from a clean local slate.
 
 #### Scenario: Locally persisted visit and contract data is permanently removed
 - **WHEN** a confirmed reset runs
@@ -41,25 +41,25 @@ The system SHALL, as part of a confirmed reset, permanently remove (not soft-del
 - **WHEN** a confirmed reset runs
 - **THEN** existing employees remain persisted, unaffected by the reset
 
-### Requirement: Reseeding creates fresh customers and customer locations in Tripletex from bundled demo data
-The system SHALL, after the reset, create in Tripletex a customer and a customer location (delivery address) for each entry in the bundled demo customer data, via the Tripletex API.
+### Requirement: Reseeding creates fresh customers and customer locations locally from bundled demo data
+The system SHALL, after the reset, create locally (with fms_ros-assigned ids, no Tripletex id yet) a customer and a customer location for each entry in the bundled demo customer data.
 
-#### Scenario: Bundled customers are created in Tripletex
+#### Scenario: Bundled customers are created locally
 - **WHEN** the reseed step runs after a reset
-- **THEN** the system creates, in Tripletex, one customer and one customer location for each entry in the bundled demo customer data
+- **THEN** the system creates, locally, one customer and one customer location for each entry in the bundled demo customer data, each with an fms_ros-assigned id
 
-### Requirement: Reseeding syncs the newly created Tripletex data locally
-The system SHALL, after creating customers and customer locations in Tripletex, run the existing Tripletex-to-local customer and customer-location sync so the newly created records are reflected in the local database before local seeding continues.
+### Requirement: Reseeding pushes the newly created local data to Tripletex
+The system SHALL, after local customer, customer-location, contract, contract-line, and service-visit seeding is complete, push every newly created customer and customer location to Tripletex, using the same bootstrap-sync behavior available on demand elsewhere in the system, so the connected Tripletex account ends up populated with the demo scenario too.
 
-#### Scenario: Newly created Tripletex data appears locally before local seeding
-- **WHEN** the reseed step has finished creating customers and customer locations in Tripletex
-- **THEN** the system runs the existing customer and customer-location sync, and every newly created Tripletex customer and customer location is persisted locally before contracts are seeded
+#### Scenario: Newly seeded local data is pushed to Tripletex after seeding
+- **WHEN** local seeding has finished creating customers, customer locations, contracts, contract lines, and service visits
+- **THEN** the system pushes every newly created customer and customer location to Tripletex, creating a corresponding record for each and remembering its Tripletex id
 
 ### Requirement: Reseeding creates contracts and contract lines from bundled demo data
-The system SHALL, after syncing, create a contract and a contract line for each entry in the bundled demo contract-line data, linking each contract line to its corresponding synced customer location and to one product chosen for it from the bundled data, and generate that contract line's unassigned service visits using the same generation rule applied when a contract line is created through the API.
+The system SHALL, after locally creating customers and customer locations, create a contract and a contract line for each entry in the bundled demo contract-line data, linking each contract line to its corresponding locally created customer location and to one product chosen for it from the bundled data, and generate that contract line's unassigned service visits using the same generation rule applied when a contract line is created through the API.
 
 #### Scenario: Bundled contract lines are created and linked
-- **WHEN** the local-seeding step runs after a sync
+- **WHEN** the local-seeding step runs after local customer and customer-location creation
 - **THEN** the system creates one contract line per entry in the bundled demo contract-line data, each linked to the customer location and product the bundled data specifies for it
 
 #### Scenario: Seeded contract lines generate their service visits

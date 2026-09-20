@@ -21,7 +21,7 @@ from app.auth import (
     verify_password,
 )
 from app.config import settings
-from app.database import SessionLocal, get_db
+from app.database import get_db
 from app.demo_schedule_refresh import refresh_demo_schedule
 from app.employee_schedule import (
     covering_template,
@@ -143,7 +143,6 @@ from app.solver_client import (
     resolve_run_payloads,
 )
 from app.tripletex import (
-    TripletexAuthError,
     TripletexClient,
     sync_customer_locations,
     sync_customers,
@@ -156,15 +155,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db = SessionLocal()
-    try:
-        sync_customers(db)
-        sync_customer_locations(db)
-        logger.info("Tripletex customer/location sync succeeded at startup")
-    except Exception:
-        logger.warning("Tripletex customer/location sync failed at startup", exc_info=True)
-    finally:
-        db.close()
+    # No Tripletex/Resco sync runs at startup - fms_ros is the system of
+    # record for masterdata and doesn't depend on either being reachable.
+    # See local-first-masterdata-sync's design.md.
     yield
 
 
@@ -230,6 +223,16 @@ def _lookup_regions_and_skills(
 
 def _tripletex_client() -> TripletexClient:
     return TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
+
+
+def _sync_warning(failed_systems: list[str]) -> str | None:
+    """A transient warning for a create/update response when a push to
+    Tripletex and/or Resco just failed - never persisted, never present on
+    a plain GET. The persistent "still needs syncing" signal is the
+    relevant *_id field being None, not this."""
+    if not failed_systems:
+        return None
+    return f"Sync to {' and '.join(failed_systems)} failed - retry from Sync to Tripletex."
 
 
 def _prefixed_product_number(product_type: str, number: str) -> str:
@@ -797,16 +800,7 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Pro
     skills = _lookup_skills(db, payload.skill_ids)
     _validate_service_order_type_id(db, payload.service_order_type_id)
 
-    client = _tripletex_client()
-    try:
-        data = client.create_product({"number": full_number, "name": payload.name})
-    except TripletexAuthError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Tripletex product create failed: {exc}"
-        ) from exc
-
     product = Product(
-        id=data["id"],
         number=full_number,
         name=payload.name,
         product_type=payload.product_type,
@@ -817,11 +811,23 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Pro
     db.commit()
     db.refresh(product)
 
+    failed_systems: list[str] = []
+    client = _tripletex_client()
+    try:
+        data = client.create_product({"number": full_number, "name": payload.name})
+        product.tripletex_id = data["id"]
+        db.commit()
+    except Exception:
+        logger.warning("Tripletex push failed for product %s", product.id, exc_info=True)
+        failed_systems.append("Tripletex")
+
     try:
         sync_product(db, product)
     except Exception:
         logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
+        failed_systems.append("Resco")
 
+    product.sync_warning = _sync_warning(failed_systems)
     return product
 
 
@@ -845,17 +851,22 @@ def update_product(
     db.commit()
     db.refresh(product)
 
-    client = _tripletex_client()
-    try:
-        client.update_product(product.id, {"number": full_number, "name": payload.name})
-    except Exception:
-        logger.warning("Tripletex push failed for product %s", product.id, exc_info=True)
+    failed_systems: list[str] = []
+    if product.tripletex_id is not None:
+        client = _tripletex_client()
+        try:
+            client.update_product(product.tripletex_id, {"number": full_number, "name": payload.name})
+        except Exception:
+            logger.warning("Tripletex push failed for product %s", product.id, exc_info=True)
+            failed_systems.append("Tripletex")
 
     try:
         sync_product(db, product)
     except Exception:
         logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
+        failed_systems.append("Resco")
 
+    product.sync_warning = _sync_warning(failed_systems)
     return product
 
 
@@ -883,7 +894,7 @@ def list_customers(
 
 
 @app.post(
-    "/customers/sync", response_model=list[CustomerOut], dependencies=[Depends(require_session)]
+    "/customers/sync", response_model=list[CustomerOut], dependencies=[Depends(require_admin)]
 )
 def sync_customers_endpoint(db: Session = Depends(get_db)) -> list[Customer]:
     try:
@@ -908,24 +919,28 @@ def sync_customers_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSync
 
 @app.post("/customers", response_model=CustomerOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
-    client = _tripletex_client()
-    try:
-        data = client.create_customer({"name": payload.name})
-    except TripletexAuthError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Tripletex customer create failed: {exc}"
-        ) from exc
-
-    customer = Customer(id=data["id"], name=payload.name)
+    customer = Customer(name=payload.name)
     db.add(customer)
     db.commit()
     db.refresh(customer)
+
+    failed_systems: list[str] = []
+    client = _tripletex_client()
+    try:
+        data = client.create_customer({"name": payload.name})
+        customer.tripletex_id = data["id"]
+        db.commit()
+    except Exception:
+        logger.warning("Tripletex push failed for customer %s", customer.id, exc_info=True)
+        failed_systems.append("Tripletex")
 
     try:
         sync_customer(db, customer)
     except Exception:
         logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
+        failed_systems.append("Resco")
 
+    customer.sync_warning = _sync_warning(failed_systems)
     return customer
 
 
@@ -944,25 +959,30 @@ def update_customer(
     db.commit()
     db.refresh(customer)
 
-    client = _tripletex_client()
-    try:
-        client.update_customer(
-            customer.id,
-            {
-                "name": payload.name,
-                "email": payload.email,
-                "phoneNumber": payload.phone_number,
-                "organizationNumber": payload.organization_number,
-            },
-        )
-    except Exception:
-        logger.warning("Tripletex push failed for customer %s", customer.id, exc_info=True)
+    failed_systems: list[str] = []
+    if customer.tripletex_id is not None:
+        client = _tripletex_client()
+        try:
+            client.update_customer(
+                customer.tripletex_id,
+                {
+                    "name": payload.name,
+                    "email": payload.email,
+                    "phoneNumber": payload.phone_number,
+                    "organizationNumber": payload.organization_number,
+                },
+            )
+        except Exception:
+            logger.warning("Tripletex push failed for customer %s", customer.id, exc_info=True)
+            failed_systems.append("Tripletex")
 
     try:
         sync_customer(db, customer)
     except Exception:
         logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
+        failed_systems.append("Resco")
 
+    customer.sync_warning = _sync_warning(failed_systems)
     return customer
 
 
@@ -1027,24 +1047,7 @@ def create_customer_location(
     if customer is None:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    client = _tripletex_client()
-    try:
-        data = client.create_delivery_address(
-            customer.id,
-            {
-                "addressLine1": payload.address_line_1,
-                "addressLine2": payload.address_line_2,
-                "postalCode": payload.postal_code,
-                "city": payload.city,
-            },
-        )
-    except TripletexAuthError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Tripletex delivery address create failed: {exc}"
-        ) from exc
-
     location = CustomerLocation(
-        id=data["id"],
         customer_id=customer.id,
         address_line_1=payload.address_line_1,
         address_line_2=payload.address_line_2,
@@ -1064,13 +1067,38 @@ def create_customer_location(
         db.commit()
         db.refresh(location)
 
+    failed_systems: list[str] = []
+    if customer.tripletex_id is not None:
+        client = _tripletex_client()
+        try:
+            data = client.create_delivery_address(
+                customer.tripletex_id,
+                {
+                    "addressLine1": payload.address_line_1,
+                    "addressLine2": payload.address_line_2,
+                    "postalCode": payload.postal_code,
+                    "city": payload.city,
+                },
+            )
+            location.tripletex_id = data["id"]
+            db.commit()
+        except Exception:
+            logger.warning(
+                "Tripletex push failed for customer location %s", location.id, exc_info=True
+            )
+            failed_systems.append("Tripletex")
+    else:
+        failed_systems.append("Tripletex")
+
     try:
         sync_customer_location(db, location)
     except Exception:
         logger.warning(
             "Resco sync failed for customer location %s", location.id, exc_info=True
         )
+        failed_systems.append("Resco")
 
+    location.sync_warning = _sync_warning(failed_systems)
     return location
 
 
@@ -1096,21 +1124,24 @@ def update_customer_location(
     db.commit()
     db.refresh(location)
 
-    client = _tripletex_client()
-    try:
-        client.update_delivery_address(
-            location.id,
-            {
-                "addressLine1": payload.address_line_1,
-                "addressLine2": payload.address_line_2,
-                "postalCode": payload.postal_code,
-                "city": payload.city,
-            },
-        )
-    except Exception:
-        logger.warning(
-            "Tripletex push failed for customer location %s", location.id, exc_info=True
-        )
+    failed_systems: list[str] = []
+    if location.tripletex_id is not None:
+        client = _tripletex_client()
+        try:
+            client.update_delivery_address(
+                location.tripletex_id,
+                {
+                    "addressLine1": payload.address_line_1,
+                    "addressLine2": payload.address_line_2,
+                    "postalCode": payload.postal_code,
+                    "city": payload.city,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Tripletex push failed for customer location %s", location.id, exc_info=True
+            )
+            failed_systems.append("Tripletex")
 
     try:
         sync_customer_location(db, location)
@@ -1118,7 +1149,9 @@ def update_customer_location(
         logger.warning(
             "Resco sync failed for customer location %s", location.id, exc_info=True
         )
+        failed_systems.append("Resco")
 
+    location.sync_warning = _sync_warning(failed_systems)
     return location
 
 

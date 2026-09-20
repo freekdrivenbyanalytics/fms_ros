@@ -54,7 +54,9 @@ export interface Product {
   number: string;
   product_type: ProductType;
   name: string;
+  tripletex_id: number | null;
   resco_product_id: string | null;
+  sync_warning: string | null;
   skills: Skill[];
   service_order_type: ServiceOrderType | null;
 }
@@ -120,7 +122,9 @@ export interface Customer {
   currency: Record<string, unknown> | null;
   ledger_account: Record<string, unknown> | null;
   bank_account_presentation: unknown[] | null;
+  tripletex_id: number | null;
   resco_account_id: string | null;
+  sync_warning: string | null;
 }
 
 export interface CustomerCreateInput {
@@ -146,7 +150,9 @@ export interface CustomerLocation {
   coordinates_locked: boolean;
   customer: Customer;
   region: Region | null;
+  tripletex_id: number | null;
   resco_asset_id: string | null;
+  sync_warning: string | null;
 }
 
 export interface CustomerLocationCoordinatesInput {

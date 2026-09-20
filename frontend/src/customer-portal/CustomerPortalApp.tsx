@@ -5,7 +5,6 @@ import {
   listCustomers,
   listServiceVisits,
   logout,
-  syncCustomers,
 } from "../api";
 import { useRequireRole } from "../shared/auth";
 import type { Contract, Customer, CustomerLocation, ServiceVisit } from "../types";
@@ -39,8 +38,6 @@ export function CustomerPortalApp() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewingAsCustomerId, setViewingAsCustomerId] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([listCustomers(), listCustomerLocations(), listContracts(), listServiceVisits()])
@@ -83,26 +80,6 @@ export function CustomerPortalApp() {
     : user && user.customer_ids.length === 1
       ? user.customer_ids[0]
       : null;
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    setRefreshError(null);
-    try {
-      await syncCustomers();
-      const [customersData, customerLocationsData, contractsData] = await Promise.all([
-        listCustomers(),
-        listCustomerLocations(),
-        listContracts(),
-      ]);
-      setCustomers(customersData);
-      setCustomerLocations(customerLocationsData);
-      setContracts(contractsData);
-    } catch (err) {
-      setRefreshError(err instanceof Error ? err.message : "Failed to refresh");
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -193,16 +170,7 @@ export function CustomerPortalApp() {
           <>
             {entity === "customers" && (
               <div>
-                {refreshError && (
-                  <p className="text-sm text-red-600 mb-3">
-                    Failed to refresh: {refreshError}
-                  </p>
-                )}
-                <CustomersView
-                  customers={customers}
-                  onRefresh={handleRefresh}
-                  refreshing={refreshing}
-                />
+                <CustomersView customers={customers} />
               </div>
             )}
             {entity === "customer-locations" && (

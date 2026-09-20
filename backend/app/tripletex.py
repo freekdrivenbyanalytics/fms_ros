@@ -8,7 +8,6 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.geocoding import geocode_address
 from app.models import (
     Customer,
     CustomerChangeType,
@@ -20,7 +19,11 @@ from app.models import (
     ProductChangeType,
     ProductSyncLog,
 )
-from app.resco import sync_customer_locations_to_resco, sync_customers_to_resco
+from app.resco import (
+    sync_customer_locations_to_resco,
+    sync_customers_to_resco,
+    sync_products_to_resco,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,199 +335,127 @@ class TripletexClient:
         return response.json()["value"]
 
 
-def _apply_fields(customer: Customer, data: dict) -> bool:
-    changed = False
-    for tripletex_key, attr in _SCALAR_FIELD_MAP.items():
-        new_value = data.get(tripletex_key)
-        if getattr(customer, attr) != new_value:
-            setattr(customer, attr, new_value)
-            changed = True
-    return changed
+def _customer_push_payload(customer: Customer) -> dict:
+    """The subset of a customer's fields fms_ros actually edits and pushes
+    outward - matches what create_customer/update_customer already send,
+    not a full reconstruction of every Tripletex field (most of Customer's
+    other columns were only ever populated by the old pull sync, which no
+    longer exists)."""
+    return {
+        "name": customer.name,
+        "email": customer.email,
+        "phoneNumber": customer.phone_number,
+        "organizationNumber": customer.organization_number,
+    }
 
 
-def sync_customers(db: Session) -> None:
+def sync_customers(db: Session) -> dict[str, int]:
+    """Bootstrap-push every non-deleted, non-archived customer to Tripletex
+    and Resco: create upstream whatever has no remembered tripletex_id,
+    update upstream whatever already does. Runs on demand only - see
+    local-first-masterdata-sync's design.md. Must complete before
+    sync_customer_locations runs in the same bootstrap-sync call, since a
+    location's Tripletex push needs its customer's tripletex_id.
+    """
     client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
-    tripletex_customers = client.get_customers()
-    tripletex_ids = {data["id"] for data in tripletex_customers}
+    customers = (
+        db.query(Customer)
+        .filter(Customer.delete_flag.is_(False), Customer.archived.is_(False))
+        .all()
+    )
 
-    existing = {customer.id: customer for customer in db.query(Customer).all()}
-
-    for data in tripletex_customers:
-        customer_id = data["id"]
-        customer = existing.get(customer_id)
-
-        if customer is None:
-            customer = Customer(id=customer_id)
-            _apply_fields(customer, data)
-            customer.delete_flag = False
-            db.add(customer)
-            db.add(
-                CustomerSyncLog(
-                    customer_id=customer_id, change_type=CustomerChangeType.CREATED
+    created = updated = failed = 0
+    for customer in customers:
+        payload = _customer_push_payload(customer)
+        try:
+            if customer.tripletex_id is None:
+                data = client.create_customer(payload)
+                customer.tripletex_id = data["id"]
+                db.add(
+                    CustomerSyncLog(
+                        customer_id=customer.id, change_type=CustomerChangeType.CREATED
+                    )
                 )
-            )
-        elif customer.delete_flag:
-            _apply_fields(customer, data)
-            customer.delete_flag = False
-            db.add(
-                CustomerSyncLog(
-                    customer_id=customer_id, change_type=CustomerChangeType.RESTORED
+                created += 1
+            else:
+                client.update_customer(customer.tripletex_id, payload)
+                db.add(
+                    CustomerSyncLog(
+                        customer_id=customer.id, change_type=CustomerChangeType.UPDATED
+                    )
                 )
-            )
-        elif _apply_fields(customer, data):
-            db.add(
-                CustomerSyncLog(
-                    customer_id=customer_id, change_type=CustomerChangeType.UPDATED
-                )
-            )
-
-    for customer_id, customer in existing.items():
-        if customer_id not in tripletex_ids and not customer.delete_flag:
-            customer.delete_flag = True
-            db.add(
-                CustomerSyncLog(
-                    customer_id=customer_id, change_type=CustomerChangeType.DELETED
-                )
-            )
+                updated += 1
+        except Exception:
+            logger.warning("Tripletex bootstrap push failed for customer %s", customer.id, exc_info=True)
+            failed += 1
 
     db.commit()
 
     try:
         sync_customers_to_resco(db)
     except Exception:
-        logger.warning("Resco customer sync failed after Tripletex sync", exc_info=True)
+        logger.warning("Resco customer sync failed after bootstrap sync", exc_info=True)
+
+    return {"created": created, "updated": updated, "failed": failed}
 
 
-_LOCATION_SCALAR_FIELD_MAP = {
-    "version": "version",
-    "url": "url",
-    "addressLine1": "address_line_1",
-    "addressLine2": "address_line_2",
-    "postalCode": "postal_code",
-    "city": "city",
-    "country": "country",
-    "name": "name",
-}
-
-_LOCATION_ADDRESS_ATTRS = {"address_line_1", "address_line_2", "postal_code", "city", "country"}
+def _location_push_payload(location: CustomerLocation) -> dict:
+    return {
+        "addressLine1": location.address_line_1,
+        "addressLine2": location.address_line_2,
+        "postalCode": location.postal_code,
+        "city": location.city,
+    }
 
 
-def _location_display_address(data: dict) -> str:
-    return data.get("addressAsString") or data.get("displayName") or ""
-
-
-def _apply_location_fields(location: CustomerLocation, data: dict) -> tuple[bool, bool]:
-    """Apply Tripletex fields to a location. Returns (changed, address_changed)."""
-    changed = False
-    address_changed = False
-    for tripletex_key, attr in _LOCATION_SCALAR_FIELD_MAP.items():
-        new_value = data.get(tripletex_key)
-        if getattr(location, attr) != new_value:
-            setattr(location, attr, new_value)
-            changed = True
-            if attr in _LOCATION_ADDRESS_ATTRS:
-                address_changed = True
-
-    new_address = _location_display_address(data)
-    if location.address != new_address:
-        location.address = new_address
-        changed = True
-        address_changed = True
-
-    return changed, address_changed
-
-
-def _geocode_location(location: CustomerLocation) -> None:
-    """Resolve and store coordinates for a location's address.
-
-    Only overwrites latitude/longitude on a successful geocode, so a
-    transient failure leaves whatever coordinates (if any) were already
-    persisted rather than clearing them.
-    """
-    resolved = geocode_address(location.address)
-    if resolved is not None:
-        location.latitude, location.longitude = resolved
-
-
-def sync_customer_locations(db: Session) -> None:
-    """Sync customer locations from Tripletex delivery addresses.
-
-    Must run after sync_customers, since a delivery address is only eligible
-    when its linked customer is already known locally. Never touches
-    region_id — region assignment is deferred to a future geofencing-based
-    lookup against region masterdata.
+def sync_customer_locations(db: Session) -> dict[str, int]:
+    """Bootstrap-push every non-deleted, non-archived customer location to
+    Tripletex and Resco. Must run after sync_customers in the same
+    bootstrap-sync call: a location whose customer has no tripletex_id yet
+    (even one created moments ago by this same run) is skipped rather than
+    pushed - see local-first-masterdata-sync's design.md ("push customers
+    before their locations").
     """
     client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
-    delivery_addresses = client.get_delivery_addresses()
+    locations = (
+        db.query(CustomerLocation)
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
+        .all()
+    )
 
-    known_customer_ids = {row[0] for row in db.query(Customer.id).all()}
-
-    eligible: list[tuple[dict, int]] = []
-    for data in delivery_addresses:
-        vendor = data.get("customerVendor")
-        if not vendor:
+    created = updated = skipped = failed = 0
+    for location in locations:
+        customer = location.customer
+        if customer.tripletex_id is None:
+            skipped += 1
             continue
-        customer_id = vendor.get("id")
-        if customer_id not in known_customer_ids:
-            continue
-        eligible.append((data, customer_id))
 
-    tripletex_ids = {data["id"] for data, _ in eligible}
-    existing = {location.id: location for location in db.query(CustomerLocation).all()}
-
-    for data, customer_id in eligible:
-        location_id = data["id"]
-        location = existing.get(location_id)
-
-        if location is None:
-            location = CustomerLocation(id=location_id, customer_id=customer_id)
-            _apply_location_fields(location, data)
-            location.delete_flag = False
-            db.add(location)
-            if not location.coordinates_locked:
-                _geocode_location(location)
-            db.add(
-                CustomerLocationSyncLog(
-                    customer_location_id=location_id,
-                    change_type=CustomerLocationChangeType.CREATED,
-                )
-            )
-        elif location.delete_flag:
-            _apply_location_fields(location, data)
-            location.customer_id = customer_id
-            location.delete_flag = False
-            if not location.coordinates_locked:
-                _geocode_location(location)
-            db.add(
-                CustomerLocationSyncLog(
-                    customer_location_id=location_id,
-                    change_type=CustomerLocationChangeType.RESTORED,
-                )
-            )
-        else:
-            changed, address_changed = _apply_location_fields(location, data)
-            if location.customer_id != customer_id:
-                location.customer_id = customer_id
-                changed = True
-            if address_changed and not location.coordinates_locked:
-                _geocode_location(location)
-            if changed:
+        payload = _location_push_payload(location)
+        try:
+            if location.tripletex_id is None:
+                data = client.create_delivery_address(customer.tripletex_id, payload)
+                location.tripletex_id = data["id"]
                 db.add(
                     CustomerLocationSyncLog(
-                        customer_location_id=location_id,
+                        customer_location_id=location.id,
+                        change_type=CustomerLocationChangeType.CREATED,
+                    )
+                )
+                created += 1
+            else:
+                client.update_delivery_address(location.tripletex_id, payload)
+                db.add(
+                    CustomerLocationSyncLog(
+                        customer_location_id=location.id,
                         change_type=CustomerLocationChangeType.UPDATED,
                     )
                 )
-
-    for location_id, location in existing.items():
-        if location_id not in tripletex_ids and not location.delete_flag:
-            location.delete_flag = True
-            db.add(
-                CustomerLocationSyncLog(
-                    customer_location_id=location_id,
-                    change_type=CustomerLocationChangeType.DELETED,
-                )
+                updated += 1
+        except Exception:
+            logger.warning(
+                "Tripletex bootstrap push failed for customer location %s", location.id, exc_info=True
             )
+            failed += 1
 
     db.commit()
 
@@ -532,84 +463,57 @@ def sync_customer_locations(db: Session) -> None:
         sync_customer_locations_to_resco(db)
     except Exception:
         logger.warning(
-            "Resco customer location sync failed after Tripletex sync", exc_info=True
+            "Resco customer location sync failed after bootstrap sync", exc_info=True
         )
 
-
-_PRODUCT_SCALAR_FIELD_MAP = {
-    "number": "number",
-    "name": "name",
-}
+    return {"created": created, "updated": updated, "skipped": skipped, "failed": failed}
 
 
-def _derive_product_type(number: str) -> str:
-    """product_type is never independently authoritative — it's always
-    derived from number's actual prefix, so it can't drift out of sync with
-    the one field Tripletex actually owns."""
-    return "PRD" if number.startswith("PRD") else "TJN"
+def _product_push_payload(product: Product) -> dict:
+    return {"number": product.number, "name": product.name}
 
 
-def _apply_product_fields(product: Product, data: dict) -> bool:
-    changed = False
-    for tripletex_key, attr in _PRODUCT_SCALAR_FIELD_MAP.items():
-        new_value = data.get(tripletex_key)
-        if getattr(product, attr) != new_value:
-            setattr(product, attr, new_value)
-            changed = True
-
-    inferred_type = _derive_product_type(product.number)
-    if product.product_type != inferred_type:
-        product.product_type = inferred_type
-        changed = True
-
-    return changed
-
-
-def sync_products(db: Session) -> None:
-    """Sync products from Tripletex, scoped to those whose number starts
-    with one of PRODUCT_NUMBER_PREFIXES."""
+def sync_products(db: Session) -> dict[str, int]:
+    """Bootstrap-push every non-deleted, non-archived product to Tripletex
+    and Resco. Runs on demand only - see local-first-masterdata-sync's
+    design.md."""
     client = TripletexClient(settings.tripletex_base_url, settings.tripletex_session_ttl_seconds)
-    tripletex_products = client.get_products()
-    tripletex_ids = {data["id"] for data in tripletex_products}
+    products = (
+        db.query(Product)
+        .filter(Product.delete_flag.is_(False), Product.archived.is_(False))
+        .all()
+    )
 
-    existing = {product.id: product for product in db.query(Product).all()}
-
-    for data in tripletex_products:
-        product_id = data["id"]
-        product = existing.get(product_id)
-
-        if product is None:
-            product = Product(id=product_id)
-            _apply_product_fields(product, data)
-            product.delete_flag = False
-            db.add(product)
-            db.add(
-                ProductSyncLog(
-                    product_id=product_id, change_type=ProductChangeType.CREATED
+    created = updated = failed = 0
+    for product in products:
+        payload = _product_push_payload(product)
+        try:
+            if product.tripletex_id is None:
+                data = client.create_product(payload)
+                product.tripletex_id = data["id"]
+                db.add(
+                    ProductSyncLog(
+                        product_id=product.id, change_type=ProductChangeType.CREATED
+                    )
                 )
-            )
-        elif product.delete_flag:
-            _apply_product_fields(product, data)
-            product.delete_flag = False
-            db.add(
-                ProductSyncLog(
-                    product_id=product_id, change_type=ProductChangeType.RESTORED
+                created += 1
+            else:
+                client.update_product(product.tripletex_id, payload)
+                db.add(
+                    ProductSyncLog(
+                        product_id=product.id, change_type=ProductChangeType.UPDATED
+                    )
                 )
-            )
-        elif _apply_product_fields(product, data):
-            db.add(
-                ProductSyncLog(
-                    product_id=product_id, change_type=ProductChangeType.UPDATED
-                )
-            )
-
-    for product_id, product in existing.items():
-        if product_id not in tripletex_ids and not product.delete_flag:
-            product.delete_flag = True
-            db.add(
-                ProductSyncLog(
-                    product_id=product_id, change_type=ProductChangeType.DELETED
-                )
-            )
+                updated += 1
+        except Exception:
+            logger.warning("Tripletex bootstrap push failed for product %s", product.id, exc_info=True)
+            failed += 1
 
     db.commit()
+
+    try:
+        sync_products_to_resco(db)
+    except Exception:
+        logger.warning("Resco product sync failed after bootstrap sync", exc_info=True)
+
+    return {"created": created, "updated": updated, "failed": failed}

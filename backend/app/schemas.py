@@ -82,7 +82,12 @@ class ProductOut(BaseModel):
     number: str
     product_type: str
     name: str
+    tripletex_id: int | None = None
     resco_product_id: str | None = None
+    # Transient - only set on the specific create/update response that just
+    # attempted a Tripletex/Resco push and had it (partly) fail. Never
+    # persisted, never present on a plain GET.
+    sync_warning: str | None = None
     skills: list[SkillOut] = []
     service_order_type: ServiceOrderTypeOut | None = None
 
@@ -150,7 +155,12 @@ class CustomerOut(BaseModel):
     currency: dict | None = None
     ledger_account: dict | None = None
     bank_account_presentation: list | None = None
+    tripletex_id: int | None = None
     resco_account_id: str | None = None
+    # Transient - only set on the specific create/update response that just
+    # attempted a Tripletex/Resco push and had it (partly) fail. Never
+    # persisted, never present on a plain GET.
+    sync_warning: str | None = None
 
 
 class CustomerLocationOut(BaseModel):
@@ -169,7 +179,9 @@ class CustomerLocationOut(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     coordinates_locked: bool = False
+    tripletex_id: int | None = None
     resco_asset_id: str | None = None
+    sync_warning: str | None = None
     customer: CustomerOut
     region: RegionOut | None = None
 

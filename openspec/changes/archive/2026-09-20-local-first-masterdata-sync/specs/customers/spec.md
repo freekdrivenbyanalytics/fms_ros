@@ -1,10 +1,6 @@
-# customers Specification
+# Spec Delta
 
-## Purpose
-
-Represents customers and the physical locations where they receive service; each location sits in a region and is what service visits are generated from.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Customer data model
 The system SHALL persist each customer using fms_ros as the system of record for its identity: each customer's unique identifier SHALL be an id assigned by fms_ros, not by Tripletex, whether or not that customer has ever been synced to Tripletex. The system SHALL additionally persist a remembered Tripletex customer id once the customer has been synced to Tripletex, and a remembered Resco Account ID once the customer has been synced to Resco.
@@ -78,12 +74,33 @@ The system SHALL allow a user to create a customer location for an existing cust
 - **WHEN** a customer location is soft-deleted in fms_ros, and a later Tripletex/Resco bootstrap sync runs
 - **THEN** that location is excluded from the bootstrap sync's candidates, and its corresponding Tripletex/Resco record (if any) is left unmodified
 
-### Requirement: A customer can have multiple locations
-The system SHALL allow a customer to have one or more customer locations.
+## REMOVED Requirements
 
-#### Scenario: Customer with multiple locations
-- **WHEN** a customer has two or more customer locations persisted with its customer_id
-- **THEN** each location is retrievable and associated with that customer
+### Requirement: Customers are synced from Tripletex
+**Reason**: fms_ros is now the system of record for customers; Tripletex no longer originates new customers this system needs to discover, so pulling Tripletex's customer list into fms_ros (creating local records for ones fms_ros doesn't have, overwriting local fields with Tripletex's) no longer fits the ownership model.
+**Migration**: See the new "Customers are bootstrap-synced to Tripletex and Resco" requirement - it pushes fms_ros's own data outward instead of pulling Tripletex's data in.
+
+### Requirement: Customer sync triggers
+**Reason**: paired with the removed pull-sync requirement above; startup no longer runs any Tripletex sync at all (see this change's proposal), and the on-demand trigger's behavior is superseded by the new bootstrap-push trigger.
+**Migration**: See "Customers are bootstrap-synced to Tripletex and Resco" for the (on-demand only, push-based) replacement trigger.
+
+### Requirement: Customer location sync triggers
+**Reason**: same as "Customer sync triggers" above, for customer locations.
+**Migration**: See the new "Customer locations are bootstrap-synced to Tripletex and Resco" requirement.
+
+### Requirement: Sync does not assign a customer location's region
+**Reason**: this requirement protected a customer location's region from being overwritten by an incoming pull from Tripletex. There is no longer any incoming pull that touches local fields at all - the bootstrap sync only ever reads local data to push outward, never writes region or any other local field - so the concern this requirement guarded against no longer exists.
+**Migration**: Not applicable. A customer location's region remains an exclusively local, portal-managed field.
+
+### Requirement: Customer changes are logged
+**Reason**: this logged the pull-sync's create/update/delete/restore actions specifically. The pull-sync no longer exists, and delete/restore no longer apply to how a customer's Tripletex link changes (see "Sync does not assign a customer location's region" reasoning - there is no more incoming reconciliation to log).
+**Migration**: See "Customers are bootstrap-synced to Tripletex and Resco" - it logs its own create/update actions.
+
+### Requirement: Customer location changes are logged
+**Reason**: same as "Customer changes are logged" above, for customer locations.
+**Migration**: See "Customer locations are bootstrap-synced to Tripletex and Resco".
+
+## ADDED Requirements
 
 ### Requirement: Customers are bootstrap-synced to Tripletex and Resco
 The system SHALL let a user trigger, on demand only (never automatically at backend startup), a bootstrap sync of every non-deleted, non-archived customer: for each such customer with no remembered Tripletex id, the system SHALL create a corresponding customer in Tripletex and remember the returned id; for each with no remembered Resco Account id, the system SHALL create a corresponding Account in Resco and remember the returned id; for each customer that already has a remembered Tripletex id and/or Resco Account id, the system SHALL instead push that customer's current local field values as an update to the corresponding Tripletex customer and/or Resco Account. The system SHALL record a log entry each time this sync creates or updates a customer's Tripletex or Resco link, capturing the customer's id, which system was affected, whether it was a create or an update, and when it occurred. A failure syncing one customer SHALL NOT prevent the sync from continuing to the remaining customers.
@@ -126,39 +143,3 @@ The system SHALL let a user trigger, on demand only (never automatically at back
 #### Scenario: The bootstrap sync only runs on demand
 - **WHEN** the backend starts
 - **THEN** no customer location bootstrap sync runs automatically; it only runs when a user explicitly triggers it
-
-### Requirement: Deleted customer locations are hidden by default
-The system SHALL exclude customer locations marked deleted from the customer location list returned to callers by default.
-
-#### Scenario: Deleted customer location is excluded from the list
-- **WHEN** a caller requests the list of customer locations
-- **THEN** customer locations marked deleted are not included in the result
-
-### Requirement: A customer location's coordinates are geocoded from its address
-The system SHALL resolve a customer location's geographic coordinates by geocoding its address through an open-source geocoding service when the location is created or its address changes, and SHALL persist the resolved coordinates so unchanged addresses are not re-geocoded on a later sync. A customer location whose coordinates have not yet been resolved SHALL have no latitude/longitude. Geocoding SHALL be skipped entirely for a customer location whose coordinates are locked, regardless of whether its address changed.
-
-#### Scenario: New customer location's coordinates are resolved
-- **WHEN** a customer location is created with an address that can be geocoded
-- **THEN** the system persists the resolved latitude and longitude for that location
-
-#### Scenario: Geocoding does not repeat for an unchanged address
-- **WHEN** a sync runs and a customer location's address is unchanged from the last sync
-- **THEN** the system does not geocode that address again
-
-#### Scenario: Geocoding is skipped for a locked customer location
-- **WHEN** a sync runs and a customer location's coordinates are locked, even if its address changed
-- **THEN** the system does not geocode that location's address, and its existing coordinates are left unchanged
-
-### Requirement: Deleted customers are hidden by default
-The system SHALL exclude customers marked deleted from the customer list returned to callers by default.
-
-#### Scenario: Deleted customer is excluded from the customer list
-- **WHEN** a caller requests the list of customers
-- **THEN** customers marked deleted are not included in the result
-
-### Requirement: Tripletex credentials stay server-side
-The system SHALL NOT expose Tripletex credentials or session tokens to the frontend; all communication with Tripletex SHALL happen through the backend.
-
-#### Scenario: Frontend never receives Tripletex credentials
-- **WHEN** the frontend triggers a customer sync or displays synced customer data
-- **THEN** no Tripletex credential or session token is present in any response the frontend receives

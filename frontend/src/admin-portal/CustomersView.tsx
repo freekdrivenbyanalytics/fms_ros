@@ -1,8 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { createCustomer, deleteCustomer, syncCustomersToResco, updateCustomer } from "../api";
+import {
+  createCustomer,
+  deleteCustomer,
+  syncCustomers,
+  syncCustomersToResco,
+  updateCustomer,
+} from "../api";
 import type { Customer, RescoSyncSummary } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+import { SyncStatusBadge } from "../shared/SyncStatusBadge";
 
 interface Props {
   customers: Customer[];
@@ -15,6 +22,10 @@ export function CustomersView({ customers, onChanged }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<RescoSyncSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [tripletexSyncing, setTripletexSyncing] = useState(false);
+  const [tripletexSyncError, setTripletexSyncError] = useState<string | null>(null);
+
+  const [createSyncWarning, setCreateSyncWarning] = useState<string | null>(null);
 
   const selected = customers.find((customer) => customer.id === selectedId) ?? null;
 
@@ -33,10 +44,29 @@ export function CustomersView({ customers, onChanged }: Props) {
     }
   }
 
+  // Bootstrap-push: creates in Tripletex/Resco whatever's missing there,
+  // updates whatever already exists - only needed when Tripletex is empty
+  // or lagging behind fms_ros, since fms_ros is the system of record.
+  async function handleSyncToTripletex() {
+    setTripletexSyncing(true);
+    setTripletexSyncError(null);
+    try {
+      await syncCustomers();
+      await onChanged();
+    } catch (err) {
+      setTripletexSyncError(
+        err instanceof Error ? err.message : "Failed to sync to Tripletex"
+      );
+    } finally {
+      setTripletexSyncing(false);
+    }
+  }
+
   if (selected) {
     return (
       <CustomerDetail
         customer={selected}
+        initialSyncWarning={createSyncWarning}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -49,6 +79,14 @@ export function CustomersView({ customers, onChanged }: Props) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Customers</h2>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSyncToTripletex}
+            disabled={tripletexSyncing}
+            className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {tripletexSyncing ? "Syncing…" : "Sync to Tripletex"}
+          </button>
           <button
             type="button"
             onClick={handleSyncToResco}
@@ -67,6 +105,7 @@ export function CustomersView({ customers, onChanged }: Props) {
         </div>
       </div>
 
+      {tripletexSyncError && <p className="text-sm text-red-600 mb-3">{tripletexSyncError}</p>}
       {syncError && <p className="text-sm text-red-600 mb-3">{syncError}</p>}
       {syncSummary && (
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -88,6 +127,7 @@ export function CustomersView({ customers, onChanged }: Props) {
         <CreateCustomerForm
           onCreated={async (customer) => {
             setCreating(false);
+            setCreateSyncWarning(customer.sync_warning);
             await onChanged();
             setSelectedId(customer.id);
           }}
@@ -108,8 +148,13 @@ export function CustomersView({ customers, onChanged }: Props) {
             render: (customer) => customer.organization_number || "—",
           },
           {
-            header: "Resco",
-            render: (customer) => (customer.resco_account_id ? "Synced" : "—"),
+            header: "Sync status",
+            render: (customer) => (
+              <div className="flex gap-1">
+                <SyncStatusBadge label="Tripletex" synced={customer.tripletex_id !== null} />
+                <SyncStatusBadge label="Resco" synced={customer.resco_account_id !== null} />
+              </div>
+            ),
           },
         ]}
       />
@@ -170,12 +215,19 @@ function CreateCustomerForm({ onCreated }: CreateCustomerFormProps) {
 
 interface CustomerDetailProps {
   customer: Customer;
+  initialSyncWarning?: string | null;
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
 }
 
-function CustomerDetail({ customer, onChanged, onDeleted, onBack }: CustomerDetailProps) {
+function CustomerDetail({
+  customer,
+  initialSyncWarning = null,
+  onChanged,
+  onDeleted,
+  onBack,
+}: CustomerDetailProps) {
   const [name, setName] = useState(customer.name);
   const [email, setEmail] = useState(customer.email ?? "");
   const [phoneNumber, setPhoneNumber] = useState(customer.phone_number ?? "");
@@ -186,17 +238,20 @@ function CustomerDetail({ customer, onChanged, onDeleted, onBack }: CustomerDeta
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(initialSyncWarning);
 
   async function handleSave() {
     setSaving(true);
     setError(null);
+    setSyncWarning(null);
     try {
-      await updateCustomer(customer.id, {
+      const updated = await updateCustomer(customer.id, {
         name,
         email: email || null,
         phone_number: phoneNumber || null,
         organization_number: organizationNumber || null,
       });
+      setSyncWarning(updated.sync_warning);
       setDirty(false);
       await onChanged();
     } catch (err) {
@@ -244,6 +299,7 @@ function CustomerDetail({ customer, onChanged, onDeleted, onBack }: CustomerDeta
         </div>
       </div>
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {syncWarning && <p className="text-sm text-amber-600 mb-3">{syncWarning}</p>}
 
       <DetailField label="Name">
         <input
@@ -288,6 +344,11 @@ function CustomerDetail({ customer, onChanged, onDeleted, onBack }: CustomerDeta
           }}
           className="text-sm border border-slate-300 rounded-md px-2 py-1"
         />
+      </DetailField>
+      <DetailField label="Tripletex Sync Status">
+        {customer.tripletex_id
+          ? `Synced (Tripletex ID ${customer.tripletex_id})`
+          : "Not yet synced"}
       </DetailField>
       <DetailField label="Resco Sync Status">
         {customer.resco_account_id ? "Synced" : "Not yet synced"}

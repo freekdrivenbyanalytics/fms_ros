@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+import { SyncStatusBadge } from "../shared/SyncStatusBadge";
 
 interface Props {
   products: Product[];
@@ -24,6 +25,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [createSyncWarning, setCreateSyncWarning] = useState<string | null>(null);
 
   const selected = products.find((product) => product.id === selectedId) ?? null;
 
@@ -35,7 +37,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
       await onChanged();
     } catch (err) {
       setRefreshMessage(
-        err instanceof Error ? err.message : "Failed to refresh products"
+        err instanceof Error ? err.message : "Failed to sync products to Tripletex"
       );
     } finally {
       setRefreshing(false);
@@ -54,6 +56,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
         productLines={productLines}
         skills={skills}
         serviceOrderTypes={serviceOrderTypes}
+        initialSyncWarning={createSyncWarning}
         onChanged={onChanged}
         onDeleted={() => setSelectedId(null)}
         onBack={() => setSelectedId(null)}
@@ -72,7 +75,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
             disabled={refreshing}
             className="text-sm px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           >
-            {refreshing ? "Refreshing…" : "Refresh from Tripletex"}
+            {refreshing ? "Syncing…" : "Sync to Tripletex"}
           </button>
           <button
             type="button"
@@ -91,6 +94,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
           serviceOrderTypes={serviceOrderTypes}
           onCreated={async (product) => {
             setCreating(false);
+            setCreateSyncWarning(product.sync_warning);
             await onChanged();
             setSelectedId(product.id);
           }}
@@ -126,6 +130,15 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
                   .filter((line) => line.required_products.some((p) => p.id === product.id))
                   .length
               ),
+          },
+          {
+            header: "Sync status",
+            render: (product) => (
+              <div className="flex gap-1">
+                <SyncStatusBadge label="Tripletex" synced={product.tripletex_id !== null} />
+                <SyncStatusBadge label="Resco" synced={product.resco_product_id !== null} />
+              </div>
+            ),
           },
         ]}
       />
@@ -265,6 +278,7 @@ interface ProductDetailProps {
   productLines: ContractLine[];
   skills: Skill[];
   serviceOrderTypes: ServiceOrderType[];
+  initialSyncWarning?: string | null;
   onChanged: () => void | Promise<void>;
   onDeleted: () => void;
   onBack: () => void;
@@ -275,6 +289,7 @@ function ProductDetail({
   productLines,
   skills,
   serviceOrderTypes,
+  initialSyncWarning = null,
   onChanged,
   onDeleted,
   onBack,
@@ -290,6 +305,7 @@ function ProductDetail({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(initialSyncWarning);
 
   function toggleSkill(skillId: number) {
     setSkillIds((prev) =>
@@ -301,14 +317,16 @@ function ProductDetail({
   async function handleSave() {
     setSaving(true);
     setError(null);
+    setSyncWarning(null);
     try {
-      await updateProduct(product.id, {
+      const updated = await updateProduct(product.id, {
         product_type: productType,
         number,
         name,
         skill_ids: skillIds,
         service_order_type_id: serviceOrderTypeId,
       });
+      setSyncWarning(updated.sync_warning);
       setDirty(false);
       await onChanged();
     } catch (err) {
@@ -358,6 +376,7 @@ function ProductDetail({
         </div>
       </div>
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {syncWarning && <p className="text-sm text-amber-600 mb-3">{syncWarning}</p>}
 
       <DetailField label="Type">
         <select
@@ -439,6 +458,14 @@ function ProductDetail({
             ))}
           </ul>
         )}
+      </DetailField>
+      <DetailField label="Tripletex Sync Status">
+        {product.tripletex_id
+          ? `Synced (Tripletex ID ${product.tripletex_id})`
+          : "Not yet synced"}
+      </DetailField>
+      <DetailField label="Resco Sync Status">
+        {product.resco_product_id ? "Synced" : "Not yet synced"}
       </DetailField>
     </div>
   );

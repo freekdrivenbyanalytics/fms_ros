@@ -19,6 +19,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import SessionLocal
+from app.geocoding import geocode_address
 from app.models import (
     Assignment,
     Contract,
@@ -97,40 +98,53 @@ def _delete_local_data(db) -> None:
     )
 
 
-def _create_tripletex_customers(
-    client: TripletexClient, rows: list[dict]
-) -> dict[str, int]:
-    """Create each CSV row's customer in Tripletex, with its delivery address
-    embedded in the same create call (Tripletex has no standalone
-    delivery-address create endpoint).
+def _location_display_address(street: str, postal_code: str | None, city: str | None) -> str:
+    locality = " ".join(part for part in [postal_code, city] if part)
+    return ", ".join(part for part in [street, locality] if part)
 
-    Returns a map of customer_key -> the delivery address's Tripletex id,
-    which becomes that location's CustomerLocation.id once synced locally.
+
+def _create_local_customers(db, rows: list[dict]) -> dict[str, CustomerLocation]:
+    """Create each CSV row's customer and its first customer location
+    locally (fms_ros-assigned ids, no Tripletex id yet) - pushed to
+    Tripletex later, after all local seeding is complete, via the
+    bootstrap-sync functions.
+
+    Returns a map of customer_key -> the created CustomerLocation, so
+    later seeding steps can use the local objects directly rather than
+    re-fetching them by an id.
     """
-    customer_key_to_location_id: dict[str, int] = {}
+    customer_key_to_location: dict[str, CustomerLocation] = {}
     for row in rows:
-        customer = client.create_customer(
-            {
-                "name": row["name"],
-                "isCustomer": True,
-                "deliveryAddress": {
-                    "addressLine1": row["street"],
-                    "postalCode": row["postal_code"],
-                    "city": row["city"],
-                },
-            }
-        )
-        customer_key_to_location_id[row["customer_key"]] = customer["deliveryAddress"]["id"]
+        customer = Customer(name=row["name"])
+        db.add(customer)
+        db.flush()
 
+        address = _location_display_address(row["street"], row["postal_code"], row["city"])
+        location = CustomerLocation(
+            customer_id=customer.id,
+            address_line_1=row["street"],
+            postal_code=row["postal_code"],
+            city=row["city"],
+            address=address,
+        )
+        resolved = geocode_address(address)
+        if resolved is not None:
+            location.latitude, location.longitude = resolved
+        db.add(location)
+        db.flush()
+
+        customer_key_to_location[row["customer_key"]] = location
+
+    db.commit()
     print(
-        f"Created {len(customer_key_to_location_id)} customer(s) and "
-        "delivery address(es) in Tripletex."
+        f"Created {len(customer_key_to_location)} customer(s) and "
+        "customer location(s) locally."
     )
-    return customer_key_to_location_id
+    return customer_key_to_location
 
 
 def _seed_contracts_and_visits(
-    db, contract_line_rows: list[dict], customer_key_to_location_id: dict[str, int]
+    db, contract_line_rows: list[dict], customer_key_to_location: dict[str, CustomerLocation]
 ) -> None:
     products_by_number = {
         p.number: p
@@ -143,13 +157,7 @@ def _seed_contracts_and_visits(
     visits_created = 0
 
     for row in contract_line_rows:
-        location_id = customer_key_to_location_id[row["customer_key"]]
-        location = db.get(CustomerLocation, location_id)
-        if location is None:
-            raise RuntimeError(
-                f"CustomerLocation {location_id} for {row['customer_key']} "
-                "not found after sync"
-            )
+        location = customer_key_to_location[row["customer_key"]]
 
         contract = contracts_by_customer_id.get(location.customer_id)
         if contract is None:
@@ -223,13 +231,15 @@ def reset_demo_data() -> None:
         _delete_tripletex_data(client)
         _delete_local_data(db)
 
-        customer_key_to_location_id = _create_tripletex_customers(client, customer_rows)
+        customer_key_to_location = _create_local_customers(db, customer_rows)
+        _seed_contracts_and_visits(db, contract_line_rows, customer_key_to_location)
+        _update_employee_products(db)
 
+        # Push everything just seeded to Tripletex/Resco last - local
+        # seeding never waited on this, matching the rest of this system's
+        # local-first behavior. See local-first-masterdata-sync's design.md.
         sync_customers(db)
         sync_customer_locations(db)
-
-        _seed_contracts_and_visits(db, contract_line_rows, customer_key_to_location_id)
-        _update_employee_products(db)
     finally:
         db.close()
 

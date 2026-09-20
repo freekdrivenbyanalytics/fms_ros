@@ -76,16 +76,24 @@ The system SHALL let customer location data be pushed to Resco by creating or up
 - **WHEN** a customer location with no street address is synced
 - **THEN** the system does not call Resco for that location, reports it as skipped, and continues processing the remaining locations
 
-### Requirement: Customers and customer locations sync to Resco automatically after a Tripletex sync
-The system SHALL attempt to sync every customer to Resco immediately after a Tripletex customer sync completes, and every customer location to Resco immediately after a Tripletex customer location sync completes. A failure of this automatic sync SHALL NOT fail or roll back the Tripletex sync itself.
+### Requirement: Customers and customer locations sync to Resco automatically on create and update
+The system SHALL attempt to sync a customer to Resco immediately after that customer is created or updated, and a customer location to Resco immediately after that location is created or updated. A failure of this automatic sync (Resco unreachable, an error response, or a missing required dependency) SHALL NOT fail or roll back the customer or customer-location create or update itself.
 
-#### Scenario: A Tripletex customer sync triggers a Resco sync attempt
-- **WHEN** a Tripletex customer sync completes (at backend startup or on demand)
-- **THEN** the system attempts to sync every customer to Resco afterward, and the Tripletex sync's own result is unaffected by whether that attempt succeeds
+#### Scenario: Creating a customer triggers a Resco sync attempt
+- **WHEN** a user creates a customer
+- **THEN** the system attempts to sync that customer to Resco after it is persisted, and the customer is persisted regardless of whether that sync attempt succeeds
 
-#### Scenario: A Tripletex customer location sync triggers a Resco sync attempt
-- **WHEN** a Tripletex customer location sync completes (at backend startup or on demand)
-- **THEN** the system attempts to sync every customer location to Resco afterward, and the Tripletex sync's own result is unaffected by whether that attempt succeeds
+#### Scenario: Updating a customer triggers a Resco sync attempt
+- **WHEN** a user updates a customer
+- **THEN** the system attempts to sync that customer to Resco after the update is persisted, and the update is persisted regardless of whether that sync attempt succeeds
+
+#### Scenario: Creating a customer location triggers a Resco sync attempt
+- **WHEN** a user creates a customer location
+- **THEN** the system attempts to sync that location to Resco after it is persisted, and the location is persisted regardless of whether that sync attempt succeeds
+
+#### Scenario: Updating a customer location triggers a Resco sync attempt
+- **WHEN** a user updates a customer location
+- **THEN** the system attempts to sync that location to Resco after the update is persisted, and the update is persisted regardless of whether that sync attempt succeeds
 
 ### Requirement: A user can manually trigger syncing all customers or all customer locations to Resco
 The system SHALL let a user trigger a sync of every non-deleted customer to Resco on demand, and separately a sync of every non-deleted customer location to Resco on demand, each returning a summary of how many were created, updated, skipped, and failed.
