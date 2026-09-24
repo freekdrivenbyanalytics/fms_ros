@@ -1,10 +1,6 @@
-# assignments Specification
+# Spec Delta
 
-## Purpose
-
-Lets a planner manually assign an unassigned service visit to an employee with a chosen planned start time, and view the resulting assignments alongside employees and visits.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Assignment data model
 The system SHALL persist each assignment with the service visit it applies to, the employee it is assigned to, a planned start time, a planned end time, and its last known Resco Work Order status once one has been pulled.
@@ -16,46 +12,6 @@ The system SHALL persist each assignment with the service visit it applies to, t
 #### Scenario: A new assignment has no Resco status until one is pulled
 - **WHEN** an assignment is created
 - **THEN** its Resco Work Order status is unset until a status pull (see the resco-integration capability) fetches one
-
-### Requirement: Manually assign an unassigned visit
-The system SHALL allow a user to manually assign an unassigned service visit to an employee by selecting a planned start time.
-
-#### Scenario: Successful manual assignment
-- **WHEN** a user assigns an unassigned service visit to an employee and selects a planned start time
-- **THEN** the system creates an assignment for that visit and employee, sets planned_start to the selected time, computes planned_end as planned_start plus the visit's duration_minutes, and updates the visit's status to `assigned`
-
-### Requirement: Prevent double assignment
-The system SHALL reject a request to assign a service visit whose status is already `assigned`.
-
-#### Scenario: Assigning an already-assigned visit is rejected
-- **WHEN** a user attempts to assign a service visit whose status is already `assigned`
-- **THEN** the system rejects the request and the visit's existing assignment remains unchanged
-
-### Requirement: Unassign an assigned visit
-The system SHALL allow a user to remove an assigned service visit's assignment, returning the visit to unassigned status. Unassigning a visit SHALL clear its pin if it was pinned.
-
-#### Scenario: Planner unassigns a visit
-- **WHEN** a user unassigns a service visit that currently has an assignment
-- **THEN** the system deletes that assignment, sets the visit's status back to unassigned, and the visit no longer appears as pinned
-
-#### Scenario: Unassigning a visit with no assignment is rejected
-- **WHEN** a user attempts to unassign a service visit that has no assignment
-- **THEN** the system rejects the request and no changes are made
-
-### Requirement: Pin an assigned visit
-The system SHALL allow a user to pin or unpin an assigned service visit's assignment. A pinned assignment SHALL be excluded from being changed by the route-optimization capability's schedule runs.
-
-#### Scenario: Planner pins an assignment
-- **WHEN** a user pins an assigned service visit's assignment
-- **THEN** the system marks that assignment as pinned, and the assignment is shown as pinned to the planner
-
-#### Scenario: Planner unpins an assignment
-- **WHEN** a user unpins a previously pinned assignment
-- **THEN** the system marks that assignment as no longer pinned
-
-#### Scenario: Pinning is unavailable for a visit with no assignment
-- **WHEN** a user attempts to pin a service visit that has no assignment
-- **THEN** the system rejects the request
 
 ### Requirement: An assignment locks automatically once it has started
 The system SHALL treat an assignment as pinned — regardless of its stored pin flag — once its planned start time has passed. This lock is based on elapsed time, not the stored flag, and cannot be removed by unpinning. The one exception is the automatic unassignment of a past planned assignment whose synced Work Order is currently Scheduled (see "Past assignments whose Work Orders are currently Scheduled are automatically unassigned") — that reconciliation overrides this lock, since a past visit currently Scheduled has nothing left to protect from reassignment.
@@ -130,6 +86,8 @@ The system SHALL provide a page showing the list of employees, the list of unass
 #### Scenario: An automatically-unassigned visit's card explains why
 - **WHEN** a user views an unassigned service visit whose most recent assignment was removed by the overdue-reconciliation, not by a manual unassign
 - **THEN** that visit's card shows that it was unassigned because its past planned Work Order is currently Scheduled
+
+## ADDED Requirements
 
 ### Requirement: Past assignments whose Work Orders are currently Scheduled are automatically unassigned
 As part of on-demand status sync, the system SHALL unassign an assignment only when its planned_start date is before today and a successful fresh read confirms its previously synced Work Order is currently Active/Scheduled (statecode 0, statuscode 5). It SHALL remove the local assignment, clear its pin, set the visit unassigned and record a reason. This narrow operation SHALL override pin/elapsed-time locks. It SHALL NOT use requested_date or assignment creation time to determine eligibility. It SHALL attempt the corresponding Draft reset specified by resco-integration. Unsynced assignments, failed reads and all other current statuses SHALL be left alone. Audit history and previously observed statuses SHALL NOT determine eligibility; a Work Order that returned to Scheduled is eligible based on its current status.

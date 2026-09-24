@@ -1,10 +1,6 @@
-# customers Specification
+# Spec Delta
 
-## Purpose
-
-Represents customers and the physical locations where they receive service; each location sits in a region and is what service visits are generated from.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Customer data model
 The system SHALL persist each customer using fms_ros as the system of record for its identity: each customer's unique identifier SHALL be an id assigned by fms_ros, not by Tripletex, whether or not that customer has ever been synced to Tripletex. The system SHALL additionally persist a remembered Tripletex customer id once the customer has been synced to Tripletex, and a remembered Resco Account ID once the customer has been synced to Resco.
@@ -78,13 +74,6 @@ The system SHALL allow a user to create a customer location for an existing cust
 - **WHEN** a customer location is soft-deleted in fms_ros, and a later Tripletex/Resco bootstrap sync runs
 - **THEN** that location is excluded from the bootstrap sync's candidates, and its corresponding Tripletex/Resco record (if any) is left unmodified
 
-### Requirement: A customer can have multiple locations
-The system SHALL allow a customer to have one or more customer locations.
-
-#### Scenario: Customer with multiple locations
-- **WHEN** a customer has two or more customer locations persisted with its customer_id
-- **THEN** each location is retrievable and associated with that customer
-
 ### Requirement: Customers are bootstrap-synced to Tripletex and Resco
 The system SHALL let a user trigger, on demand only (never automatically at backend startup), a bootstrap sync of every non-deleted, non-archived customer: for each such customer with no remembered Tripletex id, the system SHALL create a corresponding customer in Tripletex and remember the returned id; for each with no remembered Resco Account id, the system SHALL create a corresponding Account in Resco and remember the returned id; for each customer that already has a remembered Tripletex id and/or Resco Account id, the system SHALL instead push that customer's current local field values as an update to the corresponding Tripletex customer and/or Resco Account. The system SHALL record a log entry each time this sync creates or updates a customer's Tripletex or Resco link, capturing the customer's id, which system was affected, whether it was a create or an update, and when it occurred. A failure syncing one customer SHALL NOT prevent the sync from continuing to the remaining customers.
 
@@ -127,41 +116,7 @@ The system SHALL let a user trigger, on demand only (never automatically at back
 - **WHEN** the backend starts
 - **THEN** no customer location bootstrap sync runs automatically; it only runs when a user explicitly triggers it
 
-### Requirement: Deleted customer locations are hidden by default
-The system SHALL exclude customer locations marked deleted from the customer location list returned to callers by default.
-
-#### Scenario: Deleted customer location is excluded from the list
-- **WHEN** a caller requests the list of customer locations
-- **THEN** customer locations marked deleted are not included in the result
-
-### Requirement: A customer location's coordinates are geocoded from its address
-The system SHALL resolve a customer location's geographic coordinates by geocoding its address through an open-source geocoding service when the location is created or its address changes, and SHALL persist the resolved coordinates so unchanged addresses are not re-geocoded on a later sync. A customer location whose coordinates have not yet been resolved SHALL have no latitude/longitude. Geocoding SHALL be skipped entirely for a customer location whose coordinates are locked, regardless of whether its address changed.
-
-#### Scenario: New customer location's coordinates are resolved
-- **WHEN** a customer location is created with an address that can be geocoded
-- **THEN** the system persists the resolved latitude and longitude for that location
-
-#### Scenario: Geocoding does not repeat for an unchanged address
-- **WHEN** a sync runs and a customer location's address is unchanged from the last sync
-- **THEN** the system does not geocode that address again
-
-#### Scenario: Geocoding is skipped for a locked customer location
-- **WHEN** a sync runs and a customer location's coordinates are locked, even if its address changed
-- **THEN** the system does not geocode that location's address, and its existing coordinates are left unchanged
-
-### Requirement: Deleted customers are hidden by default
-The system SHALL exclude customers marked deleted from the customer list returned to callers by default.
-
-#### Scenario: Deleted customer is excluded from the customer list
-- **WHEN** a caller requests the list of customers
-- **THEN** customers marked deleted are not included in the result
-
-### Requirement: Tripletex credentials stay server-side
-The system SHALL NOT expose Tripletex credentials or session tokens to the frontend; all communication with Tripletex SHALL happen through the backend.
-
-#### Scenario: Frontend never receives Tripletex credentials
-- **WHEN** the frontend triggers a customer sync or displays synced customer data
-- **THEN** no Tripletex credential or session token is present in any response the frontend receives
+## ADDED Requirements
 
 ### Requirement: Customer contact details are editable masterdata
 The system SHALL let administrators create, view, update and clear customer contact person name, email, telephone and mobile telephone. It SHALL reuse existing fields where available and add missing fields consistently across persistence, API and portal forms. Changes SHALL propagate to the customer's Resco Account as specified by resco-integration.
@@ -180,6 +135,7 @@ The system SHALL provide repeatable demo contact data through CSV seed inputs or
 #### Scenario: Demo seeding is repeated
 - **WHEN** the same seed runs again
 - **THEN** it creates no duplicate customers and preserves existing populated contact fields
+
 
 ### Requirement: Technical Resco identifiers are visible in the portal
 The system SHALL persist actual technical IDs returned by Resco and expose them in API responses and read-only portal detail fields using the same presentation convention as Tripletex IDs. Customer details SHALL show Resco Account ID. Customer-location details SHALL show Resco Functional Location ID and Resco Asset ID alongside the Tripletex delivery-address ID. Assigned-visit details SHALL show Resco Work Order ID and Resco Work Order Schedule ID. Full IDs SHALL be selectable/copyable and clearly labelled, not replaced with names, portal IDs or business identifiers. Missing IDs SHALL display an unset/not-synced state. IDs SHALL be saved after each successful remote creation so partially completed syncs remain visible and retryable. This is sync bookkeeping, not a new full Resco import.

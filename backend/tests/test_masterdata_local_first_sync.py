@@ -14,7 +14,7 @@ from app.main import (
     create_product,
 )
 from app.models import Customer, CustomerLocation, Product
-from app.schemas import CustomerCreate, CustomerLocationCreate, ProductCreate
+from app.schemas import CustomerCreate, CustomerLocationCreate, ProductCreate, CustomerRescoSyncResult, CustomerLocationRescoSyncResult
 
 
 def test_sync_warning_is_none_when_nothing_failed() -> None:
@@ -64,7 +64,7 @@ def test_create_customer_has_no_warning_when_both_pushes_succeed() -> None:
         mock_client.create_customer.return_value = {"id": 5551234}
         with (
             patch("app.main._tripletex_client", return_value=mock_client),
-            patch("app.main.sync_customer", return_value=None),
+            patch("app.main.sync_customer", return_value=CustomerRescoSyncResult(status="synced")),
         ):
             customer = create_customer(CustomerCreate(name="Test Co (synced)"), db)
 
@@ -154,7 +154,7 @@ def test_create_customer_location_skips_tripletex_push_when_customer_not_synced(
         mock_client = MagicMock()
         with (
             patch("app.main._tripletex_client", return_value=mock_client),
-            patch("app.main.sync_customer_location", return_value=None),
+            patch("app.main.sync_customer_location", return_value=CustomerLocationRescoSyncResult(status="synced")),
             patch("app.main.geocode_address", return_value=None),
         ):
             location = create_customer_location(

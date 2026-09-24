@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Assignment, Customer, CustomerLocation, Employee, Product
+from app.models import Assignment, Customer, CustomerLocation, Employee, Product, RescoDraftReset, VisitStatus
 from app.schemas import (
     AssignmentRescoSyncResult,
     CustomerLocationRescoSyncResult,
@@ -15,6 +15,7 @@ from app.schemas import (
     EmployeeRescoSyncResult,
     ProductRescoSyncResult,
     RescoSyncSummary,
+    RescoStatusSyncSummary,
 )
 
 
@@ -91,7 +92,7 @@ class RescoClient:
             (
                 loc
                 for loc in customer.locations
-                if not loc.delete_flag and loc.address_line_1
+                if not loc.delete_flag and not loc.archived and loc.address_line_1
             ),
             None,
         )
@@ -133,35 +134,78 @@ class RescoClient:
             )
         return response.json()
 
-    def create_asset(self, location: CustomerLocation) -> dict:
-        payload = {
-            "name": location.address,
-            "customerid_account@odata.bind": f"/account({location.customer.resco_account_id})",
-        }
+    def _request(self, method: str, entity: str, **kwargs) -> dict:
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
-            response = client.post(
-                f"{self._base_url}/fs_asset",
-                auth=self._auth(),
-                json=payload,
+            response = client.request(
+                method, f"{self._base_url}/{entity}", auth=self._auth(), **kwargs
             )
         if response.status_code >= 400:
-            raise RescoApiError(
-                f"Resco asset create failed: {response.status_code} {response.text}"
-            )
-        return response.json()
+            raise RescoApiError(f"Resco {entity} failed: {response.status_code} {response.text}")
+        return response.json() if response.content else {}
+
+    @staticmethod
+    def _functional_location_payload(location: CustomerLocation) -> dict:
+        payload = {
+            "name": location.address[:160],
+            "resco_address_line1": location.address_line_1,
+            "resco_address_line2": location.address_line_2,
+            "resco_address_postalcode": location.postal_code,
+            "resco_address_city": location.city,
+            "resco_address_country": (location.country or {}).get("name"),
+        }
+        if location.latitude is not None and location.longitude is not None:
+            payload.update(resco_latitude=location.latitude, resco_longitude=location.longitude)
+        return payload
+
+    def create_functional_location(self, location: CustomerLocation) -> dict:
+        return self._request("POST", "resco_functionallocation",
+                             json=self._functional_location_payload(location))
+
+    def update_functional_location(self, location: CustomerLocation) -> dict:
+        payload = {"resco_latitude": None, "resco_longitude": None,
+                   **self._functional_location_payload(location)}
+        return self._request("PATCH",
+                             f"resco_functionallocation('{location.resco_functional_location_id}')",
+                             json=payload)
+
+    @staticmethod
+    def _asset_payload(location: CustomerLocation) -> dict:
+        return {
+            "name": location.address[:160],
+            "customerid_account@odata.bind": f"/account({location.customer.resco_account_id})",
+            "resco_functionallocationid_resco_functionallocation@odata.bind":
+                f"/resco_functionallocation({location.resco_functional_location_id})",
+        }
+
+    def create_asset(self, location: CustomerLocation) -> dict:
+        return self._request("POST", "fs_asset", json=self._asset_payload(location))
 
     def update_asset(self, location: CustomerLocation) -> dict:
-        with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
-            response = client.patch(
-                f"{self._base_url}/fs_asset('{location.resco_asset_id}')",
-                auth=self._auth(),
-                json={"name": location.address},
-            )
-        if response.status_code >= 400:
-            raise RescoApiError(
-                f"Resco asset update failed: {response.status_code} {response.text}"
-            )
-        return response.json()
+        return self._request("PATCH", f"fs_asset('{location.resco_asset_id}')",
+                             json=self._asset_payload(location))
+
+    @staticmethod
+    def _contact_payload(customer: Customer) -> dict:
+        return {
+            "firstname": None,
+            "lastname": customer.contact_name,
+            "emailaddress1": customer.email,
+            "telephone1": customer.phone_number,
+            "mobilephone": customer.phone_number_mobile,
+            "parentcustomerid_account@odata.bind": f"/account({customer.resco_account_id})",
+        }
+
+    def create_contact(self, customer: Customer) -> dict:
+        return self._request("POST", "contact", json=self._contact_payload(customer))
+
+    def update_contact(self, customer: Customer) -> dict:
+        return self._request("PATCH", f"contact('{customer.resco_contact_id}')",
+                             json=self._contact_payload(customer))
+
+    def link_contact(self, customer: Customer) -> dict:
+        return self._request("PATCH", f"account('{customer.resco_account_id}')", json={
+            "primarycontactid_contact@odata.bind": f"/contact({customer.resco_contact_id})",
+        })
 
     @staticmethod
     def _product_payload(product: Product) -> dict:
@@ -218,8 +262,11 @@ class RescoClient:
     @staticmethod
     def _work_order_payload(assignment: Assignment) -> dict:
         location = assignment.service_visit.contract_line.customer_location
+        suffix = f" | Visit {assignment.service_visit_id}"
+        name = f"{location.customer.name}: {location.address}"
         return {
-            "name": location.customer.name,
+            "name": name[:160 - len(suffix)] + suffix,
+            "customerid_account@odata.bind": f"/account({location.customer.resco_account_id})",
             "fs_assetid_fs_asset@odata.bind": f"/fs_asset({location.resco_asset_id})",
         }
 
@@ -228,13 +275,23 @@ class RescoClient:
             response = client.post(
                 f"{self._base_url}/fs_workorder",
                 auth=self._auth(),
-                json=self._work_order_payload(assignment),
+                json={**self._work_order_payload(assignment), "statecode": 0, "statuscode": 5},
             )
         if response.status_code >= 400:
             raise RescoApiError(
                 f"Resco work order create failed: {response.status_code} {response.text}"
             )
         return response.json()
+
+    def update_work_order(self, assignment: Assignment) -> dict:
+        # Updating names or bindings must never overwrite field progress.
+        return self._request("PATCH", f"fs_workorder('{assignment.resco_work_order_id}')",
+                             json=self._work_order_payload(assignment))
+
+    def get_work_order_status(self, work_order_id: str) -> dict:
+        return self._request("GET", f"fs_workorder('{work_order_id}')",
+                             params={"$select": "id,statecode,statuscode"},
+                             headers={"Prefer": 'odata.include-annotations="*"'})
 
     @staticmethod
     def _work_order_schedule_payload(assignment: Assignment, resource_id: str) -> dict:
@@ -335,6 +392,15 @@ def sync_customer(db: Session, customer: Customer) -> CustomerRescoSyncResult:
             customer.resco_account_id = str(data["id"])
             db.add(customer)
             db.commit()
+        if customer.resco_contact_id:
+            client.update_contact(customer)
+        elif customer.contact_name or customer.phone_number_mobile:
+            data = client.create_contact(customer)
+            customer.resco_contact_id = str(data["id"])
+            db.add(customer)
+            db.commit()
+        if customer.resco_contact_id:
+            client.link_contact(customer)
     except Exception as exc:
         return CustomerRescoSyncResult(status="failed", detail=str(exc))
 
@@ -380,6 +446,13 @@ def sync_customer_location(db: Session, location: CustomerLocation) -> CustomerL
 
     client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
     try:
+        if location.resco_functional_location_id:
+            client.update_functional_location(location)
+        else:
+            data = client.create_functional_location(location)
+            location.resco_functional_location_id = str(data["id"])
+            db.add(location)
+            db.commit()
         if location.resco_asset_id:
             client.update_asset(location)
         else:
@@ -396,7 +469,9 @@ def sync_customer_location(db: Session, location: CustomerLocation) -> CustomerL
 def sync_customer_locations_to_resco(db: Session) -> RescoSyncSummary:
     locations = (
         db.query(CustomerLocation)
-        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False))
+        .join(CustomerLocation.customer)
+        .filter(CustomerLocation.delete_flag.is_(False), CustomerLocation.archived.is_(False),
+                Customer.delete_flag.is_(False), Customer.archived.is_(False))
         .all()
     )
 
@@ -476,7 +551,8 @@ def sync_assignment(db: Session, assignment: Assignment) -> AssignmentRescoSyncR
 
     if not employee.resco_user_id:
         return AssignmentRescoSyncResult(status="skipped", detail="Employee not yet synced to Resco")
-    if not location.resco_asset_id:
+    if not (location.resco_asset_id and location.resco_functional_location_id
+            and location.customer.resco_account_id):
         return AssignmentRescoSyncResult(
             status="skipped", detail="Customer location not yet synced to Resco"
         )
@@ -485,10 +561,15 @@ def sync_assignment(db: Session, assignment: Assignment) -> AssignmentRescoSyncR
     try:
         resource_id = client.find_resource_id_for_user(employee.resco_user_id)
         if assignment.resco_work_order_id:
-            client.update_work_order_schedule(assignment, resource_id)
+            client.update_work_order(assignment)
         else:
             work_order = client.create_work_order(assignment)
             assignment.resco_work_order_id = str(work_order["id"])
+            db.add(assignment)
+            db.commit()
+        if assignment.resco_work_order_schedule_id:
+            client.update_work_order_schedule(assignment, resource_id)
+        else:
             schedule = client.create_work_order_schedule(
                 assignment, assignment.resco_work_order_id, resource_id
             )
@@ -499,3 +580,83 @@ def sync_assignment(db: Session, assignment: Assignment) -> AssignmentRescoSyncR
         return AssignmentRescoSyncResult(status="failed", detail=str(exc))
 
     return AssignmentRescoSyncResult(status="synced")
+
+
+def _is_resco_status_completed(statecode: int | None) -> bool:
+    return statecode == 1
+
+
+def _retry_draft_resets(db: Session, client: RescoClient, summary: RescoStatusSyncSummary) -> None:
+    for reset in db.query(RescoDraftReset).filter(RescoDraftReset.status == "pending").all():
+        try:
+            data = client.get_work_order_status(reset.work_order_id)
+            codes = (data.get("statecode"), data.get("statuscode"))
+            if any(type(code) is not int for code in codes):
+                raise RescoApiError("Work Order response missing numeric state/status")
+            if codes == (0, 1):
+                reset.status = "completed"
+            elif codes != (0, 5) or db.query(Assignment).filter(
+                Assignment.resco_work_order_id == reset.work_order_id
+            ).first() is not None:
+                reset.status = "cancelled"
+                summary.reconciliation_skipped += 1
+                summary.skip_reasons.append(
+                    f"Visit {reset.service_visit_id}: Draft reset cancelled; Work Order progressed or was reassigned"
+                )
+            else:
+                # Conditional updates protect changes made between the fresh read and reset.
+                etag = data.get("@odata.etag")
+                if not etag:
+                    raise RescoApiError("Missing Work Order ETag; Draft reset deferred")
+                client._request("PATCH", f"fs_workorder('{reset.work_order_id}')",
+                                json={"statecode": 0, "statuscode": 1},
+                                headers={"If-Match": etag})
+                reset.status = "completed"
+            reset.last_error = None
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            reset.last_error = str(exc)
+            db.commit()
+            summary.reset_failed += 1
+            summary.errors.append(f"Visit {reset.service_visit_id}: Draft reset failed: {exc}")
+
+
+def sync_assignment_statuses_from_resco(db: Session) -> RescoStatusSyncSummary:
+    summary = RescoStatusSyncSummary()
+    client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
+    for assignment in db.query(Assignment).all():
+        visit_id = assignment.service_visit_id
+        if not assignment.resco_work_order_id:
+            summary.skipped += 1
+            continue
+        try:
+            data = client.get_work_order_status(assignment.resco_work_order_id)
+            statecode, statuscode = data.get("statecode"), data.get("statuscode")
+            if type(statecode) is not int or type(statuscode) is not int:
+                raise RescoApiError("Work Order response missing numeric state/status")
+            assignment.resco_statecode = statecode
+            assignment.resco_statuscode = statuscode
+            assignment.resco_status = data.get("statuscode@RescoCloud.FormattedValue") or str(statuscode)
+            db.commit()
+            summary.pulled += 1
+            if assignment.planned_start.date() < date.today() and (statecode, statuscode) == (0, 5):
+                reset = RescoDraftReset(
+                    work_order_id=assignment.resco_work_order_id, service_visit_id=visit_id,
+                    schedule_id=assignment.resco_work_order_schedule_id,
+                    planned_start=assignment.planned_start, status="pending",
+                )
+                visit = assignment.service_visit
+                visit.status = VisitStatus.UNASSIGNED
+                visit.unassigned_reason = "Past planned visit still Scheduled in Resco"
+                assignment.pinned = False
+                db.add(reset)
+                db.delete(assignment)
+                db.commit()
+                summary.reconciled += 1
+        except Exception as exc:
+            db.rollback()
+            summary.failed += 1
+            summary.errors.append(f"Visit {visit_id}: {exc}")
+    _retry_draft_resets(db, client, summary)
+    return summary

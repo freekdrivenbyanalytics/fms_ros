@@ -30,6 +30,7 @@ from app.models import (
     CustomerSyncLog,
     Employee,
     Product,
+    RescoDraftReset,
     ServiceVisit,
     contract_line_products,
 )
@@ -81,6 +82,7 @@ def _delete_tripletex_data(client: TripletexClient) -> None:
 
 
 def _delete_local_data(db) -> None:
+    db.query(RescoDraftReset).delete(synchronize_session=False)
     db.query(Assignment).delete(synchronize_session=False)
     db.query(ServiceVisit).delete(synchronize_session=False)
     db.execute(contract_line_products.delete())

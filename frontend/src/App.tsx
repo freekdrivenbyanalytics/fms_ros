@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listAssignments, listEmployees, listServiceVisits, logout } from "./api";
+import { AllVisitsView } from "./components/AllVisitsView";
 import { AssignedVisitList } from "./components/AssignedVisitList";
 import { DayPlanningView } from "./components/DayPlanningView";
 import { EmployeeList } from "./components/EmployeeList";
@@ -13,12 +14,13 @@ async function handleLogout() {
   window.location.href = "/login.html";
 }
 
-type View = "assign" | "planning" | "optimize";
+type View = "assign" | "planning" | "optimize" | "history";
 
 const VIEW_TITLES: Record<View, string> = {
   assign: "Manual Assignment",
   planning: "Day Planning",
   optimize: "Optimize",
+  history: "All Visits",
 };
 
 function toIsoDate(d: Date): string {
@@ -122,7 +124,18 @@ function App() {
   }
 
   const unassignedVisits = visits.filter((visit) => visit.status === "unassigned");
-  const assignedVisits = visits.filter((visit) => visit.status === "assigned");
+  const today = new Date().toLocaleDateString("sv-SE");
+  const assignmentsByVisit = new Map(assignments.map((a) => [a.service_visit_id, a]));
+  const assignedVisits = visits.filter((visit) => visit.status === "assigned" &&
+    !(visit.requested_date < today && assignmentsByVisit.get(visit.id)?.resco_statecode === 1));
+
+  async function refreshPlanningData() {
+    const [nextAssignments, nextVisits] = await Promise.all([
+      listAssignments(), listServiceVisits({ endDate: visitsEndDate }),
+    ]);
+    setAssignments(nextAssignments);
+    setVisits(nextVisits);
+  }
 
   if (authLoading || loading) {
     return <div className="p-8 text-slate-500">Loading…</div>;
@@ -137,6 +150,10 @@ function App() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-semibold text-slate-900">{VIEW_TITLES[view]}</h1>
         <nav className="flex gap-2">
+          <button type="button" onClick={() => setView("history")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === "history" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>
+            All Visits
+          </button>
           <button
             type="button"
             onClick={() => setView("assign")}
@@ -242,6 +259,7 @@ function App() {
           </div>
         </>
       )}
+      {view === "history" && <AllVisitsView onChanged={refreshPlanningData} />}
       {view === "planning" && (
         <DayPlanningView employees={employees} assignments={assignments} />
       )}

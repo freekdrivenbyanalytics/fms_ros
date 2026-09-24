@@ -157,6 +157,8 @@ class CustomerOut(BaseModel):
     bank_account_presentation: list | None = None
     tripletex_id: int | None = None
     resco_account_id: str | None = None
+    resco_contact_id: str | None = None
+    contact_name: str | None = None
     # Transient - only set on the specific create/update response that just
     # attempted a Tripletex/Resco push and had it (partly) fail. Never
     # persisted, never present on a plain GET.
@@ -181,6 +183,7 @@ class CustomerLocationOut(BaseModel):
     coordinates_locked: bool = False
     tripletex_id: int | None = None
     resco_asset_id: str | None = None
+    resco_functional_location_id: str | None = None
     sync_warning: str | None = None
     customer: CustomerOut
     region: RegionOut | None = None
@@ -194,10 +197,17 @@ class CustomerLocationCoordinatesUpdate(BaseModel):
 
 class CustomerCreate(BaseModel):
     name: str
+    contact_name: str | None = None
+    email: str | None = None
+    phone_number: str | None = None
+    phone_number_mobile: str | None = None
+    organization_number: str | None = None
 
 
 class CustomerUpdate(BaseModel):
     name: str
+    contact_name: str | None = None
+    phone_number_mobile: str | None = None
     email: str | None = None
     phone_number: str | None = None
     organization_number: str | None = None
@@ -458,6 +468,7 @@ class ServiceVisitOut(BaseModel):
     id: int
     requested_date: date
     status: VisitStatus
+    unassigned_reason: str | None = None
     contract_line: ContractLineOut
     required_skills: list[SkillOut] = []
 
@@ -500,6 +511,11 @@ class AssignmentOut(BaseModel):
     employee: EmployeeOut
     service_visit: ServiceVisitOut
     resco_sync: AssignmentRescoSyncResult | None = None
+    resco_work_order_id: str | None = None
+    resco_work_order_schedule_id: str | None = None
+    resco_status: str | None = None
+    resco_statecode: int | None = None
+    resco_statuscode: int | None = None
 
     @model_validator(mode="after")
     def _lock_if_started(self) -> "AssignmentOut":
@@ -644,3 +660,14 @@ class CustomerDashboardOut(BaseModel):
     customer_locations: list[CustomerLocationOut]
     contracts: list[ContractOut]
     upcoming_visits: list[ServiceVisitOut]
+
+
+class RescoStatusSyncSummary(BaseModel):
+    pulled: int = 0
+    skipped: int = 0
+    failed: int = 0
+    reconciled: int = 0
+    reconciliation_skipped: int = 0
+    reset_failed: int = 0
+    errors: list[str] = []
+    skip_reasons: list[str] = []

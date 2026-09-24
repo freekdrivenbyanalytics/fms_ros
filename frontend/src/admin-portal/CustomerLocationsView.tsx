@@ -481,8 +481,9 @@ function CustomerLocationDetail({
           ? `Synced (Tripletex ID ${location.tripletex_id})`
           : "Not yet synced"}
       </DetailField>
-      <DetailField label="Resco Sync Status">
-        {location.resco_asset_id ? "Synced" : "Not yet synced"}
+      <DetailField label="Resco Functional Location ID"><span className="break-all select-text">{location.resco_functional_location_id ?? "Not yet synced"}</span></DetailField>
+      <DetailField label="Resco Asset ID">
+        <span className="break-all select-text">{location.resco_asset_id ?? "Not yet synced"}</span>
       </DetailField>
     </div>
   );

@@ -168,6 +168,10 @@ interface CreateCustomerFormProps {
 
 function CreateCustomerForm({ onCreated }: CreateCustomerFormProps) {
   const [name, setName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [mobile, setMobile] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,7 +181,7 @@ function CreateCustomerForm({ onCreated }: CreateCustomerFormProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const customer = await createCustomer({ name });
+      const customer = await createCustomer({ name, contact_name: contactName || null, email: email || null, phone_number: phoneNumber || null, phone_number_mobile: mobile || null });
       await onCreated(customer);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create customer");
@@ -201,6 +205,10 @@ function CreateCustomerForm({ onCreated }: CreateCustomerFormProps) {
           required
         />
       </div>
+      <label className="text-xs text-slate-500">Contact name<input value={contactName} onChange={(event) => setContactName(event.target.value)} className="block text-sm border border-slate-300 rounded-md px-2 py-1" /></label>
+      <label className="text-xs text-slate-500">Email<input value={email} onChange={(event) => setEmail(event.target.value)} className="block text-sm border border-slate-300 rounded-md px-2 py-1" /></label>
+      <label className="text-xs text-slate-500">Phone<input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} className="block text-sm border border-slate-300 rounded-md px-2 py-1" /></label>
+      <label className="text-xs text-slate-500">Mobile<input value={mobile} onChange={(event) => setMobile(event.target.value)} className="block text-sm border border-slate-300 rounded-md px-2 py-1" /></label>
       <button
         type="submit"
         disabled={submitting}
@@ -229,6 +237,8 @@ function CustomerDetail({
   onBack,
 }: CustomerDetailProps) {
   const [name, setName] = useState(customer.name);
+  const [contactName, setContactName] = useState(customer.contact_name ?? "");
+  const [mobile, setMobile] = useState(customer.phone_number_mobile ?? "");
   const [email, setEmail] = useState(customer.email ?? "");
   const [phoneNumber, setPhoneNumber] = useState(customer.phone_number ?? "");
   const [organizationNumber, setOrganizationNumber] = useState(
@@ -247,6 +257,8 @@ function CustomerDetail({
     try {
       const updated = await updateCustomer(customer.id, {
         name,
+        contact_name: contactName || null,
+        phone_number_mobile: mobile || null,
         email: email || null,
         phone_number: phoneNumber || null,
         organization_number: organizationNumber || null,
@@ -312,6 +324,8 @@ function CustomerDetail({
           className="text-sm border border-slate-300 rounded-md px-2 py-1"
         />
       </DetailField>
+      <DetailField label="Contact name"><input value={contactName} onChange={(event) => { setContactName(event.target.value); setDirty(true); }} className="text-sm border border-slate-300 rounded-md px-2 py-1" /></DetailField>
+      <DetailField label="Mobile"><input value={mobile} onChange={(event) => { setMobile(event.target.value); setDirty(true); }} className="text-sm border border-slate-300 rounded-md px-2 py-1" /></DetailField>
       <DetailField label="Email">
         <input
           type="text"
@@ -350,8 +364,9 @@ function CustomerDetail({
           ? `Synced (Tripletex ID ${customer.tripletex_id})`
           : "Not yet synced"}
       </DetailField>
-      <DetailField label="Resco Sync Status">
-        {customer.resco_account_id ? "Synced" : "Not yet synced"}
+      <DetailField label="Resco Contact ID"><span className="break-all select-text">{customer.resco_contact_id ?? "Not yet synced"}</span></DetailField>
+      <DetailField label="Resco Account ID">
+        <span className="break-all select-text">{customer.resco_account_id ?? "Not yet synced"}</span>
       </DetailField>
     </div>
   );

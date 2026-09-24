@@ -143,11 +143,11 @@ export function DayPlanningView({ employees, assignments }: Props) {
                           <InfoBox
                             summary={
                               <div className="truncate font-medium text-sky-900">
-                                {location.customer.name}
+                                {location.customer.name}{assignment.resco_status && <span className="ml-1 text-xs">({assignment.resco_status})</span>}
                               </div>
                             }
                           >
-                            <div>{location.customer.name}</div>
+                            <div>{location.customer.name}{assignment.resco_status && <span className="ml-1 text-xs">({assignment.resco_status})</span>}</div>
                             <div>{location.address}</div>
                             <div>{location.region?.name ?? "No region"}</div>
                             <div className="flex flex-wrap gap-1 mt-1">

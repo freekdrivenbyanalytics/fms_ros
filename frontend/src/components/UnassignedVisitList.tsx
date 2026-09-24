@@ -134,6 +134,7 @@ function VisitRow({ visit, employees, onAssigned }: RowProps) {
                   </span>
                 ))}
               </div>
+              {visit.unassigned_reason && <p className="text-xs text-amber-700">{visit.unassigned_reason}</p>}
               <div className="text-xs text-slate-500 mt-1">
                 {visit.contract_line.duration_minutes} min · requested {visit.requested_date}
               </div>

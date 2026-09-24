@@ -1,61 +1,21 @@
-# resco-integration Specification
+# Spec Delta
 
-## Purpose
+## MODIFIED Requirements
 
-Keeps Resco (the field service mobile CRM technicians log into) aware of fms_ros's employees, by pushing each one to Resco as a User, so a technician added or updated in fms_ros doesn't need to be entered separately in Resco.
+### Requirement: Assignments are synced to Resco as Work Orders
+The system SHALL let assignment data be pushed to Resco by creating or updating a corresponding Work Order record in Resco, sending that assignment's planned start and end time, the assigned employee (as the Work Order's resource, via that employee's remembered Resco User ID), the visit's customer location (as the Work Order's linked asset, via that location's remembered Resco Asset ID), and the visit's parent customer (as the Work Order's required customer reference, via Customer.resco_account_id). The Work Order's name SHALL identify both the customer and the customer location ("Customer name: address | Visit <service_visit_id>"), so different locations and repeated visits are distinguishable. The visit suffix SHALL be retained within the 160-character name limit; names SHALL NOT be used as identity keys. A newly created Work Order SHALL end up in a scheduled state in Resco, not left in an incomplete/draft state, once its required fields and schedule are both present.
 
-## Requirements
+#### Scenario: A new assignment is created as a Work Order in Resco
+- **WHEN** an assignment with no remembered Resco Work Order ID is synced
+- **THEN** the system creates a new Work Order in Resco with that assignment's planned start and end time, resource, linked asset, and customer, and remembers the returned Resco Work Order ID against that assignment
 
-### Requirement: Employees are synced to Resco as Users
-The system SHALL let employee data be pushed to Resco by creating or updating a corresponding User record in Resco, sending that employee's first name, last name, email, and mobile phone.
+#### Scenario: A reassigned assignment's Work Order in Resco is updated
+- **WHEN** an assignment with a remembered Resco Work Order ID is synced after its employee or planned time has changed
+- **THEN** the system updates that Resco Work Order's resource and/or planned start and end time rather than creating a new one
 
-#### Scenario: A new employee is created as a User in Resco
-- **WHEN** an employee with no remembered Resco User ID is synced
-- **THEN** the system creates a new User in Resco with that employee's first name, last name, email, and mobile phone, and remembers the returned Resco User ID against that employee
-
-#### Scenario: An existing employee's User in Resco is updated
-- **WHEN** an employee with a remembered Resco User ID is synced
-- **THEN** the system updates that Resco User's first name, last name, email, and mobile phone rather than creating a new one
-
-### Requirement: An employee missing a field Resco requires is skipped, not failed
-The system SHALL require an email and a mobile phone number to sync an employee to Resco. An employee missing either SHALL be skipped for that sync, reported as skipped, and SHALL NOT prevent other employees in the same sync from being processed.
-
-#### Scenario: An employee missing email or mobile phone is skipped
-- **WHEN** a sync processes an employee with no email, no mobile phone, or neither
-- **THEN** the system does not call Resco for that employee, reports it as skipped, and continues processing the remaining employees
-
-#### Scenario: One employee's Resco failure does not block others
-- **WHEN** a sync processes multiple employees and Resco returns an error for one of them
-- **THEN** the system reports that employee as failed and still attempts every other employee in the sync
-
-### Requirement: Employees sync to Resco automatically on create and update
-The system SHALL attempt to sync an employee to Resco immediately after that employee is created or updated. A failure of this automatic sync (Resco unreachable, an error response, or a missing required field) SHALL NOT fail or roll back the employee create or update itself.
-
-#### Scenario: Creating an employee triggers a sync attempt
-- **WHEN** a user creates an employee
-- **THEN** the system attempts to sync that employee to Resco after the employee is persisted, and the employee is persisted regardless of whether that sync attempt succeeds
-
-#### Scenario: Updating an employee triggers a sync attempt
-- **WHEN** a user updates an employee
-- **THEN** the system attempts to sync that employee to Resco after the update is persisted, and the update is persisted regardless of whether that sync attempt succeeds
-
-### Requirement: A user can manually trigger syncing all employees
-The system SHALL let a user trigger a sync of every non-deleted employee to Resco on demand, returning a summary of how many were created, updated, skipped, and failed.
-
-#### Scenario: Manually syncing all employees
-- **WHEN** a user triggers a manual sync
-- **THEN** the system attempts to sync every non-deleted employee to Resco and returns a summary counting how many were created, updated, skipped (missing required fields), and failed (a Resco error)
-
-### Requirement: Customers are synced to Resco as Accounts
-The system SHALL let customer data be pushed to Resco by creating or updating a corresponding Account record in Resco, sending that customer's name, email, phone, organization/VAT number, and address. Each portal customer SHALL map to one Account, named after the customer, regardless of its number of locations. Contact-person name and mobile SHALL also be synced when present, with exact Resco mappings verified before implementation. Changes and explicit clears SHALL update that same Account using Customer.resco_account_id. Customer updates SHALL NOT replace location-specific functional-location addresses or coordinates.
-
-#### Scenario: A new customer is created as an Account in Resco
-- **WHEN** a customer with no remembered Resco Account ID is synced
-- **THEN** the system creates a new Account in Resco with that customer's name, email, phone, organization number, and address, and remembers the returned Resco Account ID against that customer
-
-#### Scenario: An existing customer's Account in Resco is updated
-- **WHEN** a customer with a remembered Resco Account ID is synced
-- **THEN** the system updates that Resco Account's name, email, phone, organization number, and address rather than creating a new one
+#### Scenario: A newly synced Work Order is scheduled, not draft
+- **WHEN** an assignment is synced to Resco for the first time, creating its Work Order and schedule
+- **THEN** the resulting Work Order does not remain in an incomplete/draft state in Resco - it has every field Resco requires to be considered scheduled
 
 ### Requirement: Customer locations are synced to Resco as Assets
 The system SHALL let customer location data be pushed to Resco by creating or updating a corresponding Asset record in Resco, using exactly the same name as its Resco functional location and linking it to both that functional location and its parent customer's Resco Account. The functional location SHALL be synced first; each portal location SHALL have its own Asset, reused on subsequent syncs. Both names SHALL use the portal location's address, the existing location display name.
@@ -106,43 +66,6 @@ The system SHALL let a user trigger a sync of every non-deleted customer to Resc
 - **WHEN** a user triggers a manual customer location sync to Resco
 - **THEN** the system attempts to sync every non-deleted customer location to Resco and returns a summary counting how many were created, updated, skipped (customer not yet synced, or the location has no street address), and failed
 
-### Requirement: Products are synced to Resco
-The system SHALL let product data be pushed to Resco by creating or updating a corresponding Product record in Resco, sending that product's name and product number.
-
-#### Scenario: A new product is created in Resco
-- **WHEN** a product with no remembered Resco Product ID is synced
-- **THEN** the system creates a new Product in Resco with that product's name and number, and remembers the returned Resco Product ID against that product
-
-#### Scenario: An existing product's Resco record is updated
-- **WHEN** a product with a remembered Resco Product ID is synced
-- **THEN** the system updates that Resco Product's name and number rather than creating a new one
-
-### Requirement: Products sync to Resco on create and update
-The system SHALL attempt to sync a product to Resco immediately after that product is created or updated in fms_ros. A failure of this automatic sync SHALL NOT fail or roll back the product create or update itself.
-
-#### Scenario: Creating a product triggers a sync attempt
-- **WHEN** a user creates a product in fms_ros
-- **THEN** the system attempts to sync that product to Resco after it is persisted, and the product is persisted regardless of whether that sync attempt succeeds
-
-#### Scenario: Updating a product triggers a sync attempt
-- **WHEN** a user updates a product in fms_ros
-- **THEN** the system attempts to sync that product to Resco after the update is persisted, and the update is persisted regardless of whether that sync attempt succeeds
-
-### Requirement: Assignments are synced to Resco as Work Orders
-The system SHALL let assignment data be pushed to Resco by creating or updating a corresponding Work Order record in Resco, sending that assignment's planned start and end time, the assigned employee (as the Work Order's resource, via that employee's remembered Resco User ID), the visit's customer location (as the Work Order's linked asset, via that location's remembered Resco Asset ID), and the visit's parent customer (as the Work Order's required customer reference, via Customer.resco_account_id). The Work Order's name SHALL identify both the customer and the customer location ("Customer name: address | Visit <service_visit_id>"), so different locations and repeated visits are distinguishable. The visit suffix SHALL be retained within the 160-character name limit; names SHALL NOT be used as identity keys. A newly created Work Order SHALL end up in a scheduled state in Resco, not left in an incomplete/draft state, once its required fields and schedule are both present.
-
-#### Scenario: A new assignment is created as a Work Order in Resco
-- **WHEN** an assignment with no remembered Resco Work Order ID is synced
-- **THEN** the system creates a new Work Order in Resco with that assignment's planned start and end time, resource, linked asset, and customer, and remembers the returned Resco Work Order ID against that assignment
-
-#### Scenario: A reassigned assignment's Work Order in Resco is updated
-- **WHEN** an assignment with a remembered Resco Work Order ID is synced after its employee or planned time has changed
-- **THEN** the system updates that Resco Work Order's resource and/or planned start and end time rather than creating a new one
-
-#### Scenario: A newly synced Work Order is scheduled, not draft
-- **WHEN** an assignment is synced to Resco for the first time, creating its Work Order and schedule
-- **THEN** the resulting Work Order does not remain in an incomplete/draft state in Resco - it has every field Resco requires to be considered scheduled
-
 ### Requirement: An assignment whose employee or location isn't yet synced to Resco is skipped, not failed
 The system SHALL require the assignment's employee to have a remembered Resco User ID and the visit's customer location to have both a remembered Resco functional location ID and a remembered Resco Asset ID, with its parent customer having a remembered Resco Account ID to sync an assignment to Resco. An assignment missing either SHALL be skipped for that sync, reported as skipped, and SHALL NOT prevent the assignment itself from being created, or other assignments in the same batch from being synced.
 
@@ -158,16 +81,18 @@ The system SHALL require the assignment's employee to have a remembered Resco Us
 - **WHEN** applying a proposed schedule creates or updates multiple assignments and Resco returns an error for one of them
 - **THEN** the system reports that assignment's sync as failed and still attempts every other assignment's sync in the same apply
 
-### Requirement: Assignments sync to Resco automatically when scheduled or rescheduled
-The system SHALL attempt to sync an assignment to Resco immediately after it is created or has its employee or planned time changed, whether that happens through manually assigning a visit or through applying a proposed schedule. A failure of this automatic sync (Resco unreachable, an error response, or a missing required dependency) SHALL NOT fail or roll back the assignment create or update itself.
+### Requirement: Customers are synced to Resco as Accounts
+The system SHALL let customer data be pushed to Resco by creating or updating a corresponding Account record in Resco, sending that customer's name, email, phone, organization/VAT number, and address. Each portal customer SHALL map to one Account, named after the customer, regardless of its number of locations. Contact-person name and mobile SHALL also be synced when present, with exact Resco mappings verified before implementation. Changes and explicit clears SHALL update that same Account using Customer.resco_account_id. Customer updates SHALL NOT replace location-specific functional-location addresses or coordinates.
 
-#### Scenario: Manually assigning a visit triggers a sync attempt
-- **WHEN** a user manually assigns a visit to an employee
-- **THEN** the system attempts to sync that assignment to Resco after it is persisted, and the assignment is persisted regardless of whether that sync attempt succeeds
+#### Scenario: A new customer is created as an Account in Resco
+- **WHEN** a customer with no remembered Resco Account ID is synced
+- **THEN** the system creates a new Account in Resco with that customer's name, email, phone, organization number, and address, and remembers the returned Resco Account ID against that customer
 
-#### Scenario: Applying a proposed schedule triggers a sync attempt per assignment
-- **WHEN** a user applies a proposed schedule
-- **THEN** the system attempts to sync each assignment it creates or reassigns to Resco, and the apply's own result is unaffected by whether any of those sync attempts succeed
+#### Scenario: An existing customer's Account in Resco is updated
+- **WHEN** a customer with a remembered Resco Account ID is synced
+- **THEN** the system updates that Resco Account's name, email, phone, organization number, and address rather than creating a new one
+
+## ADDED Requirements
 
 
 
@@ -205,6 +130,11 @@ The system SHALL attempt to reset the existing Work Order to Draft (statecode 0,
 - **WHEN** a user manually unassigns a visit outside overdue reconciliation
 - **THEN** this change does not trigger a remote status reset
 
+
+
+
+
+
 ### Requirement: Customer locations are synced to Resco as functional locations
 The system SHALL create or update one Resco functional location per portal customer-location, named using the location's address (its existing portal display name), sending its address fields and optional latitude/longitude. It SHALL remember the returned technical ID on CustomerLocation.resco_functional_location_id and reuse it for updates. Each functional location SHALL have one portal-managed Asset with exactly the same name, linked through resco_functionallocationid_resco_functionallocation and to the parent customer Account through customerid_account. A location SHALL NOT create its own Resco Account. Equal names SHALL NOT merge distinct portal locations; remembered technical IDs determine identity.
 
@@ -241,3 +171,11 @@ The system SHALL update the parent customer's single Resco Account with name, or
 #### Scenario: Contact information changes for a customer with multiple locations
 - **WHEN** a customer contact value changes or is cleared
 - **THEN** sync updates the same parent Account, all location Assets retain that Account link, and each functional location keeps its own address and coordinates
+
+## REMOVED Requirements
+
+
+
+### Requirement: Unassigning a visit does not affect its Resco Work Order
+**Reason**: The user requests a Draft reset for past Work Orders that is currently Scheduled.
+**Migration**: Apply the narrowly scoped reconciliation reset below; ordinary manual unassignment retains its existing behavior.

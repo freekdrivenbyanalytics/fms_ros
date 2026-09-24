@@ -40,6 +40,7 @@ import type {
   RegionCreateInput,
   RegionUpdateInput,
   RescoSyncSummary,
+  RescoStatusSyncSummary,
   ServiceOrderType,
   ServiceOrderTypeCreateInput,
   ServiceOrderTypeUpdateInput,
@@ -655,4 +656,9 @@ export function getCustomerDashboard(customerId: number): Promise<CustomerDashbo
   return apiFetch(`${API_URL}/customers/${customerId}/dashboard`).then((res) =>
     handleResponse<CustomerDashboard>(res)
   );
+}
+
+export function syncAssignmentStatuses(): Promise<RescoStatusSyncSummary> {
+  return apiFetch(`${API_URL}/assignments/sync-resco-status`, { method: "POST" })
+    .then((res) => handleResponse<RescoStatusSyncSummary>(res));
 }

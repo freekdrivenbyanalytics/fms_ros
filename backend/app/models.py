@@ -287,6 +287,8 @@ class Customer(Base):
 
     tripletex_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     resco_account_id: Mapped[str | None] = mapped_column(String)
+    resco_contact_id: Mapped[str | None] = mapped_column(String)
+    contact_name: Mapped[str | None] = mapped_column(String)
 
     locations: Mapped[list["CustomerLocation"]] = relationship(
         back_populates="customer"
@@ -357,6 +359,7 @@ class CustomerLocation(Base):
     )
     tripletex_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     resco_asset_id: Mapped[str | None] = mapped_column(String)
+    resco_functional_location_id: Mapped[str | None] = mapped_column(String)
 
     customer: Mapped["Customer"] = relationship(back_populates="locations")
     region: Mapped["Region | None"] = relationship(back_populates="customer_locations")
@@ -549,10 +552,23 @@ class ServiceVisit(Base):
         server_default=VisitStatus.UNASSIGNED.value,
     )
 
+    unassigned_reason: Mapped[str | None] = mapped_column(String)
+
     contract_line: Mapped["ContractLine"] = relationship(back_populates="service_visits")
     assignment: Mapped["Assignment | None"] = relationship(
         back_populates="service_visit", uselist=False
     )
+
+
+class RescoDraftReset(Base):
+    __tablename__ = "resco_draft_resets"
+
+    work_order_id: Mapped[str] = mapped_column(String, primary_key=True)
+    service_visit_id: Mapped[int] = mapped_column(ForeignKey("service_visits.id"), nullable=False)
+    schedule_id: Mapped[str | None] = mapped_column(String)
+    planned_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    last_error: Mapped[str | None] = mapped_column(String)
 
 
 class Assignment(Base):
@@ -569,6 +585,9 @@ class Assignment(Base):
     )
     resco_work_order_id: Mapped[str | None] = mapped_column(String)
     resco_work_order_schedule_id: Mapped[str | None] = mapped_column(String)
+    resco_status: Mapped[str | None] = mapped_column(String)
+    resco_statecode: Mapped[int | None] = mapped_column(Integer)
+    resco_statuscode: Mapped[int | None] = mapped_column(Integer)
 
     service_visit: Mapped["ServiceVisit"] = relationship(back_populates="assignment")
     employee: Mapped["Employee"] = relationship(back_populates="assignments")

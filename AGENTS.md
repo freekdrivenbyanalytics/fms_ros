@@ -20,8 +20,9 @@ into `openspec/specs/`). Slash commands live in `.claude/commands/opsx/` (`/opsx
 - Look up behavior first: `openspec list --specs`, `openspec show <capability> --type spec`.
 - History and rationale: `ls openspec/changes/archive` (~45 archived changes, dated). Read the relevant `design.md` before
   redesigning anything - most "why is it like this" questions are answered there.
-- **Active change**: `openspec/changes/add-resco-work-order-status-tracking/` (proposal/specs/design/tasks written, **not yet
-  implemented** - nothing in the code reflects it). Start with its `design.md`.
+- **Resco status tracking**: archived at `openspec/changes/archive/2026-09-23-add-resco-work-order-status-tracking/`.
+  Implementation is present; five verification tasks remain unchecked in its `tasks.md`. Read its `design.md` for the
+  current-status-only decision and durable Draft-reset retries. No active change remains after this archive.
 - Validate before archiving: `openspec validate <change> --strict`, and `openspec validate --specs` for main specs.
 - Delta-spec rules that bite (all learned the hard way):
   - A `MODIFIED` requirement replaces the whole block: its header text must match the main spec **exactly**, and it must
@@ -70,7 +71,7 @@ and apply. Entity list: `backend/app/models.py` (single file, ~25 tables). Note 
   `ad_hoc_visits.py` (free-slot search, 14-day horizon, 15-min steps), `employee_schedule.py` (template/override resolution),
   `tomtom_routing.py`, `geocoding.py`, `geofencing.py` (point-in-polygon region assignment), `solver_partitioning.py`
   (region grouping by shared employees), `demo_schedule_refresh.py`, `reset_demo_data.py`, `seed.py`, `demo_data/*.csv`.
-- `alembic/versions/00NN_*.py` - hand-numbered linear migrations (`revision = "0025"`, `down_revision = "0024"`); DB head is `0025`.
+- `alembic/versions/00NN_*.py` - hand-numbered linear migrations; DB head is `0027` (durable Resco Draft-reset context).
 - `scripts/` - one-off, manually run, **not** part of startup/seed (`seed_admin_user`, Tripletex contact seeding, skill assignment).
 
 ### Solver layout (`solver/app/`)
@@ -140,11 +141,11 @@ user's customers), `employee-management.html`, `login.html`. Navigation between 
   (`_default_time_limit_seconds`, cap 90s); solver `unimproved_spent_limit` = `max(5, budget // 3)`. Constraint construction
   heuristic throughput, not local search, is the bottleneck at ~150 visits (see `improve-multi-day-solve-quality/design.md`).
 - **Pinned/locked assignments**: pinned, or already started, assignments are fixed facts for the solver; everything else is a
-  candidate. (`assignments` spec; the active change carves out one exception.)
+  candidate. See the `assignments` spec for the past-Scheduled reconciliation exception.
 - **Resco Work Order = two records**: `fs_workorder` (name, customer, asset) + child `fs_workorderschedule` (start/end/resource),
   employee's `fs_resource` looked up by `__targetid_id`. `Assignment` stores both Resco ids. Resco pushes are triggered inline
-  after the write; this codebase never deletes anything in Resco. See `add-resco-visit-sync/design.md` and, for known gaps
-  (missing customer field, Draft status, no status read-back, no coordinates), the active change.
+  after the write; this codebase never deletes anything in Resco. Functional-location/Asset mapping, customer contacts,
+  status reads and conditional Draft resets are documented in the archived status-tracking change above.
 - **Driving times**: per-region TomTom matrix persisted in `driving_times` (`origin/destination` are `(kind, id)` pairs, not FKs);
   missing pairs fall back to a Haversine estimate at 40 km/h in the solver, so travel is never free.
 - **Demo data**: `reset_demo_data.py --confirm` (destructive, wipes local *and* Tripletex customers) and
@@ -218,6 +219,6 @@ where possible (see `0025` for a data-preserving example), run `alembic upgrade 
 - Solver on Windows with `--workers N` can occasionally lose one worker to `WinError 10022` at startup; uvicorn respawns it (see `solver/README.md`).
 - `main.py` and `models.py` are single large files; `GET /assignments` and `/service-visits` return unbounded lists (the board
   filters client-side), and Nominatim geocoding is sequential at 1 req/s, so bulk location creation is slow.
-- Assignments completed in the field are invisible to this system today (no `Assignment` status, no Resco read-back); the
-  Manual Assignment board grows indefinitely until the active change lands.
+- Resco status refresh is on demand; there is no background polling. Audit API errors do not block current-status sync.
+  Remaining live visual verification is recorded in the archived status-tracking tasks.
 - The frontend duplicates backend types by hand and has no test coverage; response-shape changes are easy to miss in `types.ts`.

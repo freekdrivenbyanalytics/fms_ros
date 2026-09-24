@@ -110,6 +110,7 @@ from app.schemas import (
     RegionOut,
     RegionUpdate,
     RescoSyncSummary,
+    RescoStatusSyncSummary,
     ServiceOrderTypeCreate,
     ServiceOrderTypeOut,
     ServiceOrderTypeUpdate,
@@ -133,6 +134,7 @@ from app.resco import (
     sync_customer,
     sync_customer_location,
     sync_customer_locations_to_resco,
+    sync_assignment_statuses_from_resco,
     sync_customers_to_resco,
     sync_employee,
     sync_product,
@@ -919,7 +921,7 @@ def sync_customers_to_resco_endpoint(db: Session = Depends(get_db)) -> RescoSync
 
 @app.post("/customers", response_model=CustomerOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
-    customer = Customer(name=payload.name)
+    customer = Customer(**payload.model_dump())
     db.add(customer)
     db.commit()
     db.refresh(customer)
@@ -935,7 +937,9 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> C
         failed_systems.append("Tripletex")
 
     try:
-        sync_customer(db, customer)
+        result = sync_customer(db, customer)
+        if result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
         failed_systems.append("Resco")
@@ -953,6 +957,10 @@ def update_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
 
     customer.name = payload.name
+    if "contact_name" in payload.model_fields_set:
+        customer.contact_name = payload.contact_name
+    if "phone_number_mobile" in payload.model_fields_set:
+        customer.phone_number_mobile = payload.phone_number_mobile
     customer.email = payload.email
     customer.phone_number = payload.phone_number
     customer.organization_number = payload.organization_number
@@ -977,7 +985,9 @@ def update_customer(
             failed_systems.append("Tripletex")
 
     try:
-        sync_customer(db, customer)
+        result = sync_customer(db, customer)
+        if result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning("Resco sync failed for customer %s", customer.id, exc_info=True)
         failed_systems.append("Resco")
@@ -1091,7 +1101,9 @@ def create_customer_location(
         failed_systems.append("Tripletex")
 
     try:
-        sync_customer_location(db, location)
+        result = sync_customer_location(db, location)
+        if result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning(
             "Resco sync failed for customer location %s", location.id, exc_info=True
@@ -1144,7 +1156,9 @@ def update_customer_location(
             failed_systems.append("Tripletex")
 
     try:
-        sync_customer_location(db, location)
+        result = sync_customer_location(db, location)
+        if result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning(
             "Resco sync failed for customer location %s", location.id, exc_info=True
@@ -1662,6 +1676,7 @@ def _assign_visit(
         planned_start=planned_start,
         planned_end=planned_end,
     )
+    visit.unassigned_reason = None
     visit.status = VisitStatus.ASSIGNED
     db.add(assignment)
     return assignment
@@ -1832,6 +1847,7 @@ def apply_optimization(
         if employee is None:
             raise HTTPException(status_code=404, detail="Employee not found")
 
+        visit.unassigned_reason = None
         assignment.employee_id = employee.id
         assignment.planned_start = item.planned_start
         assignment.planned_end = item.planned_start + timedelta(
@@ -2130,3 +2146,9 @@ def get_customer_dashboard(
         contracts=[_contract_out(contract) for contract in contracts],
         upcoming_visits=[ServiceVisitOut.model_validate(visit) for visit in upcoming_visits],
     )
+
+
+@app.post("/assignments/sync-resco-status", response_model=RescoStatusSyncSummary,
+          dependencies=[Depends(require_admin)])
+def sync_assignment_statuses_endpoint(db: Session = Depends(get_db)) -> RescoStatusSyncSummary:
+    return sync_assignment_statuses_from_resco(db)

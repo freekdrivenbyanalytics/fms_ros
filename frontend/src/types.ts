@@ -124,15 +124,23 @@ export interface Customer {
   bank_account_presentation: unknown[] | null;
   tripletex_id: number | null;
   resco_account_id: string | null;
+  resco_contact_id: string | null;
+  contact_name: string | null;
   sync_warning: string | null;
 }
 
 export interface CustomerCreateInput {
   name: string;
+  contact_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  phone_number_mobile?: string | null;
 }
 
 export interface CustomerUpdateInput {
   name: string;
+  contact_name?: string | null;
+  phone_number_mobile?: string | null;
   email: string | null;
   phone_number: string | null;
   organization_number: string | null;
@@ -152,6 +160,7 @@ export interface CustomerLocation {
   region: Region | null;
   tripletex_id: number | null;
   resco_asset_id: string | null;
+  resco_functional_location_id: string | null;
   sync_warning: string | null;
 }
 
@@ -354,11 +363,17 @@ export interface ServiceVisit {
   id: number;
   requested_date: string;
   status: VisitStatus;
+  unassigned_reason: string | null;
   contract_line: ContractLine;
   required_skills: Skill[];
 }
 
 export interface Assignment {
+  resco_work_order_id: string | null;
+  resco_work_order_schedule_id: string | null;
+  resco_status: string | null;
+  resco_statecode: number | null;
+  resco_statuscode: number | null;
   service_visit_id: number;
   employee_id: number;
   planned_start: string;
@@ -497,4 +512,15 @@ export interface CustomerDashboard {
   customer_locations: CustomerLocation[];
   contracts: Contract[];
   upcoming_visits: ServiceVisit[];
+}
+
+export interface RescoStatusSyncSummary {
+  pulled: number;
+  skipped: number;
+  failed: number;
+  reconciled: number;
+  reconciliation_skipped: number;
+  reset_failed: number;
+  errors: string[];
+  skip_reasons: string[];
 }
