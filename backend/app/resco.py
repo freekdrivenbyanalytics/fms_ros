@@ -294,6 +294,12 @@ class RescoClient:
                              headers={"Prefer": 'odata.include-annotations="*"'})
 
     @staticmethod
+    def _work_order_schedule_name(assignment: Assignment) -> str:
+        suffix = f" | Visit {assignment.service_visit_id}"
+        location = assignment.service_visit.contract_line.customer_location
+        return f"SCH-{location.customer.name}: {location.address}"[:160 - len(suffix)] + suffix
+
+    @staticmethod
     def _work_order_schedule_payload(assignment: Assignment, resource_id: str) -> dict:
         return {
             "scheduledstart": _to_resco_datetime(assignment.planned_start),
@@ -305,6 +311,7 @@ class RescoClient:
         self, assignment: Assignment, work_order_id: str, resource_id: str
     ) -> dict:
         payload = self._work_order_schedule_payload(assignment, resource_id)
+        payload.update(name=self._work_order_schedule_name(assignment), statecode=0, statuscode=1)
         payload["workorderid_fs_workorder@odata.bind"] = f"/fs_workorder({work_order_id})"
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
             response = client.post(
@@ -623,6 +630,14 @@ def _retry_draft_resets(db: Session, client: RescoClient, summary: RescoStatusSy
 
 
 def sync_assignment_statuses_from_resco(db: Session) -> RescoStatusSyncSummary:
+    return _refresh_assignment_statuses(db, reconcile=False)
+
+
+def reconcile_scheduled_assignments_from_resco(db: Session) -> RescoStatusSyncSummary:
+    return _refresh_assignment_statuses(db, reconcile=True)
+
+
+def _refresh_assignment_statuses(db: Session, *, reconcile: bool) -> RescoStatusSyncSummary:
     summary = RescoStatusSyncSummary()
     client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
     for assignment in db.query(Assignment).all():
@@ -640,7 +655,7 @@ def sync_assignment_statuses_from_resco(db: Session) -> RescoStatusSyncSummary:
             assignment.resco_status = data.get("statuscode@RescoCloud.FormattedValue") or str(statuscode)
             db.commit()
             summary.pulled += 1
-            if assignment.planned_start.date() < date.today() and (statecode, statuscode) == (0, 5):
+            if reconcile and assignment.planned_start.date() < date.today() and (statecode, statuscode) == (0, 5):
                 reset = RescoDraftReset(
                     work_order_id=assignment.resco_work_order_id, service_visit_id=visit_id,
                     schedule_id=assignment.resco_work_order_schedule_id,
@@ -658,5 +673,6 @@ def sync_assignment_statuses_from_resco(db: Session) -> RescoStatusSyncSummary:
             db.rollback()
             summary.failed += 1
             summary.errors.append(f"Visit {visit_id}: {exc}")
-    _retry_draft_resets(db, client, summary)
+    if reconcile:
+        _retry_draft_resets(db, client, summary)
     return summary

@@ -135,6 +135,7 @@ from app.resco import (
     sync_customer_location,
     sync_customer_locations_to_resco,
     sync_assignment_statuses_from_resco,
+    reconcile_scheduled_assignments_from_resco,
     sync_customers_to_resco,
     sync_employee,
     sync_product,
@@ -2152,3 +2153,9 @@ def get_customer_dashboard(
           dependencies=[Depends(require_admin)])
 def sync_assignment_statuses_endpoint(db: Session = Depends(get_db)) -> RescoStatusSyncSummary:
     return sync_assignment_statuses_from_resco(db)
+
+
+@app.post("/assignments/reconcile-resco-scheduled", response_model=RescoStatusSyncSummary,
+          dependencies=[Depends(require_admin)])
+def reconcile_scheduled_assignments_endpoint(db: Session = Depends(get_db)) -> RescoStatusSyncSummary:
+    return reconcile_scheduled_assignments_from_resco(db)

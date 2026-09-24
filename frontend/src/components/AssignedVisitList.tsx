@@ -90,6 +90,8 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
   const [error, setError] = useState<string | null>(null);
   const plannedDate = assignment.planned_start.slice(0, 10);
   const rescheduled = plannedDate !== visit.requested_date;
+  const rescoStatus = !assignment.resco_work_order_id ? "Not synced"
+    : assignment.resco_status ? `${assignment.resco_status} (last known)` : "Not yet refreshed";
 
   async function handleUnassign() {
     setBusy(true);
@@ -124,7 +126,7 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
             <div>
               <div className="font-medium text-slate-800 flex items-center gap-2">
                 {visit.contract_line.customer_location.customer.name}
-                {assignment.resco_status && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">{assignment.resco_status}</span>}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">Resco status: {rescoStatus}</span>
                 {assignment.pinned && (
                   <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                     Pinned
@@ -175,6 +177,7 @@ function AssignedVisitCard({ visit, assignment, onUnassigned, onPinChanged }: Ca
               ? `${visit.contract_line.customer_location.latitude.toFixed(4)}, ${visit.contract_line.customer_location.longitude.toFixed(4)}`
               : "Coordinates not yet resolved"}
           </div>
+          <div>Resco status: {rescoStatus}</div>
           <div className="break-all select-text">Resco Work Order ID: {assignment.resco_work_order_id ?? "Not synced"}</div>
           <div className="break-all select-text">Resco Schedule ID: {assignment.resco_work_order_schedule_id ?? "Not synced"}</div>
         </InfoBox>

@@ -662,3 +662,8 @@ export function syncAssignmentStatuses(): Promise<RescoStatusSyncSummary> {
   return apiFetch(`${API_URL}/assignments/sync-resco-status`, { method: "POST" })
     .then((res) => handleResponse<RescoStatusSyncSummary>(res));
 }
+
+export function reconcileScheduledAssignments(): Promise<RescoStatusSyncSummary> {
+  return apiFetch(`${API_URL}/assignments/reconcile-resco-scheduled`, { method: "POST" })
+    .then((res) => handleResponse<RescoStatusSyncSummary>(res));
+}

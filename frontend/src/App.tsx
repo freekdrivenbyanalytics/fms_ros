@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listAssignments, listEmployees, listServiceVisits, logout } from "./api";
 import { AllVisitsView } from "./components/AllVisitsView";
+import { RescoStatusActions } from "./components/RescoStatusActions";
 import { AssignedVisitList } from "./components/AssignedVisitList";
 import { DayPlanningView } from "./components/DayPlanningView";
 import { EmployeeList } from "./components/EmployeeList";
@@ -243,6 +244,7 @@ function App() {
             </button>
             {visitsLoading && <span className="text-xs text-slate-400">Refreshing…</span>}
           </div>
+          <RescoStatusActions onChanged={refreshPlanningData} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             <EmployeeList employees={employees} />
             <UnassignedVisitList

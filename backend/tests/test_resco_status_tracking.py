@@ -84,7 +84,7 @@ def test_work_order_names_remain_unique_with_long_addresses():
     assert p1["customerid_account@odata.bind"] == "/account(account)"
 
 
-def test_status_pull_continues_after_failure_and_unassigns_past_scheduled(monkeypatch):
+def test_reconciliation_continues_after_failure_and_unassigns_past_scheduled(monkeypatch):
     items = [assignment(1), assignment(2), assignment(3), assignment(4, resco_work_order_id=None)]
     client = MagicMock()
     client.get_work_order_status.side_effect = [RuntimeError("offline"),
@@ -93,7 +93,7 @@ def test_status_pull_continues_after_failure_and_unassigns_past_scheduled(monkey
     monkeypatch.setattr(resco, "RescoClient", lambda *args: client)
     db = MagicMock()
     db.query.return_value.all.return_value = items
-    summary = resco.sync_assignment_statuses_from_resco(db)
+    summary = resco.reconcile_scheduled_assignments_from_resco(db)
     assert (summary.pulled, summary.failed, summary.skipped) == (2, 1, 1)
     assert summary.reconciled == 1
     assert items[1].resco_status == "Scheduled" and items[2].resco_status == "Closed"
@@ -236,7 +236,7 @@ def test_reconciliation_uses_planned_day_and_current_status(monkeypatch, days, s
     monkeypatch.setattr(resco, "RescoClient", lambda *args: client)
     db = MagicMock()
     db.query.return_value.all.return_value = [item]
-    summary = resco.sync_assignment_statuses_from_resco(db)
+    summary = resco.reconcile_scheduled_assignments_from_resco(db)
     assert summary.reconciled == expected
     assert db.delete.call_count == expected
     if expected:
@@ -328,7 +328,7 @@ def test_local_unassignment_and_retry_context_survive_remote_failure(monkeypatch
             client.get_work_order_status.return_value = {"statecode": 0, "statuscode": 5, "@odata.etag": 'W/"1"'}
             client._request.side_effect = [RuntimeError("offline"), {}]
             monkeypatch.setattr(resco, "RescoClient", lambda *args: client)
-            summary = resco.sync_assignment_statuses_from_resco(db)
+            summary = resco.reconcile_scheduled_assignments_from_resco(db)
             assert summary.reconciled == 1 and summary.reset_failed == 1
             db.expire_all()
             assert db.get(Assignment, visit_id) is None
@@ -336,10 +336,89 @@ def test_local_unassignment_and_retry_context_survive_remote_failure(monkeypatch
             assert db.get(ServiceVisit, visit_id).unassigned_reason
             reset = db.get(RescoDraftReset, "test-durable-reset")
             assert reset.status == "pending" and reset.schedule_id == "schedule"
-            summary = resco.sync_assignment_statuses_from_resco(db)
+            summary = resco.reconcile_scheduled_assignments_from_resco(db)
             assert summary.reconciled == 0 and summary.reset_failed == 0
             db.expire_all()
             assert db.get(RescoDraftReset, "test-durable-reset").status == "completed"
         finally:
             db.close()
             transaction.rollback()
+
+
+def test_status_only_sync_preserves_past_assignments_and_pending_resets(monkeypatch):
+    items = [assignment(1), assignment(2, resco_status="Working"),
+             assignment(3, resco_work_order_id=None)]
+    client = MagicMock()
+    client.get_work_order_status.side_effect = [
+        {"statecode": 0, "statuscode": 5, "statuscode@RescoCloud.FormattedValue": "Scheduled"},
+        RuntimeError("offline"),
+    ]
+    monkeypatch.setattr(resco, "RescoClient", lambda *args: client)
+    retry = MagicMock()
+    monkeypatch.setattr(resco, "_retry_draft_resets", retry)
+    db = MagicMock()
+    db.query.return_value.all.return_value = items
+    summary = resco.sync_assignment_statuses_from_resco(db)
+    assert (summary.pulled, summary.failed, summary.skipped) == (1, 1, 1)
+    assert summary.reconciled == summary.reset_failed == 0
+    assert items[0].resco_status == "Scheduled" and items[0].pinned
+    assert items[1].resco_status == "Working"
+    db.delete.assert_not_called()
+    db.add.assert_not_called()
+    client._request.assert_not_called()
+    retry.assert_not_called()
+
+
+@pytest.mark.parametrize("month,offset", [(1, "+01:00"), (7, "+02:00")])
+def test_schedule_creation_is_named_planned_and_uses_oslo_offset(monkeypatch, month, offset):
+    item = assignment(planned_start=datetime(2026, month, 15, 14),
+                      planned_end=datetime(2026, month, 15, 15))
+    item.service_visit.contract_line.customer_location.address = "a" * 200
+    transport = MagicMock()
+    transport.__enter__.return_value = transport
+    transport.post.return_value.status_code = 200
+    transport.post.return_value.json.return_value = {"id": "child"}
+    transport.patch.return_value.status_code = 200
+    monkeypatch.setattr(resco.httpx, "Client", lambda **kwargs: transport)
+    client = resco.RescoClient("https://example.invalid", "user", "password")
+    client.create_work_order_schedule(item, "parent", "resource")
+    payload = transport.post.call_args.kwargs["json"]
+    assert payload["statecode"] == 0 and payload["statuscode"] == 1
+    assert len(payload["name"]) == 160 and payload["name"].endswith("Visit 1")
+    assert payload["scheduledstart"].endswith(offset)
+    assert payload["resourceid_fs_resource@odata.bind"] == "/fs_resource(resource)"
+    assert payload["workorderid_fs_workorder@odata.bind"] == "/fs_workorder(parent)"
+    item.resco_work_order_schedule_id = "child"
+    client.update_work_order_schedule(item, "resource")
+    update = transport.patch.call_args.kwargs["json"]
+    assert "statecode" not in update and "statuscode" not in update
+
+
+@pytest.mark.parametrize("path,function_name", [
+    ("/assignments/sync-resco-status", "sync_assignment_statuses_from_resco"),
+    ("/assignments/reconcile-resco-scheduled", "reconcile_scheduled_assignments_from_resco"),
+])
+def test_status_actions_are_separate_admin_only_routes(monkeypatch, path, function_name):
+    from fastapi.testclient import TestClient
+    from app import main
+    from app.auth import get_current_user
+    from app.database import get_db
+
+    operation = MagicMock(return_value=RescoStatusSyncSummary())
+    monkeypatch.setattr(main, function_name, operation)
+    db = MagicMock()
+    previous = main.app.dependency_overrides.copy()
+    try:
+        main.app.dependency_overrides[get_db] = lambda: db
+        with TestClient(main.app) as client:
+            main.app.dependency_overrides[get_current_user] = lambda: None
+            assert client.post(path).status_code == 401
+            main.app.dependency_overrides[get_current_user] = lambda: NS(is_admin=False)
+            assert client.post(path).status_code == 403
+            operation.assert_not_called()
+            main.app.dependency_overrides[get_current_user] = lambda: NS(is_admin=True)
+            assert client.post(path).status_code == 200
+            operation.assert_called_once_with(db)
+    finally:
+        main.app.dependency_overrides.clear()
+        main.app.dependency_overrides.update(previous)
