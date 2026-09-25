@@ -4,6 +4,7 @@ from datetime import date, datetime, time
 from sqlalchemy import (
     Boolean,
     Column,
+    CheckConstraint,
     Computed,
     Date,
     DateTime,
@@ -74,16 +75,64 @@ class Skill(Base):
     )
 
 
+class Task(Base):
+    __tablename__ = "tasks"
+    __table_args__ = (CheckConstraint("estimated_duration_minutes > 0", name="task_duration_positive"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(2000))
+    estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    delete_flag: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    type_links: Mapped[list["ServiceOrderTypeTask"]] = relationship(back_populates="task")
+
+    @property
+    def service_order_types(self):
+        return [link.service_order_type for link in self.type_links
+                if not link.delete_flag and not link.service_order_type.delete_flag]
+
+
 class ServiceOrderType(Base):
     __tablename__ = "service_order_types"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    delete_flag: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
-
+    delete_flag: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    resco_job_template_id: Mapped[str | None] = mapped_column(String)
+    sync_error: Mapped[str | None] = mapped_column(String)
     products: Mapped[list["Product"]] = relationship(back_populates="service_order_type")
+    task_links: Mapped[list["ServiceOrderTypeTask"]] = relationship(
+        back_populates="service_order_type", order_by="ServiceOrderTypeTask.position")
+
+    @property
+    def tasks(self):
+        return [link.task for link in sorted(self.task_links, key=lambda link: link.position)
+                if not link.delete_flag and not link.task.delete_flag]
+
+
+class ServiceOrderTypeTask(Base):
+    __tablename__ = "service_order_type_tasks"
+
+    service_order_type_id: Mapped[int] = mapped_column(
+        ForeignKey("service_order_types.id", ondelete="CASCADE"), primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    delete_flag: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    resco_task_id: Mapped[str | None] = mapped_column(String)
+    service_order_type: Mapped["ServiceOrderType"] = relationship(back_populates="task_links")
+    task: Mapped["Task"] = relationship(back_populates="type_links")
+
+
+class RescoSyncRecord(Base):
+    # No business-row FKs: remote ownership must survive assignment/demo cleanup.
+    __tablename__ = "resco_sync_records"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    entity: Mapped[str] = mapped_column(String, nullable=False)
+    remote_id: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
 
 
 class Region(Base):
@@ -583,6 +632,7 @@ class Assignment(Base):
     pinned: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    resco_sync_token: Mapped[str | None] = mapped_column(String)
     resco_work_order_id: Mapped[str | None] = mapped_column(String)
     resco_work_order_schedule_id: Mapped[str | None] = mapped_column(String)
     resco_status: Mapped[str | None] = mapped_column(String)

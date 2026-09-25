@@ -36,16 +36,37 @@ export interface SkillUpdateInput {
   name: string;
 }
 
+export interface PortalTask {
+  id: number;
+  name: string;
+  description: string | null;
+  estimated_duration_minutes: number | null;
+  service_order_types: { id: number; name: string }[];
+  sync_warning: string | null;
+}
+
+export interface TaskInput {
+  name: string;
+  description: string | null;
+  estimated_duration_minutes: number | null;
+}
+
 export interface ServiceOrderType {
   id: number;
   name: string;
+  tasks: Pick<PortalTask, "id" | "name" | "description" | "estimated_duration_minutes">[];
+  resco_job_template_id: string | null;
+  sync_error: string | null;
+  sync_warning: string | null;
 }
 
 export interface ServiceOrderTypeCreateInput {
+  task_ids?: number[];
   name: string;
 }
 
 export interface ServiceOrderTypeUpdateInput {
+  task_ids?: number[];
   name: string;
 }
 

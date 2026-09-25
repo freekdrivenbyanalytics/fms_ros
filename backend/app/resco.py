@@ -208,15 +208,17 @@ class RescoClient:
         })
 
     @staticmethod
-    def _product_payload(product: Product) -> dict:
-        return {"name": product.name, "productnumber": product.number}
+    def _product_payload(product: Product, setup: tuple[str, str]) -> dict:
+        from app.resco_jobs import pricing
+        return {"name": product.name, "productnumber": product.number,
+                "isservice": product.product_type == "TJN", **pricing(*setup)}
 
-    def create_product(self, product: Product) -> dict:
+    def create_product(self, product: Product, setup: tuple[str, str]) -> dict:
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
             response = client.post(
                 f"{self._base_url}/product",
                 auth=self._auth(),
-                json=self._product_payload(product),
+                json=self._product_payload(product, setup),
             )
         if response.status_code >= 400:
             raise RescoApiError(
@@ -224,12 +226,12 @@ class RescoClient:
             )
         return response.json()
 
-    def update_product(self, product: Product) -> dict:
+    def update_product(self, product: Product, setup: tuple[str, str]) -> dict:
         with httpx.Client(timeout=httpx.Timeout(10.0)) as client:
             response = client.patch(
                 f"{self._base_url}/product('{product.resco_product_id}')",
                 auth=self._auth(),
-                json=self._product_payload(product),
+                json=self._product_payload(product, setup),
             )
         if response.status_code >= 400:
             raise RescoApiError(
@@ -508,13 +510,19 @@ def sync_customer_locations_to_resco(db: Session) -> RescoSyncSummary:
     )
 
 
-def sync_product(db: Session, product: Product) -> ProductRescoSyncResult:
+def sync_product(db: Session, product: Product, *,
+                 setup: tuple[str, str] | None = None) -> ProductRescoSyncResult:
+    from app.resco_jobs import sync_lock, nok_setup
+
     client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
     try:
+        if setup is None:
+            with sync_lock(db):
+                setup = nok_setup(db, client)
         if product.resco_product_id:
-            client.update_product(product)
+            client.update_product(product, setup)
         else:
-            data = client.create_product(product)
+            data = client.create_product(product, setup)
             product.resco_product_id = str(data["id"])
             db.add(product)
             db.commit()
@@ -564,28 +572,53 @@ def sync_assignment(db: Session, assignment: Assignment) -> AssignmentRescoSyncR
             status="skipped", detail="Customer location not yet synced to Resco"
         )
 
+    # Import here because the job synchronizer reuses RescoClient and product sync.
+    from app.resco_jobs import sync_lock, nok_setup, pricing, reserve, ensure, populate_work_order
+    from app.models import RescoSyncRecord
+
     client = RescoClient(settings.resco_base_url, settings.resco_username, settings.resco_password)
     try:
-        resource_id = client.find_resource_id_for_user(employee.resco_user_id)
-        if assignment.resco_work_order_id:
-            client.update_work_order(assignment)
-        else:
-            work_order = client.create_work_order(assignment)
-            assignment.resco_work_order_id = str(work_order["id"])
-            db.add(assignment)
-            db.commit()
-        if assignment.resco_work_order_schedule_id:
-            client.update_work_order_schedule(assignment, resource_id)
-        else:
-            schedule = client.create_work_order_schedule(
-                assignment, assignment.resco_work_order_id, resource_id
-            )
-            assignment.resco_work_order_schedule_id = str(schedule["id"])
-            db.add(assignment)
-            db.commit()
+        with sync_lock(db):
+            db.refresh(assignment)
+            resource_id = client.find_resource_id_for_user(employee.resco_user_id)
+            is_new = not assignment.resco_work_order_id
+            if is_new:
+                setup = nok_setup(db, client)
+                # Allocate ownership before POST; caller IDs recover a lost create response.
+                from uuid import uuid4
+                if not assignment.resco_sync_token:
+                    assignment.resco_sync_token = str(uuid4())
+                    db.commit()
+                parent_key = f"assignment-parent:{assignment.resco_sync_token}"
+                parent = ensure(db, client, parent_key, "fs_workorder", {
+                    **client._work_order_payload(assignment), **pricing(*setup),
+                    "statecode": 0, "statuscode": 5,
+                })
+                assignment.resco_work_order_id = parent.remote_id
+                reserve(db, f"pending-work-order:{parent.remote_id}", "pending", {}, parent.remote_id)
+                db.commit()
+            else:
+                client.update_work_order(assignment)
+            if assignment.resco_work_order_schedule_id:
+                client.update_work_order_schedule(assignment, resource_id)
+            else:
+                schedule = ensure(db, client, f"schedule:{assignment.resco_work_order_id}",
+                                  "fs_workorderschedule", {
+                    **client._work_order_schedule_payload(assignment, resource_id),
+                    "name": client._work_order_schedule_name(assignment),
+                    "workorderid_fs_workorder@odata.bind": f"/fs_workorder({assignment.resco_work_order_id})",
+                    "statecode": 0, "statuscode": 1,
+                })
+                assignment.resco_work_order_schedule_id = schedule.remote_id
+                db.commit()
+                current_schedule = client._work_order_schedule_payload(assignment, resource_id)
+                if any(schedule.payload.get(k) != v for k, v in current_schedule.items()):
+                    client.update_work_order_schedule(assignment, resource_id)
+            if is_new or db.get(RescoSyncRecord, f"pending-work-order:{assignment.resco_work_order_id}"):
+                populate_work_order(db, client, assignment)
     except Exception as exc:
+        db.rollback()
         return AssignmentRescoSyncResult(status="failed", detail=str(exc))
-
     return AssignmentRescoSyncResult(status="synced")
 
 

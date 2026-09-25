@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  listTasks,
   listContracts,
   listCustomerLocations,
   listCustomers,
@@ -15,6 +16,7 @@ import {
 } from "../api";
 import { useRequireRole } from "../shared/auth";
 import type {
+  PortalTask,
   Contract,
   Customer,
   CustomerLocation,
@@ -27,6 +29,7 @@ import type {
   Skill,
   User,
 } from "../types";
+import { TasksView } from "./TasksView";
 import { ContractsView } from "./ContractsView";
 import { CustomerLocationsView } from "./CustomerLocationsView";
 import { CustomersView } from "./CustomersView";
@@ -44,6 +47,7 @@ async function handleLogout() {
 }
 
 type Entity =
+  | "tasks"
   | "regions"
   | "products"
   | "skills"
@@ -56,6 +60,7 @@ type Entity =
   | "demo";
 
 const ENTITY_LABELS: Record<Entity, string> = {
+  tasks: "Tasks",
   regions: "Regions",
   products: "Products",
   skills: "Skills",
@@ -69,6 +74,7 @@ const ENTITY_LABELS: Record<Entity, string> = {
 };
 
 const ENTITY_ORDER: Entity[] = [
+  "tasks",
   "regions",
   "products",
   "skills",
@@ -84,6 +90,7 @@ const ENTITY_ORDER: Entity[] = [
 export function AdminPortalApp() {
   const { loading: authLoading } = useRequireRole("admin");
   const [entity, setEntity] = useState<Entity>("regions");
+  const [tasks, setTasks] = useState<PortalTask[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -100,6 +107,7 @@ export function AdminPortalApp() {
 
   async function reload() {
     const [
+      tasksData,
       regionsData,
       productsData,
       skillsData,
@@ -112,6 +120,7 @@ export function AdminPortalApp() {
       usersData,
       serviceRequestsData,
     ] = await Promise.all([
+      listTasks(),
       listRegions(),
       listProducts(),
       listSkills(),
@@ -124,6 +133,7 @@ export function AdminPortalApp() {
       listUsers(),
       listServiceRequests(),
     ]);
+    setTasks(tasksData);
     setRegions(regionsData);
     setProducts(productsData);
     setSkills(skillsData);
@@ -207,6 +217,7 @@ export function AdminPortalApp() {
         </div>
       </aside>
       <main className="flex-1 p-8">
+        {entity === "tasks" && <TasksView tasks={tasks} onChanged={reload} />}
         {entity === "regions" && (
           <RegionsView
             regions={regions}
@@ -229,6 +240,7 @@ export function AdminPortalApp() {
         )}
         {entity === "service-order-types" && (
           <ServiceOrderTypesView
+            tasks={tasks}
             serviceOrderTypes={serviceOrderTypes}
             products={products}
             onChanged={reload}

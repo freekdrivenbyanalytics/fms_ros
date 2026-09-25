@@ -20,6 +20,7 @@ from app.auth import (
     require_session,
     verify_password,
 )
+from app.resco_jobs import sync_types
 from app.config import settings
 from app.database import get_db
 from app.demo_schedule_refresh import refresh_demo_schedule
@@ -52,6 +53,8 @@ from app.models import (
     Product,
     Region,
     ServiceOrderType,
+    ServiceOrderTypeTask,
+    Task,
     ServiceRequest,
     ServiceRequestStatus,
     ServiceVisit,
@@ -113,6 +116,8 @@ from app.schemas import (
     RescoStatusSyncSummary,
     ServiceOrderTypeCreate,
     ServiceOrderTypeOut,
+    TaskInput,
+    TaskOut,
     ServiceOrderTypeUpdate,
     ServiceRequestCreate,
     ServiceRequestOut,
@@ -139,6 +144,7 @@ from app.resco import (
     sync_customers_to_resco,
     sync_employee,
     sync_product,
+    sync_products_to_resco,
 )
 from app.solver_client import (
     request_parallel_proposals,
@@ -705,43 +711,105 @@ def list_service_order_types(db: Session = Depends(get_db)) -> list[ServiceOrder
     )
 
 
+def _task_links(db: Session, type_: ServiceOrderType, task_ids: list[int]) -> None:
+    if len(task_ids) != len(set(task_ids)):
+        raise HTTPException(422, "Duplicate task IDs")
+    tasks = db.query(Task).filter(Task.id.in_(task_ids), Task.delete_flag.is_(False)).all()
+    if len(tasks) != len(task_ids):
+        raise HTTPException(422, "Task IDs must identify active tasks")
+    links = {link.task_id: link for link in type_.task_links}
+    for link in links.values():
+        link.delete_flag = link.task_id not in task_ids
+    for position, task_id in enumerate(task_ids):
+        if task_id in links:
+            links[task_id].position = position
+        else:
+            type_.task_links.append(ServiceOrderTypeTask(task_id=task_id, position=position))
+
+
+def _sync_type_warning(db: Session, ids: list[int]) -> str | None:
+    result = sync_types(db, ids)
+    return "; ".join(result.errors) or None
+
+
+@app.post("/service-order-types/sync-resco", response_model=RescoSyncSummary, dependencies=[Depends(require_admin)])
+def sync_service_order_types(db: Session = Depends(get_db)):
+    return sync_types(db)
+
+
 @app.post("/service-order-types", response_model=ServiceOrderTypeOut, status_code=201, dependencies=[Depends(require_admin)])
-def create_service_order_type(
-    payload: ServiceOrderTypeCreate, db: Session = Depends(get_db)
-) -> ServiceOrderType:
-    service_order_type = ServiceOrderType(name=payload.name)
-    db.add(service_order_type)
+def create_service_order_type(payload: ServiceOrderTypeCreate, db: Session = Depends(get_db)):
+    type_ = ServiceOrderType(name=payload.name)
+    _task_links(db, type_, payload.task_ids)
+    db.add(type_)
     db.commit()
-    db.refresh(service_order_type)
-    return service_order_type
+    type_.sync_warning = _sync_type_warning(db, [type_.id])
+    return type_
 
 
 @app.patch("/service-order-types/{service_order_type_id}", response_model=ServiceOrderTypeOut, dependencies=[Depends(require_admin)])
-def update_service_order_type(
-    service_order_type_id: int,
-    payload: ServiceOrderTypeUpdate,
-    db: Session = Depends(get_db),
-) -> ServiceOrderType:
-    service_order_type = db.get(ServiceOrderType, service_order_type_id)
-    if service_order_type is None:
-        raise HTTPException(status_code=404, detail="Service order type not found")
-
-    service_order_type.name = payload.name
+def update_service_order_type(service_order_type_id: int, payload: ServiceOrderTypeUpdate,
+                              db: Session = Depends(get_db)):
+    type_ = db.get(ServiceOrderType, service_order_type_id)
+    if type_ is None or type_.delete_flag:
+        raise HTTPException(404, "Service order type not found")
+    if payload.task_ids is not None:
+        _task_links(db, type_, payload.task_ids)
+    type_.name = payload.name
     db.commit()
-    db.refresh(service_order_type)
-    return service_order_type
+    type_.sync_warning = _sync_type_warning(db, [type_.id])
+    return type_
 
 
-@app.delete("/service-order-types/{service_order_type_id}", status_code=204, dependencies=[Depends(require_admin)])
-def delete_service_order_type(
-    service_order_type_id: int, db: Session = Depends(get_db)
-) -> None:
-    service_order_type = db.get(ServiceOrderType, service_order_type_id)
-    if service_order_type is None:
-        raise HTTPException(status_code=404, detail="Service order type not found")
-
-    service_order_type.delete_flag = True
+@app.delete("/service-order-types/{service_order_type_id}", response_model=ServiceOrderTypeOut, dependencies=[Depends(require_admin)])
+def delete_service_order_type(service_order_type_id: int, db: Session = Depends(get_db)):
+    type_ = db.get(ServiceOrderType, service_order_type_id)
+    if type_ is None or type_.delete_flag:
+        raise HTTPException(404, "Service order type not found")
+    type_.delete_flag = True
     db.commit()
+    type_.sync_warning = _sync_type_warning(db, [type_.id])
+    return type_
+
+
+@app.get("/tasks", response_model=list[TaskOut], dependencies=[Depends(require_admin)])
+def list_tasks(db: Session = Depends(get_db)):
+    return db.query(Task).filter(Task.delete_flag.is_(False)).order_by(Task.name, Task.id).all()
+
+
+@app.post("/tasks", response_model=TaskOut, status_code=201, dependencies=[Depends(require_admin)])
+def create_task(payload: TaskInput, db: Session = Depends(get_db)):
+    task = Task(**payload.model_dump())
+    db.add(task)
+    db.commit()
+    return task
+
+
+@app.patch("/tasks/{task_id}", response_model=TaskOut, dependencies=[Depends(require_admin)])
+def update_task(task_id: int, payload: TaskInput, db: Session = Depends(get_db)):
+    task = db.get(Task, task_id)
+    if task is None or task.delete_flag:
+        raise HTTPException(404, "Task not found")
+    for field, value in payload.model_dump().items():
+        setattr(task, field, value)
+    ids = [link.service_order_type_id for link in task.type_links if not link.delete_flag]
+    db.commit()
+    task.sync_warning = _sync_type_warning(db, ids)
+    return task
+
+
+@app.delete("/tasks/{task_id}", response_model=TaskOut, dependencies=[Depends(require_admin)])
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.get(Task, task_id)
+    if task is None or task.delete_flag:
+        raise HTTPException(404, "Task not found")
+    task.delete_flag = True
+    ids = [link.service_order_type_id for link in task.type_links]
+    for link in task.type_links:
+        link.delete_flag = True
+    db.commit()
+    task.sync_warning = _sync_type_warning(db, ids)
+    return task
 
 
 @app.post("/customer-locations/assign-regions", response_model=list[CustomerLocationOut], dependencies=[Depends(require_admin)])
@@ -797,6 +865,11 @@ def sync_products_endpoint(db: Session = Depends(get_db)) -> list[Product]:
     )
 
 
+@app.post("/products/sync-resco", response_model=RescoSyncSummary, dependencies=[Depends(require_admin)])
+def sync_products_resco_endpoint(db: Session = Depends(get_db)):
+    return sync_products_to_resco(db)
+
+
 @app.post("/products", response_model=ProductOut, status_code=201, dependencies=[Depends(require_admin)])
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Product:
     full_number = _prefixed_product_number(payload.product_type, payload.number)
@@ -825,7 +898,9 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)) -> Pro
         failed_systems.append("Tripletex")
 
     try:
-        sync_product(db, product)
+        result = sync_product(db, product)
+        if result is not None and result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
         failed_systems.append("Resco")
@@ -864,7 +939,9 @@ def update_product(
             failed_systems.append("Tripletex")
 
     try:
-        sync_product(db, product)
+        result = sync_product(db, product)
+        if result is not None and result.status == "failed":
+            failed_systems.append("Resco")
     except Exception:
         logger.warning("Resco sync failed for product %s", product.id, exc_info=True)
         failed_systems.append("Resco")

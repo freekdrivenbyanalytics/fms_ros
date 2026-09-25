@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     resco_base_url: str = "https://sfm.rescocrm.com/odata/v4/sfm"
     resco_username: str = ""
     resco_password: str = ""
+    resco_nok_price_list_id: str = ""
     jwt_secret_key: str
 
 

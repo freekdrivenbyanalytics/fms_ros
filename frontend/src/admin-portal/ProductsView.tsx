@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { createProduct, deleteProduct, syncProducts, updateProduct } from "../api";
+import { createProduct, deleteProduct, syncProductsToResco, syncProducts, updateProduct } from "../api";
 import type {
   Contract,
   ContractLine,
@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
 import { ListTable } from "../shared/ListTable";
+import { RescoSyncButton } from "../shared/RescoSyncButton";
 import { SyncStatusBadge } from "../shared/SyncStatusBadge";
 
 interface Props {
@@ -86,6 +87,7 @@ export function ProductsView({ products, contracts, skills, serviceOrderTypes, o
           </button>
         </div>
       </div>
+      <RescoSyncButton sync={syncProductsToResco} onChanged={onChanged} />
       {refreshMessage && <p className="text-sm text-red-600 mb-3">{refreshMessage}</p>}
 
       {creating && (

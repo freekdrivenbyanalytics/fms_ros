@@ -71,7 +71,7 @@ and apply. Entity list: `backend/app/models.py` (single file, ~25 tables). Note 
   `ad_hoc_visits.py` (free-slot search, 14-day horizon, 15-min steps), `employee_schedule.py` (template/override resolution),
   `tomtom_routing.py`, `geocoding.py`, `geofencing.py` (point-in-polygon region assignment), `solver_partitioning.py`
   (region grouping by shared employees), `demo_schedule_refresh.py`, `reset_demo_data.py`, `seed.py`, `demo_data/*.csv`.
-- `alembic/versions/00NN_*.py` - hand-numbered linear migrations; DB head is `0027` (durable Resco Draft-reset context).
+- `alembic/versions/00NN_*.py` - hand-numbered linear migrations; DB head is `0028` (reusable tasks and durable Resco job/task sync ownership).
 - `scripts/` - one-off, manually run, **not** part of startup/seed (`seed_admin_user`, Tripletex contact seeding, skill assignment).
 
 ### Solver layout (`solver/app/`)
@@ -222,3 +222,8 @@ where possible (see `0025` for a data-preserving example), run `alembic upgrade 
 - Resco status refresh is on demand; there is no background polling. Audit API errors do not block current-status sync.
   Remaining live visual verification is recorded in the archived status-tracking tasks.
 - The frontend duplicates backend types by hand and has no test coverage; response-shape changes are easy to miss in `types.ts`.
+
+
+### Resco jobs and reusable tasks
+
+Tasks are reusable catalog records linked in order through `ServiceOrderTypeTask`. Type/task CRUD syncs Resco templates best-effort. Work Orders receive one named job per selected product's distinct active type, explicit API-created task snapshots, and selected product lines (`app/resco_jobs.py`); merely binding a Resco template does not generate tasks through OData. `RescoSyncRecord` deliberately has no business-row foreign keys and retains remote ownership through assignment/demo cleanup. Do not reset its IDs or replay completed task snapshots. Migration `0028` and `scripts.seed_service_order_tasks` set up the catalog; selected legacy Work Orders use `scripts.catch_up_resco_jobs` (dry-run default, `--apply` writes). Products and Service Order Types have separate admin Resco sync actions. No startup sync occurs. See `openspec/changes/archive/2026-09-25-sync-resco-job-templates-and-tasks/design.md` for evidence and rollout.

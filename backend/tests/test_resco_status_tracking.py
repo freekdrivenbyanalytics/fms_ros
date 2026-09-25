@@ -58,18 +58,35 @@ def test_location_payloads_keep_distinct_coordinates_and_equal_names():
 
 
 def test_work_order_retry_keeps_parent_and_does_not_reset_status(monkeypatch):
+    from contextlib import nullcontext
+    from app import resco_jobs
     client = MagicMock()
-    client.create_work_order.return_value = {"id": "parent"}
-    client.create_work_order_schedule.side_effect = [RuntimeError("offline"), {"id": "child"}]
     monkeypatch.setattr(resco, "RescoClient", lambda *args: client)
-    item = assignment(resco_work_order_id=None)
+    monkeypatch.setattr(resco_jobs, "sync_lock", lambda db: nullcontext())
+    monkeypatch.setattr(resco_jobs, "nok_setup", lambda *args: ("nok", "price"))
+    monkeypatch.setattr(resco_jobs, "reserve", lambda *args: None)
+    populate = MagicMock()
+    monkeypatch.setattr(resco_jobs, "populate_work_order", populate)
+    calls = []
+    def ensure(db, client, key, entity, payload):
+        calls.append((entity, payload))
+        if entity == "fs_workorder":
+            return NS(remote_id="parent")
+        if len(calls) == 2:
+            raise RuntimeError("offline")
+        return NS(remote_id="child", payload={})
+    monkeypatch.setattr(resco_jobs, "ensure", ensure)
+    item = assignment(resco_work_order_id=None, resco_sync_token=None)
     db = MagicMock()
     assert resco.sync_assignment(db, item).status == "failed"
     assert item.resco_work_order_id == "parent"
     assert resco.sync_assignment(db, item).status == "synced"
-    client.create_work_order.assert_called_once()
+    assert sum(entity == "fs_workorder" for entity, _ in calls) == 1
     client.update_work_order.assert_called_once()
     assert item.resco_work_order_schedule_id == "child"
+    assert calls[0][1]["statuscode"] == 5
+    assert calls[1][1]["statuscode"] == 1
+    populate.assert_called_once()
 
 
 def test_work_order_names_remain_unique_with_long_addresses():

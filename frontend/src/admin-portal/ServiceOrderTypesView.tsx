@@ -1,17 +1,20 @@
 import { useState, type FormEvent } from "react";
-import { createServiceOrderType, deleteServiceOrderType, updateServiceOrderType } from "../api";
-import type { Product, ServiceOrderType } from "../types";
+import { createServiceOrderType, deleteServiceOrderType, updateServiceOrderType, syncTypesToResco } from "../api";
+import type { PortalTask, Product, ServiceOrderType } from "../types";
 import { BackButton, DetailField } from "../shared/DetailField";
+import { RescoSyncButton } from "../shared/RescoSyncButton";
 import { ListTable } from "../shared/ListTable";
 
 interface Props {
+  tasks: PortalTask[];
   serviceOrderTypes: ServiceOrderType[];
   products: Product[];
   onChanged: () => void | Promise<void>;
 }
 
-export function ServiceOrderTypesView({ serviceOrderTypes, products, onChanged }: Props) {
+export function ServiceOrderTypesView({ tasks, serviceOrderTypes, products, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const selected = serviceOrderTypes.find((type) => type.id === selectedId) ?? null;
@@ -22,6 +25,10 @@ export function ServiceOrderTypesView({ serviceOrderTypes, products, onChanged }
     );
     return (
       <ServiceOrderTypeDetail
+        key={selected.id}
+        tasks={tasks}
+        onWarning={setWarning}
+        initialWarning={warning}
         serviceOrderType={selected}
         typeProducts={typeProducts}
         onChanged={onChanged}
@@ -44,9 +51,12 @@ export function ServiceOrderTypesView({ serviceOrderTypes, products, onChanged }
         </button>
       </div>
 
+      <RescoSyncButton sync={syncTypesToResco} onChanged={onChanged} />
+      {warning && <p className="mb-3 text-amber-700">{warning}</p>}
       {creating && (
         <CreateServiceOrderTypeForm
           onCreated={async (serviceOrderType) => {
+            setWarning(serviceOrderType.sync_warning);
             setCreating(false);
             await onChanged();
             setSelectedId(serviceOrderType.id);
@@ -124,6 +134,9 @@ function CreateServiceOrderTypeForm({ onCreated }: CreateServiceOrderTypeFormPro
 }
 
 interface ServiceOrderTypeDetailProps {
+  tasks: PortalTask[];
+  initialWarning: string | null;
+  onWarning: (value: string | null) => void;
   serviceOrderType: ServiceOrderType;
   typeProducts: Product[];
   onChanged: () => void | Promise<void>;
@@ -132,6 +145,7 @@ interface ServiceOrderTypeDetailProps {
 }
 
 function ServiceOrderTypeDetail({
+  tasks, initialWarning, onWarning,
   serviceOrderType,
   typeProducts,
   onChanged,
@@ -139,6 +153,8 @@ function ServiceOrderTypeDetail({
   onBack,
 }: ServiceOrderTypeDetailProps) {
   const [name, setName] = useState(serviceOrderType.name);
+  const [taskIds, setTaskIds] = useState(serviceOrderType.tasks.map(t => t.id));
+  const [warning, setWarning] = useState(initialWarning);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -148,7 +164,8 @@ function ServiceOrderTypeDetail({
     setSaving(true);
     setError(null);
     try {
-      await updateServiceOrderType(serviceOrderType.id, { name });
+      const result = await updateServiceOrderType(serviceOrderType.id, { name, task_ids: taskIds });
+      setWarning(result.sync_warning);
       setDirty(false);
       await onChanged();
     } catch (err) {
@@ -162,7 +179,7 @@ function ServiceOrderTypeDetail({
     setDeleting(true);
     setError(null);
     try {
-      await deleteServiceOrderType(serviceOrderType.id);
+      onWarning((await deleteServiceOrderType(serviceOrderType.id)).sync_warning);
       await onChanged();
       onDeleted();
     } catch (err) {
@@ -209,6 +226,29 @@ function ServiceOrderTypeDetail({
         />
       </DetailField>
 
+      {(warning || serviceOrderType.sync_error) && <p className="text-amber-700 mb-3">{warning || serviceOrderType.sync_error}</p>}
+      <DetailField label="Resco job template">{serviceOrderType.resco_job_template_id ?? "Not synced"}</DetailField>
+      <RescoSyncButton sync={syncTypesToResco} onChanged={onChanged} />
+      <DetailField label="Tasks (in order)">
+        <div className="space-y-2">
+          {taskIds.map((id, index) => <div key={id} className="flex items-center gap-3">
+            <span>{tasks.find(t => t.id === id)?.name ?? `Task ${id}`}</span>
+            <button type="button" disabled={index === 0} onClick={() => {
+              const next = [...taskIds]; [next[index - 1], next[index]] = [next[index], next[index - 1]];
+              setTaskIds(next); setDirty(true);
+            }} className="text-sm disabled:opacity-30">Move up</button>
+            <button type="button" disabled={index === taskIds.length - 1} onClick={() => {
+              const next = [...taskIds]; [next[index + 1], next[index]] = [next[index], next[index + 1]];
+              setTaskIds(next); setDirty(true);
+            }} className="text-sm disabled:opacity-30">Move down</button>
+            <button type="button" onClick={() => { setTaskIds(taskIds.filter(t => t !== id)); setDirty(true); }} className="text-sm text-red-700">Remove</button>
+          </div>)}
+          <select aria-label="Add task" value="" onChange={e => { setTaskIds([...taskIds, Number(e.target.value)]); setDirty(true); }} className="border rounded p-2">
+            <option value="" disabled>Add task?</option>
+            {tasks.filter(t => !taskIds.includes(t.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      </DetailField>
       <DetailField label="Products assigned this service order type">
         {typeProducts.length === 0
           ? "—"

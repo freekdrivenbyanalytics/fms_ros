@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models import DayType, LocationKind, LunchType, ServiceRequestStatus, VisitStatus
 
@@ -60,19 +60,54 @@ class SkillUpdate(BaseModel):
     name: str
 
 
-class ServiceOrderTypeOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class NamedTaskInput(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
 
+    @field_validator("name")
+    @classmethod
+    def nonblank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Name must not be blank")
+        return value.strip()
+
+
+class TaskInput(NamedTaskInput):
+    description: str | None = Field(default=None, max_length=2000)
+    estimated_duration_minutes: int | None = Field(default=None, gt=0, strict=True)
+
+
+class TaskSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    description: str | None = None
+    estimated_duration_minutes: int | None = None
+
+
+class ServiceOrderTypeSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
 
 
-class ServiceOrderTypeCreate(BaseModel):
-    name: str
+class TaskOut(TaskSummary):
+    service_order_types: list[ServiceOrderTypeSummary] = []
+    sync_warning: str | None = None
 
 
-class ServiceOrderTypeUpdate(BaseModel):
-    name: str
+class ServiceOrderTypeOut(ServiceOrderTypeSummary):
+    tasks: list[TaskSummary] = []
+    resco_job_template_id: str | None = None
+    sync_error: str | None = None
+    sync_warning: str | None = None
+
+
+class ServiceOrderTypeCreate(NamedTaskInput):
+    task_ids: list[int] = []
+
+
+class ServiceOrderTypeUpdate(NamedTaskInput):
+    task_ids: list[int] | None = None
 
 
 class ProductOut(BaseModel):

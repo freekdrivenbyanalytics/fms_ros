@@ -1,4 +1,6 @@
 import type {
+  PortalTask,
+  TaskInput,
   AdHocVisitBookingInput,
   Assignment,
   Contract,
@@ -282,13 +284,8 @@ export function updateServiceOrderType(
   }).then((res) => handleResponse<ServiceOrderType>(res));
 }
 
-export async function deleteServiceOrderType(id: number): Promise<void> {
-  const res = await apiFetch(`${API_URL}/service-order-types/${id}`, { method: "DELETE" });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const message = body?.detail ?? `Request failed with status ${res.status}`;
-    throw new Error(message);
-  }
+export function deleteServiceOrderType(id: number): Promise<ServiceOrderType> {
+  return apiFetch(`${API_URL}/service-order-types/${id}`, { method: "DELETE" }).then(handleResponse<ServiceOrderType>);
 }
 
 export function listProducts(): Promise<Product[]> {
@@ -666,4 +663,28 @@ export function syncAssignmentStatuses(): Promise<RescoStatusSyncSummary> {
 export function reconcileScheduledAssignments(): Promise<RescoStatusSyncSummary> {
   return apiFetch(`${API_URL}/assignments/reconcile-resco-scheduled`, { method: "POST" })
     .then((res) => handleResponse<RescoStatusSyncSummary>(res));
+}
+
+
+export function listTasks(): Promise<PortalTask[]> {
+  return apiFetch(`${API_URL}/tasks`).then(handleResponse<PortalTask[]>);
+}
+
+export function saveTask(id: number | null, input: TaskInput): Promise<PortalTask> {
+  return apiFetch(`${API_URL}/tasks${id === null ? "" : `/${id}`}`, {
+    method: id === null ? "POST" : "PATCH",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+  }).then(handleResponse<PortalTask>);
+}
+
+export function deleteTask(id: number): Promise<PortalTask> {
+  return apiFetch(`${API_URL}/tasks/${id}`, { method: "DELETE" }).then(handleResponse<PortalTask>);
+}
+
+export function syncProductsToResco(): Promise<RescoSyncSummary> {
+  return apiFetch(`${API_URL}/products/sync-resco`, { method: "POST" }).then(handleResponse<RescoSyncSummary>);
+}
+
+export function syncTypesToResco(): Promise<RescoSyncSummary> {
+  return apiFetch(`${API_URL}/service-order-types/sync-resco`, { method: "POST" }).then(handleResponse<RescoSyncSummary>);
 }
